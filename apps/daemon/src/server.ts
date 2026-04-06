@@ -86,6 +86,26 @@ export async function createServer(
     }
   })
 
+  // ─── Update apply (triggers Watchtower pull + container restart) ──────────
+  app.post('/api/updates/apply', async () => {
+    const token = process.env.WATCHTOWER_TOKEN
+    if (!token) {
+      throw { statusCode: 503, message: 'Update service not configured (WATCHTOWER_TOKEN not set)' }
+    }
+    try {
+      const res = await fetch('http://watchtower:8080/v1/update', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(10000),
+      })
+      if (!res.ok) throw new Error(`Watchtower responded with ${res.status}`)
+      log.info('Update triggered via Watchtower — container will restart shortly')
+      return { updating: true }
+    } catch (err) {
+      throw { statusCode: 502, message: `Failed to contact update service: ${err}` }
+    }
+  })
+
   // ─── System info ──────────────────────────────────────────────────────────
   app.get('/api/system', async () => {
     const ni = os.networkInterfaces()

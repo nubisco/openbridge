@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { api, type BridgeConfig } from '@/api'
+import { api, type BridgeConfig, type UpdateStatus } from '@/api'
 import { useLayoutStore } from '@/stores/layout'
 
 const layout = useLayoutStore()
@@ -8,6 +8,55 @@ const saving = ref(false)
 const saved = ref(false)
 const error = ref<string | null>(null)
 const restarting = ref(false)
+
+// ─── Updates ─────────────────────────────────────────────────────────────────
+const updateStatus = ref<UpdateStatus | null>(null)
+const checkingUpdate = ref(false)
+const applying = ref(false)
+const updateError = ref<string | null>(null)
+
+async function checkUpdate() {
+  checkingUpdate.value = true
+  updateError.value = null
+  try {
+    updateStatus.value = await api.updates.check()
+  } catch (e) {
+    updateError.value = String(e)
+  } finally {
+    checkingUpdate.value = false
+  }
+}
+
+async function applyUpdate() {
+  if (applying.value) return
+  applying.value = true
+  updateError.value = null
+  try {
+    await api.updates.apply()
+    // Container will restart — poll health until it comes back up
+    let attempts = 0
+    const poll = setInterval(async () => {
+      attempts++
+      try {
+        await api.health()
+        clearInterval(poll)
+        applying.value = false
+        updateStatus.value = null
+        await checkUpdate()
+      } catch {
+        /* still restarting */
+      }
+      if (attempts > 60) {
+        clearInterval(poll)
+        applying.value = false
+        updateError.value = 'Timed out waiting for restart'
+      }
+    }, 2000)
+  } catch (e) {
+    updateError.value = String(e)
+    applying.value = false
+  }
+}
 
 const bridge = ref<BridgeConfig>({
   name: 'OpenBridge',
@@ -35,6 +84,7 @@ onMounted(async () => {
   } catch {
     /* use defaults */
   }
+  checkUpdate()
 })
 
 async function save() {
@@ -198,6 +248,73 @@ function generatePin() {
           Restart the daemon for changes to take effect
         </span>
       </div>
+    </section>
+
+    <!-- Updates -->
+    <section class="settings-card">
+      <div class="card-header">
+        <div class="card-icon">
+          <NbIcon name="arrow-circle-up" :size="18" />
+        </div>
+        <div>
+          <h2 class="card-title">Updates</h2>
+          <p class="card-subtitle">OpenBridge daemon and UI</p>
+        </div>
+      </div>
+
+      <div class="update-row">
+        <div class="update-versions">
+          <span class="version-chip">
+            <NbIcon name="tag" :size="11" />
+            Current:
+            <strong>v{{ updateStatus?.current ?? '…' }}</strong>
+          </span>
+          <template v-if="updateStatus && !checkingUpdate">
+            <span v-if="updateStatus.updateAvailable" class="version-chip version-chip--available">
+              <NbIcon name="arrow-circle-up" :size="11" />
+              Available:
+              <strong>v{{ updateStatus.latest }}</strong>
+            </span>
+            <span v-else class="version-chip version-chip--ok">
+              <NbIcon name="check-circle" :size="11" />
+              Up to date
+            </span>
+          </template>
+          <span v-if="checkingUpdate" class="version-chip version-chip--muted">Checking…</span>
+        </div>
+
+        <div class="update-actions">
+          <NbButton
+            variant="secondary"
+            size="sm"
+            outlined
+            :loading="checkingUpdate"
+            icon="arrows-clockwise"
+            @click="checkUpdate"
+          >
+            Check
+          </NbButton>
+          <NbButton
+            v-if="updateStatus?.updateAvailable"
+            variant="primary"
+            size="sm"
+            :loading="applying"
+            :icon="applying ? 'spinner' : 'arrow-circle-up'"
+            @click="applyUpdate"
+          >
+            {{ applying ? 'Updating…' : 'Install update' }}
+          </NbButton>
+        </div>
+      </div>
+
+      <p v-if="applying" class="update-notice">
+        <NbIcon name="info" :size="12" />
+        Pulling new image — the container will restart. This page will reconnect automatically.
+      </p>
+      <p v-if="updateError" class="update-notice update-notice--error">
+        <NbIcon name="warning" :size="12" />
+        {{ updateError }}
+      </p>
     </section>
 
     <!-- HAP pairing info -->
@@ -381,6 +498,63 @@ function generatePin() {
   gap: 0.3rem;
   font-size: 0.72rem;
   color: #9ca3af;
+}
+
+// ─── Updates card ────────────────────────────────────────────────────────────
+.update-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.update-versions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.version-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.78rem;
+  padding: 0.25rem 0.6rem;
+  border-radius: 20px;
+  background: #f3f4f6;
+  color: #374151;
+
+  &--available {
+    background: #fef3c7;
+    color: #92400e;
+  }
+  &--ok {
+    background: #d1fae5;
+    color: #065f46;
+  }
+  &--muted {
+    color: #9ca3af;
+  }
+}
+
+.update-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.update-notice {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  color: #6b7280;
+  margin: 0.75rem 0 0;
+
+  &--error {
+    color: #dc2626;
+  }
 }
 
 // ─── Info card ───────────────────────────────────────────────────────────────

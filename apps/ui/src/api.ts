@@ -52,6 +52,12 @@ export interface HealthResponse {
   timestamp: string
 }
 
+export interface UpdateStatus {
+  current: string
+  latest: string | null
+  updateAvailable: boolean
+}
+
 export interface SystemInfo {
   os: string
   arch: string
@@ -180,6 +186,14 @@ export const api = {
       fetch('/api/daemon/restart', { method: 'POST' }).then((r) => {
         if (!r.ok) throw new Error(`Restart failed: ${r.status}`)
         return r.json()
+      }),
+  },
+  updates: {
+    check: () => get<UpdateStatus>('/updates/check'),
+    apply: () =>
+      fetch('/api/updates/apply', { method: 'POST' }).then((r) => {
+        if (!r.ok) throw new Error(`Update failed: ${r.status}`)
+        return r.json() as Promise<{ updating: boolean }>
       }),
   },
   marketplace: {
