@@ -4,7 +4,7 @@ services:
     container_name: openbridge
     restart: unless-stopped
     ports:
-      - '8582:8582'
+      - '8582:8581'
     volumes:
       # Persistent config and pairing data
       - openbridge-config:/root/.openbridge
