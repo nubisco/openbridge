@@ -4,7 +4,7 @@ services:
     container_name: openbridge
     restart: unless-stopped
     ports:
-      - '8582:8582'
+      - '8582:8581'
     volumes:
       # Persistent config and pairing data
       - openbridge-config:/root/.openbridge
@@ -13,11 +13,10 @@ services:
     environment:
       TZ: Europe/Lisbon
       NODE_ENV: production
-      OPENBRIDGE_PORT: 8582
       # Must match WATCHTOWER_HTTP_API_TOKEN below — change in a .env file
       WATCHTOWER_TOKEN: ${WATCHTOWER_TOKEN:-openbridge-update-token}
     healthcheck:
-      test: ['CMD', 'wget', '-qO-', 'http://localhost:8582/api/health']
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:8581/api/health']
       interval: 30s
       timeout: 5s
       retries: 3
