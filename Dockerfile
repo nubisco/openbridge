@@ -2,6 +2,7 @@
 FROM node:22-alpine AS deps
 WORKDIR /repo
 
+RUN apk add --no-cache python3 make g++
 RUN npm install -g pnpm@9
 
 # Copy manifests only — maximise layer cache
@@ -39,10 +40,6 @@ RUN pnpm --filter @openbridge/daemon deploy --prod /pruned
 # ─── Stage 4: Minimal runtime image ─────────────────────────────────────────
 FROM node:22-alpine AS runtime
 WORKDIR /app
-
-# Fix node-pty spawn-helper execute permission at image build time
-RUN apk add --no-cache python3 make g++ && \
-    apk del make g++ 2>/dev/null || true
 
 # Copy production node_modules (workspace deps resolved to real packages)
 COPY --from=prune /pruned/node_modules ./apps/daemon/node_modules
