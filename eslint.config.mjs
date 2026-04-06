@@ -16,6 +16,7 @@ export default defineConfig(
       'apps/docs/.vitepress/dist/**',
       'apps/docs/docs/.vitepress/cache/**',
       'apps/docs/docs/.vitepress/dist/**',
+      'apps/docs/docs/.vitepress/plugins/**',
     ],
   },
 
