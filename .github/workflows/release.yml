@@ -10,7 +10,6 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  # ─── Build & push Docker image + create GitHub Release ───────────────────
   docker:
     name: Build & push Docker image
     runs-on: ubuntu-latest
@@ -65,56 +64,3 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: 'v${{ steps.version.outputs.VERSION }}'
           generate_release_notes: true
-
-  # ─── Build & publish npm packages ────────────────────────────────────────
-  npm:
-    name: Publish to npm
-    runs-on: ubuntu-latest
-    if: ${{ secrets.NPM_TOKEN != '' }}
-    permissions:
-      contents: read
-      id-token: write
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: pnpm/action-setup@v3
-        with:
-          version: 9
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          registry-url: https://registry.npmjs.org
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Extract version from tag
-        id: version
-        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-
-      - name: Bump all package versions
-        run: |
-          VERSION=${{ steps.version.outputs.VERSION }}
-          pnpm -r exec -- npm version "$VERSION" --no-git-tag-version --allow-same-version
-
-      - name: Build all packages
-        run: pnpm build
-
-      - name: Publish internal packages to npm
-        run: |
-          pnpm --filter @openbridge/core      publish --no-git-checks --access public
-          pnpm --filter @openbridge/logger    publish --no-git-checks --access public
-          pnpm --filter @openbridge/config    publish --no-git-checks --access public
-          pnpm --filter @openbridge/sdk       publish --no-git-checks --access public
-          pnpm --filter @openbridge/compatibility-homebridge publish --no-git-checks --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Publish openbridge (daemon) to npm
-        working-directory: apps/daemon
-        run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
