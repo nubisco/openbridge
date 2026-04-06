@@ -17,6 +17,6 @@ try {
     chmodSync(spawnHelper, 0o755)
     console.log(`[postinstall] Fixed execute permission on ${spawnHelper}`)
   }
-} catch (e) {
+} catch (_e) {
   // node-pty not installed yet or not needed on this platform
 }
