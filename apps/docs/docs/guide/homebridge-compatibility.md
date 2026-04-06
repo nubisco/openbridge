@@ -90,7 +90,7 @@ grep -r "registerPlatform" \
 ### Step 5 — Restart the daemon
 
 ```bash
-curl -X POST http://localhost:8581/api/daemon/restart
+curl -X POST http://localhost:8582/api/daemon/restart
 ```
 
 Or use the UI: Settings → Restart Daemon.
@@ -104,7 +104,7 @@ The plugin will initialize, discover its devices, and register them with the HAP
 If you install a new Homebridge package while the daemon is running, you can trigger a re-scan without a full restart:
 
 ```bash
-curl -X POST http://localhost:8581/api/plugins/refresh
+curl -X POST http://localhost:8582/api/plugins/refresh
 ```
 
 This re-scans the Homebridge plugins directory and updates the plugin list. New platforms still require a restart to initialize.

@@ -1,4 +1,4 @@
-const BASE_URL = process.env.OPENBRIDGE_URL ?? 'http://localhost:8581'
+const BASE_URL = process.env.OPENBRIDGE_URL ?? 'http://localhost:8582'
 
 export async function apiGet<T>(path: string): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`)

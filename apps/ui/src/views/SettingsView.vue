@@ -60,7 +60,7 @@ async function applyUpdate() {
 
 const bridge = ref<BridgeConfig>({
   name: 'OpenBridge',
-  port: 8581,
+  port: 8582,
   hapPort: 51826,
   pincode: '031-45-154',
   username: '',
@@ -74,7 +74,7 @@ onMounted(async () => {
     if (res && typeof res === 'object') {
       bridge.value = {
         name: res.name ?? 'OpenBridge',
-        port: res.port ?? 8581,
+        port: res.port ?? 8582,
         hapPort: res.hapPort ?? 51826,
         pincode: res.pincode ?? '031-45-154',
         username: res.username ?? '',

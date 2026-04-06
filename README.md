@@ -76,7 +76,7 @@ pnpm build
 node apps/daemon/dist/index.js
 ```
 
-Open **http://localhost:8581** — the dashboard loads immediately.
+Open **http://localhost:8582** — the dashboard loads immediately.
 
 ---
 
@@ -91,7 +91,7 @@ pnpm --filter @openbridge/daemon dev
 
 # Start the UI dev server with HMR (terminal 2)
 pnpm --filter @openbridge/ui dev
-# → UI at http://localhost:5174 (proxies /api and /ws to daemon on :8581)
+# → UI at http://localhost:5174 (proxies /api and /ws to daemon on :8582)
 ```
 
 To rebuild individual packages during development:
@@ -142,7 +142,7 @@ Default config path: `~/.openbridge/config.json`
 {
   "bridge": {
     "name": "My OpenBridge",
-    "port": 8581,
+    "port": 8582,
     "logLevel": "info"
   },
   "plugins": [
@@ -163,7 +163,7 @@ See [Configuration Reference](apps/docs/docs/guide/config-reference.md) for all 
 
 ## HTTP API
 
-The daemon exposes a REST API on port 8581:
+The daemon exposes a REST API on port 8582:
 
 | Method | Path                       | Description               |
 | ------ | -------------------------- | ------------------------- |

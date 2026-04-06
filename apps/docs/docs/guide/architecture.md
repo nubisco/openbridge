@@ -12,7 +12,7 @@ flowchart TB
   pluginsOpenbridge["~/.openbridge/plugins/<br/>openbridge/"]
   pluginsHomebridge["~/.openbridge/plugins/<br/>homebridge/"]
 
-  subgraph daemon["Daemon (port 8581)"]
+  subgraph daemon["Daemon (port 8582)"]
     direction TB
 
     subgraph daemonCoreRow[" "]
@@ -28,7 +28,7 @@ flowchart TB
     end
 
     hap["hap-nodejs HAP Bridge<br/>port: hapPort (51826)<br/>Bonjour/mDNS advertisement"]
-    http["Fastify HTTP server (port 8581)<br/><br/>REST API: /api/*<br/>Static UI: /ui/*<br/>WebSocket streams: /ws/logs, /ws/metrics, /ws/terminal, /ws/shell"]
+    http["Fastify HTTP server (port 8582)<br/><br/>REST API: /api/*<br/>Static UI: /ui/*<br/>WebSocket streams: /ws/logs, /ws/metrics, /ws/terminal, /ws/shell"]
   end
 
   homekit["Apple HomeKit<br/>Home app / Apple TV<br/>HomePod / iPad"]

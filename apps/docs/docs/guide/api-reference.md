@@ -1,6 +1,6 @@
 # API Reference
 
-The OpenBridge daemon exposes a REST API and four WebSocket streams, all on port 8581 (configurable via `bridge.port`). The base URL for all REST endpoints is `http://localhost:8581`.
+The OpenBridge daemon exposes a REST API and four WebSocket streams, all on port 8582 (configurable via `bridge.port`). The base URL for all REST endpoints is `http://localhost:8582`.
 
 All REST responses are JSON unless noted. All request bodies must be `Content-Type: application/json`.
 
@@ -208,7 +208,7 @@ Returns the raw config file content as a JSON string. Note: the `content` field 
 
 ```json
 {
-  "content": "{\"bridge\":{\"name\":\"OpenBridge\",\"port\":8581},...}"
+  "content": "{\"bridge\":{\"name\":\"OpenBridge\",\"port\":8582},...}"
 }
 ```
 
@@ -222,7 +222,7 @@ Overwrites the entire config file. The `content` field must be a valid JSON stri
 
 ```json
 {
-  "content": "{\"bridge\":{\"name\":\"My Bridge\",\"port\":8581,...}}"
+  "content": "{\"bridge\":{\"name\":\"My Bridge\",\"port\":8582,...}}"
 }
 ```
 
@@ -292,7 +292,7 @@ Returns the current `bridge` config object.
 ```json
 {
   "name": "OpenBridge",
-  "port": 8581,
+  "port": 8582,
   "hapPort": 51826,
   "pincode": "031-45-154",
   "username": "AA:BB:CC:DD:EE:FF",
@@ -542,7 +542,7 @@ The connection will drop immediately after this response. The UI reconnects auto
 
 ## WebSocket streams
 
-All WebSocket endpoints are at `ws://localhost:8581/ws/*`. Connect using any standard WebSocket client.
+All WebSocket endpoints are at `ws://localhost:8582/ws/*`. Connect using any standard WebSocket client.
 
 ### `WS /ws/logs`
 
@@ -608,7 +608,7 @@ An interactive PTY shell. Bidirectional:
 
 This is what the Terminal view in the UI connects to when in shell mode. The shell runs as the same user as the daemon process.
 
-> **Warning:** The shell WebSocket provides full command-line access to the host machine. Never expose port 8581 to an untrusted network without authentication.
+> **Warning:** The shell WebSocket provides full command-line access to the host machine. Never expose port 8582 to an untrusted network without authentication.
 
 ---
 

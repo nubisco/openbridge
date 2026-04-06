@@ -25,7 +25,7 @@ When you start the daemon, this is what happens in order:
 3. **Homebridge plugins are registered** — each entry in `platforms[]` is loaded from its explicit `plugin` path and initialized through the Homebridge compatibility shim.
 4. **Plugin lifecycle runs** — `setup()` is called on every plugin, then `start()`. Errors in one plugin do not prevent others from starting.
 5. **The HAP bridge starts** — hap-nodejs advertises the bridge on your local network via Bonjour/mDNS. HomeKit devices poll and control accessories through this interface.
-6. **The Fastify HTTP server starts** on port 8581. It serves the REST API, all four WebSocket streams, and the built Vue 3 UI as static files.
+6. **The Fastify HTTP server starts** on port 8582. It serves the REST API, all four WebSocket streams, and the built Vue 3 UI as static files.
 7. **On SIGINT or SIGTERM**, `stop()` is called on every plugin in reverse start order, then the server closes cleanly.
 
 ## What OpenBridge is NOT

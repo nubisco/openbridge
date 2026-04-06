@@ -12,7 +12,7 @@ export const PlatformConfigSchema = z
 
 export const BridgeConfigSchema = z.object({
   name: z.string().default('OpenBridge'),
-  port: z.number().int().min(1024).max(65535).default(8581),
+  port: z.number().int().min(1024).max(65535).default(8582),
   hapPort: z.number().int().min(1024).max(65535).default(51826),
   pincode: z.string().default('031-45-154'),
   username: z.string().optional(),

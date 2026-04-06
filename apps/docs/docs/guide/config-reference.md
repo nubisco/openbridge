@@ -12,7 +12,7 @@ You can edit this file by hand, through the UI Settings page, or via the config 
 {
   "bridge": {
     "name": "OpenBridge",
-    "port": 8581,
+    "port": 8582,
     "hapPort": 51826,
     "pincode": "031-45-154",
     "username": "AA:BB:CC:DD:EE:FF",
@@ -46,7 +46,7 @@ The `bridge` object configures both the HTTP server and the HAP bridge that Home
 | Field      | Type                                     | Default               | Required | Description                                           |
 | ---------- | ---------------------------------------- | --------------------- | -------- | ----------------------------------------------------- |
 | `name`     | `string`                                 | `"OpenBridge"`        | No       | Bridge name shown in the Apple Home app               |
-| `port`     | `number`                                 | `8581`                | No       | HTTP API and UI port                                  |
+| `port`     | `number`                                 | `8582`                | No       | HTTP API and UI port                                  |
 | `hapPort`  | `number`                                 | `51826`               | No       | Port hap-nodejs uses for HomeKit communication        |
 | `pincode`  | `string`                                 | `"031-45-154"`        | No       | 8-digit PIN for HomeKit pairing. Format: `XXX-XX-XXX` |
 | `username` | `string`                                 | `"AA:BB:CC:DD:EE:FF"` | No       | MAC address that uniquely identifies this bridge      |
@@ -177,18 +177,18 @@ The config API lets you read and write config programmatically:
 
 ```bash
 # Read current config (returns raw JSON string)
-curl http://localhost:8581/api/config
+curl http://localhost:8582/api/config
 
 # Overwrite entire config
-curl -X POST http://localhost:8581/api/config \
+curl -X POST http://localhost:8582/api/config \
   -H 'Content-Type: application/json' \
-  -d '{ "content": "{\"bridge\":{\"name\":\"My Bridge\",\"port\":8581}}" }'
+  -d '{ "content": "{\"bridge\":{\"name\":\"My Bridge\",\"port\":8582}}" }'
 
 # Read a single platform entry
-curl http://localhost:8581/api/config/platform/ShellyDS9
+curl http://localhost:8582/api/config/platform/ShellyDS9
 
 # Upsert a platform entry
-curl -X POST http://localhost:8581/api/config/platform \
+curl -X POST http://localhost:8582/api/config/platform \
   -H 'Content-Type: application/json' \
   -d '{ "platform": "ShellyDS9", "plugin": "/path/to/dist/index.js" }'
 ```

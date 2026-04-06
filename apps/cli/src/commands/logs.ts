@@ -22,7 +22,7 @@ export async function logsCommand(options: { plugin?: string; follow?: boolean }
 
   if (options.follow) {
     console.log(chalk.gray('\n--- Following live logs (Ctrl+C to stop) ---\n'))
-    const ws = new WebSocket('ws://localhost:8581/ws/logs')
+    const ws = new WebSocket('ws://localhost:8582/ws/logs')
     ws.onmessage = (event) => {
       const entry = JSON.parse(event.data as string) as LogEntry
       if (!options.plugin || entry.plugin === options.plugin) {

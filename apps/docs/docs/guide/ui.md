@@ -1,8 +1,8 @@
 # Dashboard UI
 
-OpenBridge ships a built-in Vue 3 web interface. In production, the daemon serves it as static files at [http://localhost:8581](http://localhost:8581). In development, it runs on its own Vite dev server at [http://localhost:5174](http://localhost:5174) and proxies API calls to the daemon.
+OpenBridge ships a built-in Vue 3 web interface. In production, the daemon serves it as static files at [http://localhost:8582](http://localhost:8582). In development, it runs on its own Vite dev server at [http://localhost:5174](http://localhost:5174) and proxies API calls to the daemon.
 
-> **Tip:** You do not need to run the Vite dev server to use the UI. The daemon always serves the last built version of the UI at port 8581. Only start the Vite server if you are making changes to the UI source code.
+> **Tip:** You do not need to run the Vite dev server to use the UI. The daemon always serves the last built version of the UI at port 8582. Only start the Vite server if you are making changes to the UI source code.
 
 ---
 
@@ -122,7 +122,7 @@ A full interactive PTY shell — you get a real shell running on the server mach
 
 The terminal uses **JetBrains Mono** loaded from Google Fonts for a clean monospace rendering.
 
-> **Warning:** The shell WebSocket gives full shell access to the machine running OpenBridge. Do not expose port 8581 to untrusted networks.
+> **Warning:** The shell WebSocket gives full shell access to the machine running OpenBridge. Do not expose port 8582 to untrusted networks.
 
 ---
 
@@ -150,10 +150,10 @@ Calls `POST /api/daemon/restart`. The daemon process restarts, all plugins go th
 
 | Mode           | URL                     | How to start                       |
 | -------------- | ----------------------- | ---------------------------------- |
-| Production     | `http://localhost:8581` | `node apps/daemon/dist/index.js`   |
+| Production     | `http://localhost:8582` | `node apps/daemon/dist/index.js`   |
 | UI development | `http://localhost:5174` | `pnpm --filter @openbridge/ui dev` |
 
-In UI development mode, the Vite server at 5174 proxies `/api/*` and `/ws/*` requests to the daemon at 8581. Both must be running. The daemon does not need to be in dev mode — you can run the compiled daemon while developing the UI.
+In UI development mode, the Vite server at 5174 proxies `/api/*` and `/ws/*` requests to the daemon at 8582. Both must be running. The daemon does not need to be in dev mode — you can run the compiled daemon while developing the UI.
 
 ---
 

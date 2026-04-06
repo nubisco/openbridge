@@ -62,9 +62,9 @@ RUN mkdir -p /plugins /root/.openbridge
 ENV NODE_ENV=production
 ENV OPENBRIDGE_PLUGINS_DIR=/plugins
 
-EXPOSE 8581
+EXPOSE 8582
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
-  CMD wget -qO- http://localhost:8581/api/health || exit 1
+  CMD wget -qO- http://localhost:8582/api/health || exit 1
 
 CMD ["node", "apps/daemon/dist/index.js"]

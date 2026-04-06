@@ -58,7 +58,7 @@ Open two terminals.
 pnpm --filter @openbridge/daemon dev
 ```
 
-This uses `tsx watch` to restart the daemon whenever a source file changes. The API and plugin engine run on **port 8581**.
+This uses `tsx watch` to restart the daemon whenever a source file changes. The API and plugin engine run on **port 8582**.
 
 **Terminal 2 — UI dev server (optional):**
 
@@ -66,9 +66,9 @@ This uses `tsx watch` to restart the daemon whenever a source file changes. The 
 pnpm --filter @openbridge/ui dev
 ```
 
-This starts Vite's development server on **port 5174** with hot module replacement. The UI at port 5174 proxies API calls to the daemon at 8581, so both need to be running.
+This starts Vite's development server on **port 5174** with hot module replacement. The UI at port 5174 proxies API calls to the daemon at 8582, so both need to be running.
 
-> **Tip:** You only need Terminal 2 if you are working on the UI itself. If you just want to use the dashboard, the daemon already serves the built UI at [http://localhost:8581](http://localhost:8581) — no Vite needed.
+> **Tip:** You only need Terminal 2 if you are working on the UI itself. If you just want to use the dashboard, the daemon already serves the built UI at [http://localhost:8582](http://localhost:8582) — no Vite needed.
 
 ### Production mode
 
@@ -77,7 +77,7 @@ pnpm build
 node apps/daemon/dist/index.js
 ```
 
-Open [http://localhost:8581](http://localhost:8581) to access the dashboard.
+Open [http://localhost:8582](http://localhost:8582) to access the dashboard.
 
 ## First-time config
 
@@ -87,7 +87,7 @@ On first run, OpenBridge creates `~/.openbridge/config.json` if it does not exis
 {
   "bridge": {
     "name": "OpenBridge",
-    "port": 8581,
+    "port": 8582,
     "hapPort": 51826,
     "pincode": "031-45-154",
     "username": "AA:BB:CC:DD:EE:FF",
@@ -102,7 +102,7 @@ On first run, OpenBridge creates `~/.openbridge/config.json` if it does not exis
 **What each field means:**
 
 - `bridge.name` — the name shown in the Apple Home app when you add the bridge.
-- `bridge.port` — the HTTP API and UI port. Change this if 8581 is taken.
+- `bridge.port` — the HTTP API and UI port. Change this if 8582 is taken.
 - `bridge.hapPort` — the port hap-nodejs uses for HomeKit communication. Must be reachable from your phone/Apple TV/HomePod.
 - `bridge.pincode` — the 8-digit PIN you enter in the Home app when pairing. Format: `XXX-XX-XXX`.
 - `bridge.username` — a MAC address that uniquely identifies this bridge to HomeKit. Change it if you run multiple bridges on the same network.
@@ -123,7 +123,7 @@ Once the daemon is running, your bridge is advertising itself on the local netwo
 You can also fetch the setup URI programmatically:
 
 ```bash
-curl http://localhost:8581/api/qr
+curl http://localhost:8582/api/qr
 # { "setupURI": "X-HM://...", "pincode": "031-45-154" }
 ```
 
@@ -173,7 +173,7 @@ The entry file is almost always `dist/index.js`. Check the `main` field in the p
 
 ```bash
 # In the UI → Settings → Restart, or:
-curl -X POST http://localhost:8581/api/daemon/restart
+curl -X POST http://localhost:8582/api/daemon/restart
 ```
 
 The plugin will initialize, and its accessories will appear in the Home app within a few seconds.

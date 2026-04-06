@@ -22,7 +22,7 @@ export async function initCommand(dir: string = '.') {
     const defaultConfig = {
       bridge: {
         name: 'My OpenBridge',
-        port: 8581,
+        port: 8582,
         logLevel: 'info',
       },
       plugins: [],
