@@ -9,6 +9,7 @@ RUN npm install -g pnpm@9
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
 COPY apps/cli/package.json             apps/cli/
 COPY apps/daemon/package.json          apps/daemon/
+COPY apps/daemon/scripts/              apps/daemon/scripts/
 COPY apps/ui/package.json              apps/ui/
 COPY packages/compatibility-homebridge/package.json packages/compatibility-homebridge/
 COPY packages/config/package.json      packages/config/
