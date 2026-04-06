@@ -1,0 +1,36 @@
+// Nubisco UI global styles — includes CSS variables, grid, typography, reset
+@use '@nubisco/ui/styles';
+
+@font-face {
+  font-family: 'Symbols Nerd Font Mono';
+  src: url('https://cdn.jsdelivr.net/gh/ryanoasis/nerd-fonts@v3.2.1/patched-fonts/NerdFontsSymbolsOnly/Regular/SymbolsNerdFontMono-Regular.woff2')
+    format('woff2');
+  font-weight: normal;
+  font-style: normal;
+  font-display: block;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  font-family:
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    'Segoe UI',
+    sans-serif;
+  color: #1a1a1a;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#app {
+  height: 100%;
+}

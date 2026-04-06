@@ -1,0 +1,51 @@
+{
+  "name": "@openbridge/compatibility-homebridge",
+  "version": "0.1.0",
+  "description": "Homebridge platform plugin compatibility shim for OpenBridge",
+  "author": "José Silva <jose@nubisco.io>",
+  "license": "MIT",
+  "homepage": "https://github.com/nubisco/openbridge#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nubisco/openbridge.git",
+    "directory": "packages/compatibility-homebridge"
+  },
+  "bugs": {
+    "url": "https://github.com/nubisco/openbridge/issues"
+  },
+  "keywords": [
+    "homebridge",
+    "compatibility",
+    "homekit",
+    "home-automation",
+    "typescript",
+    "openbridge"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist/"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.4.0"
+  },
+  "dependencies": {
+    "@openbridge/logger": "workspace:^"
+  }
+}

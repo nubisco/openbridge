@@ -1,0 +1,49 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+
+# TypeScript incremental build
+*.tsbuildinfo
+
+# Vite
+.vite/
+
+# VitePress
+**/.vitepress/cache/
+**/.vitepress/dist/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# HAP persist (pairing data — runtime only, never commit)
+persist/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.idea/
+.vscode/settings.json
+.vscode/mcp.json
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# Test coverage
+coverage/
+
+# Claude Code project memory (local only)
+.claude/

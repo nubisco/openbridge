@@ -1,0 +1,46 @@
+{
+  "name": "@openbridge/logger",
+  "version": "0.1.0",
+  "description": "Structured logger with in-memory buffer and WebSocket streaming for OpenBridge",
+  "author": "José Silva <jose@nubisco.io>",
+  "license": "MIT",
+  "homepage": "https://github.com/nubisco/openbridge#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nubisco/openbridge.git",
+    "directory": "packages/logger"
+  },
+  "bugs": {
+    "url": "https://github.com/nubisco/openbridge/issues"
+  },
+  "keywords": [
+    "logger",
+    "structured-logging",
+    "typescript",
+    "openbridge"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist/"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/node": "^20.0.0"
+  }
+}

@@ -1,0 +1,100 @@
+name: Bug Report
+description: Report a reproducible defect or regression
+labels: [bug]
+assignees: [joseporto]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please fill in as much detail as possible to help us reproduce and fix the issue.
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Which part of OpenBridge is affected?
+      options:
+        - Daemon / HTTP API
+        - Plugin lifecycle (load / start / stop)
+        - HAP bridge / Apple Home
+        - Homebridge compatibility
+        - Dashboard UI
+        - Terminal (xterm / node-pty)
+        - Config parsing
+        - Logger
+        - Docker / deployment
+        - CLI
+        - SDK / plugin authoring
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: OpenBridge version
+      placeholder: e.g. 0.1.0
+    validations:
+      required: true
+
+  - type: input
+    id: node
+    attributes:
+      label: Node.js version
+      placeholder: e.g. 20.12.0
+    validations:
+      required: true
+
+  - type: input
+    id: platform
+    attributes:
+      label: Platform / OS
+      placeholder: e.g. macOS 15, Ubuntu 22.04, Synology DSM 7.2 (Docker)
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Relevant config snippet
+      description: Paste the relevant section of your `config.json` (remove any sensitive values).
+      render: json
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start the daemon with config ...
+        2. Load plugin ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: 'Paste any relevant log lines. Use `logLevel: "debug"` in config to get verbose output.'
+      render: text
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<svg width="320px" height="320px" viewBox="0 0 320 320" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="o-gradient-main" gradientUnits="userSpaceOnUse" x1="60" y1="40" x2="260" y2="280" spreadMethod="pad">
+      <title>Main Ring Gradient</title>
+      <stop offset="0" stop-color="rgb(254,216,103)"/>
+      <stop offset="0.35" stop-color="rgb(250,71,78)"/>
+      <stop offset="0.55" stop-color="rgb(173,55,159)"/>
+      <stop offset="0.7" stop-color="rgb(16,169,164)"/>
+      <stop offset="0.85" stop-color="rgb(11,130,207)"/>
+      <stop offset="1" stop-color="rgb(105,187,99)"/>
+    </linearGradient>
+    <linearGradient id="o-gradient-highlight" gradientUnits="userSpaceOnUse" x1="80" y1="50" x2="120" y2="100" spreadMethod="pad">
+      <title>Top Highlight</title>
+      <stop offset="0" stop-color="rgb(255,255,255)" stop-opacity="0.7"/>
+      <stop offset="0.6" stop-color="rgb(255,255,255)" stop-opacity="0.2"/>
+      <stop offset="1" stop-color="rgb(255,255,255)" stop-opacity="0.05"/>
+    </linearGradient>
+    <clipPath id="o-ring-clip">
+      <circle cx="160" cy="160" r="110"/>
+      <circle cx="160" cy="160" r="75" fill="white"/>
+    </clipPath>
+  </defs>
+  <g id="ring-outer" style="filter: none;" transform="matrix(1.454545, 0, 0, 1.454545, -72.72728, -72.727249)">
+    <title>outer ring</title>
+    <path d="M 270 160 C 270 220.751 220.751 270 160 270 C 99.249 270 50 220.751 50 160 C 50 99.249 99.249 50 160 50 C 220.751 50 270 99.249 270 160 Z M 160 85 C 118.579 85 85 118.579 85 160 C 85 201.421 118.579 235 160 235 C 201.421 235 235 201.421 235 160 C 235 118.579 201.421 85 160 85 Z" fill="url(#o-gradient-main)" stroke="none"/>
+  </g>
+  <g id="highlights" clip-path="url(#o-ring-clip)" transform="matrix(1.454545, 0, 0, 1.454545, -72.72728, -72.727249)">
+    <title>highlights</title>
+    <ellipse cx="100" cy="75" rx="45" ry="50" fill="url(#o-gradient-highlight)" opacity="0.8"/>
+    <path fill="rgb(255,255,255)" fill-opacity="0.4" d="M 95 65 Q 115 55 130 70 Q 120 60 100 60 Q 85 60 95 65 Z">
+      <title>bright spot</title>
+    </path>
+  </g>
+</svg>

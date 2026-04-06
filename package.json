@@ -1,0 +1,73 @@
+{
+  "name": "openbridge",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@9.0.0",
+  "description": "Local-first home automation bridge for developers. Plugin-based, TypeScript-first, Homebridge-compatible.",
+  "author": "José Silva <jose@nubisco.io>",
+  "license": "MIT",
+  "homepage": "https://github.com/nubisco/openbridge#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/nubisco/openbridge.git"
+  },
+  "bugs": {
+    "url": "https://github.com/nubisco/openbridge/issues"
+  },
+  "keywords": [
+    "homebridge",
+    "homekit",
+    "home-automation",
+    "hap",
+    "smart-home",
+    "plugin",
+    "bridge",
+    "typescript",
+    "vue",
+    "nas",
+    "synology",
+    "docker"
+  ],
+  "scripts": {
+    "dev": "pnpm --filter @openbridge/daemon --filter @openbridge/ui --parallel dev",
+    "build": "pnpm -r build",
+    "start": "pnpm --filter @openbridge/daemon start",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "prepare": "simple-git-hooks"
+  },
+  "simple-git-hooks": {
+    "pre-commit": "npx lint-staged"
+  },
+  "lint-staged": {
+    "apps/**/*.ts": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "apps/**/*.vue": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "packages/**/*.ts": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "**/*.{json,md,mts,mjs}": "prettier --write"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "eslint": "^9.0.0",
+    "eslint-config-prettier": "^10.0.0",
+    "eslint-plugin-prettier": "^5.0.0",
+    "eslint-plugin-vue": "^9.0.0",
+    "globals": "^15.0.0",
+    "lint-staged": "^15.0.0",
+    "prettier": "^3.0.0",
+    "simple-git-hooks": "^2.11.0",
+    "typescript": "^5.0.0",
+    "typescript-eslint": "^8.0.0",
+    "vue-eslint-parser": "^9.0.0"
+  }
+}
