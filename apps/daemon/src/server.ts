@@ -562,7 +562,7 @@ export async function createServer(
     let pty: any = null
     try {
       const nodePty = _req('node-pty')
-      const shell = process.env.SHELL || (process.platform === 'win32' ? 'cmd.exe' : '/bin/bash')
+      const shell = process.env.SHELL || (process.platform === 'win32' ? 'cmd.exe' : '/bin/sh')
       pty = nodePty.spawn(shell, [], {
         name: 'xterm-256color',
         cols: 80,
