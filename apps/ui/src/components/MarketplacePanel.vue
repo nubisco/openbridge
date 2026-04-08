@@ -340,6 +340,15 @@ onMounted(async () => {
               <NbIcon name="book-open" :size="11" />
               Docs
             </a>
+            <a
+              :href="`https://marketplace.openbridge.nubisco.io/plugins/${pkg.name}`"
+              target="_blank"
+              rel="noopener"
+              class="mp-stat mp-stat--link mp-stat--marketplace"
+            >
+              <NbIcon name="arrow-square-out" :size="11" />
+              Marketplace
+            </a>
           </div>
         </div>
 
@@ -622,6 +631,10 @@ onMounted(async () => {
       background: rgba(124, 58, 237, 0.12);
       border-color: rgba(124, 58, 237, 0.3);
     }
+  }
+
+  &.mp-stat--marketplace {
+    font-weight: 600;
   }
 }
 
