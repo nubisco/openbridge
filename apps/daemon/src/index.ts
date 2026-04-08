@@ -12,8 +12,10 @@ process.on('unhandledRejection', (reason) => {
   log.error(`Unhandled rejection: ${reason instanceof Error ? reason.message : String(reason)}`)
 })
 
+const portEnv = process.env.OPENBRIDGE_PORT ? parseInt(process.env.OPENBRIDGE_PORT, 10) : undefined
+
 const daemon = new Daemon()
-daemon.start().catch((err) => {
+daemon.start({ port: portEnv }).catch((err) => {
   console.error('Fatal error:', err)
   process.exit(1)
 })
