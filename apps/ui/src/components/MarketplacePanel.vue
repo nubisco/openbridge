@@ -21,15 +21,45 @@ const justInstalled = ref<{ name: string; mainFile: string } | null>(null)
 const page = ref(0)
 const PAGE_SIZE = 20
 const localPlugins = ref<LocalPlugin[]>([])
-const enrichedCache = ref(new Map<string, NpmPackage>()) // Cache enriched metadata
-const loadingEnriched = ref(new Set<string>()) // Tracks which packages are loading enriched data
+// Marketplace API — enriched data (stars, sponsors, reviews) is already in the response
+const MARKETPLACE_API = 'https://marketplace.openbridge.nubisco.io/api'
 
-function mergeEnrichedIntoResults(name: string, enriched: NpmPackage) {
-  const index = results.value.findIndex((item) => item.name === name)
-  if (index < 0) return
-  const next = [...results.value]
-  next[index] = { ...next[index], ...enriched }
-  results.value = next
+interface MarketplacePlugin {
+  name: string
+  display_name: string
+  description: string | null
+  version: string
+  author: string | null
+  homepage: string | null
+  repository_url: string | null
+  npm_url: string
+  weekly_downloads: number
+  github_stars: number | null
+  github_sponsors_url: string | null
+  verified: boolean
+  deprecated: boolean
+  last_published_at: string
+  rating_avg: number | null
+  rating_count: number
+}
+
+function marketplaceToNpmPackage(p: MarketplacePlugin): NpmPackage {
+  return {
+    name: p.name,
+    version: p.version,
+    description: p.description ?? '',
+    author: p.author ? { name: p.author } : undefined,
+    date: p.last_published_at,
+    weeklyDownloads: p.weekly_downloads,
+    githubStars: p.github_stars ?? undefined,
+    githubSponsorsUrl: p.github_sponsors_url ?? undefined,
+    documentationUrl: p.homepage ?? undefined,
+    links: {
+      npm: p.npm_url,
+      homepage: p.homepage ?? undefined,
+      repository: p.repository_url ?? undefined,
+    },
+  }
 }
 
 // Format download count (e.g., 1000 → "1.0K", 1000000 → "1.0M")
@@ -40,27 +70,6 @@ function formatDownloads(count?: number): string {
   return count.toString()
 }
 
-// Load enriched metadata for a package (downloads, stars, sponsors, etc.)
-async function loadEnriched(pkg: NpmPackage) {
-  if (enrichedCache.value.has(pkg.name)) {
-    const cached = enrichedCache.value.get(pkg.name)!
-    mergeEnrichedIntoResults(pkg.name, cached)
-    return cached
-  }
-  if (loadingEnriched.value.has(pkg.name)) return pkg
-  loadingEnriched.value.add(pkg.name)
-  try {
-    const enriched = await api.marketplace.enriched(pkg.name)
-    enrichedCache.value.set(pkg.name, enriched)
-    mergeEnrichedIntoResults(pkg.name, enriched)
-  } catch {
-    /* ignore enrichment failure, use basic data */
-  } finally {
-    loadingEnriched.value.delete(pkg.name)
-  }
-  return pkg
-}
-
 async function search(reset = true) {
   if (reset) {
     page.value = 0
@@ -69,12 +78,18 @@ async function search(reset = true) {
   loading.value = true
   error.value = null
   try {
-    const res = await api.marketplace.search(query.value, page.value * PAGE_SIZE, PAGE_SIZE)
-    const pkgs = res.objects.map((o) => o.package)
+    const marketplacePage = page.value + 1
+    const params = new URLSearchParams({
+      q: query.value,
+      page: String(marketplacePage),
+      limit: String(PAGE_SIZE),
+    })
+    const res = await fetch(`${MARKETPLACE_API}/plugins?${params}`)
+    if (!res.ok) throw new Error(`Marketplace API error: ${res.status}`)
+    const data = (await res.json()) as { plugins: MarketplacePlugin[]; total: number }
+    const pkgs = data.plugins.map(marketplaceToNpmPackage)
     results.value = reset ? pkgs : [...results.value, ...pkgs]
-    total.value = res.total
-    // Load enriched data for visible packages (non-blocking)
-    pkgs.forEach((p) => loadEnriched(p).catch(() => {}))
+    total.value = data.total
   } catch (e) {
     error.value = String(e)
   } finally {
