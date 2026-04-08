@@ -1,3 +1,9 @@
+# [0.3.0](https://github.com/nubisco/openbridge/compare/v0.2.0...v0.3.0) (2026-04-08)
+
+### Features
+
+- **ci:** automate releases via semantic-release and CI chain ([693ac87](https://github.com/nubisco/openbridge/commit/693ac87d5f35c422ec6edefbf52aa9b6cf629e2f))
+
 # Changelog
 
 All notable changes to this project will be documented in this file.
