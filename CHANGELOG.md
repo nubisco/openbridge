@@ -1,3 +1,9 @@
+# [0.5.0](https://github.com/nubisco/openbridge/compare/v0.4.0...v0.5.0) (2026-04-08)
+
+### Features
+
+- **crawler:** fetch GitHub stars + sponsors; expose in plugins API ([af5a511](https://github.com/nubisco/openbridge/commit/af5a5114593231e83d4e6eba2c157a46cfc3ad1d))
+
 # [0.4.0](https://github.com/nubisco/openbridge/compare/v0.3.1...v0.4.0) (2026-04-08)
 
 ### Features
