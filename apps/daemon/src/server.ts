@@ -21,9 +21,10 @@ const log = Logger.create('system')
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
-// Read version from own package.json (works in both monorepo dev and npm install)
+// Version: injected at Docker build time via OPENBRIDGE_VERSION env var,
+// falls back to apps/daemon/package.json for local dev.
 const _ownPkg = _req('../package.json') as { version: string }
-export const OPENBRIDGE_VERSION: string = _ownPkg.version
+export const OPENBRIDGE_VERSION: string = process.env.OPENBRIDGE_VERSION ?? _ownPkg.version
 
 // Resolve UI dist: env override → npm layout (../ui-dist) → monorepo dev layout
 const uiDist =
@@ -72,13 +73,13 @@ export async function createServer(
   // ─── Update check ─────────────────────────────────────────────────────────
   app.get('/api/updates/check', async () => {
     try {
-      const res = await fetch('https://registry.npmjs.org/openbridge/latest', {
+      const res = await fetch('https://api.github.com/repos/nubisco/openbridge/releases/latest', {
         signal: AbortSignal.timeout(8000),
-        headers: { Accept: 'application/json' },
+        headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'openbridge-daemon' },
       })
       if (!res.ok) return { current: OPENBRIDGE_VERSION, latest: null, updateAvailable: false }
-      const data = (await res.json()) as { version: string }
-      const latest = data.version
+      const data = (await res.json()) as { tag_name: string }
+      const latest = data.tag_name.replace(/^v/, '')
       const updateAvailable = latest !== OPENBRIDGE_VERSION
       return { current: OPENBRIDGE_VERSION, latest, updateAvailable }
     } catch {
