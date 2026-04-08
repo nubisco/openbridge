@@ -1,3 +1,9 @@
+# [0.4.0](https://github.com/nubisco/openbridge/compare/v0.3.1...v0.4.0) (2026-04-08)
+
+### Features
+
+- **marketplace-panel:** add Marketplace link per plugin to openbridge ([caf840d](https://github.com/nubisco/openbridge/commit/caf840d14405d5ab9ce0156afafdc01dee46cbd5))
+
 ## [0.3.1](https://github.com/nubisco/openbridge/compare/v0.3.0...v0.3.1) (2026-04-08)
 
 ### Bug Fixes
