@@ -1,3 +1,9 @@
+## [0.3.1](https://github.com/nubisco/openbridge/compare/v0.3.0...v0.3.1) (2026-04-08)
+
+### Bug Fixes
+
+- **daemon:** correct version source and update checker ([11c8b24](https://github.com/nubisco/openbridge/commit/11c8b2475066f5bed811fdc38a127fc581273c09))
+
 # [0.3.0](https://github.com/nubisco/openbridge/compare/v0.2.0...v0.3.0) (2026-04-08)
 
 ### Features
