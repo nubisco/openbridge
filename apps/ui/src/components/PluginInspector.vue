@@ -42,6 +42,23 @@ const statusLabel: Record<string, string> = {
   error: 'Error',
 }
 
+// ─── Plugin disabled toggle ───────────────────────────────────────────────────
+const togglingDisabled = ref(false)
+
+async function togglePluginDisabled() {
+  if (!inspector.selectedPlugin || togglingDisabled.value) return
+  const newDisabledState = !inspector.selectedPlugin.disabled
+  togglingDisabled.value = true
+  try {
+    const updated = await api.setPluginDisabled(inspector.selectedPlugin.id, newDisabledState)
+    inspector.selectedPlugin.disabled = updated.disabled
+  } catch (err) {
+    console.error('Failed to toggle plugin disabled state:', err)
+  } finally {
+    togglingDisabled.value = false
+  }
+}
+
 // ─── Config section ───────────────────────────────────────────────────────────
 const pluginInfo = ref<{ mainFile: string; platforms: string[] } | null>(null)
 const loadingInfo = ref(false)
@@ -59,6 +76,11 @@ const hasVisualSchema = computed(() => configSchema.value?.schema != null)
 
 // Show config editor for ANY homebridge-source plugin (running or stopped)
 const isHomebridge = computed(() => inspector.selectedPlugin?.source === 'homebridge')
+const selectedHomebridgePlatformName = computed(() => {
+  const plugin = inspector.selectedPlugin
+  if (!plugin || plugin.source !== 'homebridge') return ''
+  return plugin.platformName ?? plugin.id ?? plugin.manifest.name
+})
 
 watch(
   () => inspector.selectedPlugin,
@@ -75,11 +97,11 @@ watch(
 
     loadingInfo.value = true
     try {
-      // Running platforms have manifest.name === platformName (e.g. "TuyaLocalPlatform").
-      // Try loading their existing config first.
-      const existing = await api.config.getPlatform(plugin.manifest.name)
+      // Homebridge instances can expose package name in manifest and platform name separately.
+      // Always target config by platformName when available.
+      const existing = await api.config.getPlatform(selectedHomebridgePlatformName.value)
       if (existing.config) {
-        selectedPlatform.value = plugin.manifest.name
+        selectedPlatform.value = selectedHomebridgePlatformName.value
         configJson.value = JSON.stringify(existing.config, null, 2)
         visualConfig.value = existing.config as Record<string, unknown>
         await loadSchema(plugin.manifest.name)
@@ -98,9 +120,9 @@ watch(
     } catch {
       // Probe failed (e.g. plugin not in marketplace dir) — try by name as fallback
       try {
-        const existing = await api.config.getPlatform(plugin.manifest.name)
+        const existing = await api.config.getPlatform(selectedHomebridgePlatformName.value)
         if (existing.config) {
-          selectedPlatform.value = plugin.manifest.name
+          selectedPlatform.value = selectedHomebridgePlatformName.value
           configJson.value = JSON.stringify(existing.config, null, 2)
         }
       } catch {
@@ -291,6 +313,14 @@ async function save() {
         <div v-if="inspector.selectedPlugin.stoppedAt" class="field-row">
           <span class="field-label">Stopped</span>
           <span class="field-value">{{ new Date(inspector.selectedPlugin.stoppedAt).toLocaleString() }}</span>
+        </div>
+        <div class="field-row">
+          <span class="field-label">Disabled</span>
+          <NbSwitch
+            :model-value="inspector.selectedPlugin.disabled ?? false"
+            :disabled="togglingDisabled"
+            @update:model-value="togglePluginDisabled"
+          />
         </div>
       </section>
 

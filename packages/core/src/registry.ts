@@ -3,8 +3,8 @@ import type { Plugin, PluginInstance, PluginStatus } from './types.js'
 export class PluginRegistry {
   private plugins = new Map<string, { plugin: Plugin; instance: PluginInstance }>()
 
-  register(plugin: Plugin): PluginInstance {
-    const id = plugin.manifest.name
+  register(plugin: Plugin, instanceId?: string): PluginInstance {
+    const id = instanceId ?? plugin.manifest.name
     const instance: PluginInstance = {
       id,
       manifest: plugin.manifest,
@@ -20,6 +20,21 @@ export class PluginRegistry {
 
   getAll(): PluginInstance[] {
     return Array.from(this.plugins.values()).map((e) => e.instance)
+  }
+
+  unregister(id: string): boolean {
+    return this.plugins.delete(id)
+  }
+
+  unregisterWhere(predicate: (instance: PluginInstance) => boolean): number {
+    let removed = 0
+    for (const [id, entry] of this.plugins.entries()) {
+      if (predicate(entry.instance)) {
+        this.plugins.delete(id)
+        removed++
+      }
+    }
+    return removed
   }
 
   updateStatus(id: string, status: PluginStatus, error?: string) {

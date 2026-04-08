@@ -1,61 +1,3 @@
-<script setup lang="ts">
-import { onMounted, onUnmounted, watch, ref } from 'vue'
-import { useRoute } from 'vue-router'
-import { useDaemonStore } from '@/stores/daemon'
-import { useInspectorStore } from '@/stores/inspector'
-import { useLayoutStore } from '@/stores/layout'
-import PluginInspector from '@/components/PluginInspector.vue'
-import MarketplacePanel from '@/components/MarketplacePanel.vue'
-
-const route = useRoute()
-const daemon = useDaemonStore()
-const inspector = useInspectorStore()
-const layout = useLayoutStore()
-
-const updateAvailable = ref<string | null>(null)
-const updateDismissed = ref(false)
-
-async function checkForUpdate() {
-  try {
-    const res = await fetch('/api/updates/check')
-    if (!res.ok) return
-    const data = (await res.json()) as { updateAvailable: boolean; latest: string }
-    if (data.updateAvailable && data.latest) updateAvailable.value = data.latest
-  } catch {
-    // network unavailable — silently ignore
-  }
-}
-
-const navItems = [
-  { name: 'dashboard', icon: 'house', label: 'Dashboard', href: '/dashboard' },
-  { name: 'plugins', icon: 'puzzle-piece', label: 'Plugins', href: '/plugins' },
-  { name: 'devices', icon: 'devices', label: 'Devices', href: '/devices' },
-  { name: 'config', icon: 'brackets-curly', label: 'Config', href: '/config' },
-  { name: 'terminal', icon: 'terminal', label: 'Terminal', href: '/terminal' },
-  { name: 'settings', icon: 'gear', label: 'Settings', href: '/settings' },
-]
-
-// Close inspector when navigating away
-watch(
-  () => route.name,
-  () => inspector.close(),
-)
-
-onMounted(async () => {
-  await daemon.fetchHealth()
-  await daemon.fetchPlugins()
-  daemon.connectLiveLogs()
-
-  // Poll health every 10s
-  const interval = setInterval(() => daemon.fetchHealth(), 10_000)
-  onUnmounted(() => clearInterval(interval))
-
-  // Check for updates once on load (non-blocking)
-  checkForUpdate()
-})
-onUnmounted(() => daemon.disconnectLiveLogs())
-</script>
-
 <template>
   <NbShell :inspector-visible="inspector.visible">
     <!-- ═══ Logo ═══ -->
@@ -123,6 +65,64 @@ onUnmounted(() => daemon.disconnectLiveLogs())
     <RouterView />
   </NbShell>
 </template>
+
+<script setup lang="ts">
+import { onMounted, onUnmounted, watch, ref } from 'vue'
+import { useRoute } from 'vue-router'
+import { useDaemonStore } from '@/stores/daemon'
+import { useInspectorStore } from '@/stores/inspector'
+import { useLayoutStore } from '@/stores/layout'
+import PluginInspector from '@/components/PluginInspector.vue'
+import MarketplacePanel from '@/components/MarketplacePanel.vue'
+
+const route = useRoute()
+const daemon = useDaemonStore()
+const inspector = useInspectorStore()
+const layout = useLayoutStore()
+
+const updateAvailable = ref<string | null>(null)
+const updateDismissed = ref(false)
+
+async function checkForUpdate() {
+  try {
+    const res = await fetch('/api/updates/check')
+    if (!res.ok) return
+    const data = (await res.json()) as { updateAvailable: boolean; latest: string }
+    if (data.updateAvailable && data.latest) updateAvailable.value = data.latest
+  } catch {
+    // network unavailable — silently ignore
+  }
+}
+
+const navItems = [
+  { name: 'dashboard', icon: 'house', label: 'Dashboard', href: '/dashboard' },
+  { name: 'plugins', icon: 'puzzle-piece', label: 'Plugins', href: '/plugins' },
+  { name: 'devices', icon: 'devices', label: 'Devices', href: '/devices' },
+  { name: 'config', icon: 'brackets-curly', label: 'Config', href: '/config' },
+  { name: 'terminal', icon: 'terminal', label: 'Terminal', href: '/terminal' },
+  { name: 'settings', icon: 'gear', label: 'Settings', href: '/settings' },
+]
+
+// Close inspector when navigating away
+watch(
+  () => route.name,
+  () => inspector.close(),
+)
+
+onMounted(async () => {
+  await daemon.fetchHealth()
+  await daemon.fetchPlugins()
+  daemon.connectLiveLogs()
+
+  // Poll health every 10s
+  const interval = setInterval(() => daemon.fetchHealth(), 10_000)
+  onUnmounted(() => clearInterval(interval))
+
+  // Check for updates once on load (non-blocking)
+  checkForUpdate()
+})
+onUnmounted(() => daemon.disconnectLiveLogs())
+</script>
 
 <style lang="scss" scoped>
 // Sidebar logo — local tooltip (NbShell slot can't use NbSidebarLink's scoped tooltip)

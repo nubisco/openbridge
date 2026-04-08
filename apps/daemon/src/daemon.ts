@@ -164,6 +164,22 @@ export class Daemon {
       this.registry.register(plugin)
     }
     this.loadedPlugins = plugins
+
+    // Load disabled plugins list from config and apply to instances
+    try {
+      const rawConfig = JSON.parse(readFileSync(configPath, 'utf8'))
+      const disabledPlugins = (rawConfig.disabledPlugins ?? []) as string[]
+      for (const disabledId of disabledPlugins) {
+        const entry = this.registry.get(disabledId)
+        if (entry) {
+          entry.instance.disabled = true
+          log.debug(`Plugin marked as disabled: ${disabledId}`)
+        }
+      }
+    } catch {
+      /* config file may not exist yet */
+    }
+
     await this.lifecycle.startAll(plugins, (plugin) => this.makeContext(plugin, config))
 
     // ── Marketplace-installed plugins (discovery) ──────────────────────────────

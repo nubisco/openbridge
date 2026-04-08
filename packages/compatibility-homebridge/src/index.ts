@@ -296,18 +296,19 @@ export class HomebridgeAPI extends EventEmitter {
       if (registry) {
         const pseudoPlugin = {
           manifest: {
-            name: reg.platformName,
+            name: reg.pluginName,
             version: (config.version as string | undefined) ?? '?.?.?',
-            description: `Homebridge platform: ${reg.pluginName}`,
+            description: `Platform: ${reg.platformName}`,
             author: 'homebridge-compat',
           },
           setup: undefined,
           start: undefined,
           stop: undefined,
         }
-        const instance = registry.register(pseudoPlugin)
+        const instance = registry.register(pseudoPlugin, reg.platformName)
         instance.source = 'homebridge'
-        registry.updateStatus(reg.platformName, 'loading')
+        instance.platformName = reg.platformName
+        registry.updateStatus(instance.id, 'loading')
       }
 
       try {

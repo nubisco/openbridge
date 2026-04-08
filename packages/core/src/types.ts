@@ -37,4 +37,7 @@ export interface PluginInstance {
   startedAt?: Date
   stoppedAt?: Date
   source?: 'native' | 'homebridge'
+  disabled?: boolean
+  platformName?: string
+  enrichedMetadata?: Record<string, unknown> // Cached npm metadata (downloads, stars, sponsors, docs url)
 }

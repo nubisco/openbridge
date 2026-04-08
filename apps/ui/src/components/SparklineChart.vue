@@ -56,7 +56,7 @@ const paths = computed(() => {
       </linearGradient>
     </defs>
     <path v-if="paths.area" :d="paths.area" :fill="`url(#${gradientId})`" />
-    <path v-if="paths.line" :d="paths.line" :stroke="color" stroke-width="1.5" fill="none" stroke-linecap="round" />
+    <path v-if="paths.line" :d="paths.line" :stroke="color" stroke-width="0.5" fill="none" stroke-linecap="round" />
   </svg>
 </template>
 

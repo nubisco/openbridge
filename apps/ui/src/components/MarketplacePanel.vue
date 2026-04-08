@@ -3,9 +3,11 @@ import { ref, onMounted } from 'vue'
 import { useInspectorStore } from '@/stores/inspector'
 import { useDaemonStore } from '@/stores/daemon'
 import { api, type NpmPackage, type LocalPlugin } from '@/api'
+import { useNotifications } from '@/composables/useNotifications'
 
 const inspector = useInspectorStore()
 const daemon = useDaemonStore()
+const notify = useNotifications()
 const uninstalling = ref<string | null>(null)
 
 const query = ref('')
@@ -19,6 +21,45 @@ const justInstalled = ref<{ name: string; mainFile: string } | null>(null)
 const page = ref(0)
 const PAGE_SIZE = 20
 const localPlugins = ref<LocalPlugin[]>([])
+const enrichedCache = ref(new Map<string, NpmPackage>()) // Cache enriched metadata
+const loadingEnriched = ref(new Set<string>()) // Tracks which packages are loading enriched data
+
+function mergeEnrichedIntoResults(name: string, enriched: NpmPackage) {
+  const index = results.value.findIndex((item) => item.name === name)
+  if (index < 0) return
+  const next = [...results.value]
+  next[index] = { ...next[index], ...enriched }
+  results.value = next
+}
+
+// Format download count (e.g., 1000 → "1.0K", 1000000 → "1.0M")
+function formatDownloads(count?: number): string {
+  if (!count) return '0'
+  if (count >= 1_000_000) return `${(count / 1_000_000).toFixed(1)}M`
+  if (count >= 1_000) return `${(count / 1_000).toFixed(1)}K`
+  return count.toString()
+}
+
+// Load enriched metadata for a package (downloads, stars, sponsors, etc.)
+async function loadEnriched(pkg: NpmPackage) {
+  if (enrichedCache.value.has(pkg.name)) {
+    const cached = enrichedCache.value.get(pkg.name)!
+    mergeEnrichedIntoResults(pkg.name, cached)
+    return cached
+  }
+  if (loadingEnriched.value.has(pkg.name)) return pkg
+  loadingEnriched.value.add(pkg.name)
+  try {
+    const enriched = await api.marketplace.enriched(pkg.name)
+    enrichedCache.value.set(pkg.name, enriched)
+    mergeEnrichedIntoResults(pkg.name, enriched)
+  } catch {
+    /* ignore enrichment failure, use basic data */
+  } finally {
+    loadingEnriched.value.delete(pkg.name)
+  }
+  return pkg
+}
 
 async function search(reset = true) {
   if (reset) {
@@ -32,6 +73,8 @@ async function search(reset = true) {
     const pkgs = res.objects.map((o) => o.package)
     results.value = reset ? pkgs : [...results.value, ...pkgs]
     total.value = res.total
+    // Load enriched data for visible packages (non-blocking)
+    pkgs.forEach((p) => loadEnriched(p).catch(() => {}))
   } catch (e) {
     error.value = String(e)
   } finally {
@@ -49,8 +92,10 @@ async function install(pkg: NpmPackage) {
     justInstalled.value = { name: pkg.name, mainFile: res.mainFile }
     await api.pluginsRefresh()
     await daemon.fetchPlugins()
+    notify.success(`Installed ${pkg.name}`)
   } catch (e) {
     error.value = `Failed to install ${pkg.name}: ${e}`
+    notify.error(`Failed to install ${pkg.name}`)
   } finally {
     installing.value = null
   }
@@ -64,8 +109,10 @@ async function uninstall(name: string) {
     await api.marketplace.uninstall(name)
     installed.value.delete(name)
     await daemon.fetchPlugins()
+    notify.success(`Removed ${name}`)
   } catch (e) {
     error.value = `Failed to uninstall ${name}: ${e}`
+    notify.error(`Failed to remove ${name}`)
   } finally {
     uninstalling.value = null
   }
@@ -86,8 +133,10 @@ async function activateLocal(local: LocalPlugin) {
     installed.value.set(local.name, mainFile)
     justInstalled.value = { name: local.name, mainFile }
     await daemon.fetchPlugins()
+    notify.success(`Activated ${local.name}`)
   } catch (e) {
     error.value = `Failed to activate ${local.name}: ${e}`
+    notify.error(`Failed to activate ${local.name}`)
   } finally {
     installing.value = null
   }
@@ -260,6 +309,37 @@ onMounted(async () => {
             <span v-if="authorName(pkg)">{{ authorName(pkg) }}</span>
             <span v-if="authorName(pkg)" class="mp-sep">·</span>
             <span>{{ relativeDate(pkg.date) }}</span>
+          </div>
+          <!-- Enriched metadata row -->
+          <div class="mp-enriched">
+            <span v-if="pkg.weeklyDownloads" class="mp-stat">
+              <NbIcon name="cloud-arrow-down" :size="11" />
+              {{ formatDownloads(pkg.weeklyDownloads) }}
+            </span>
+            <span v-if="pkg.githubStars" class="mp-stat">
+              <NbIcon name="star" weight="fill" :size="11" />
+              {{ formatDownloads(pkg.githubStars) }}
+            </span>
+            <a
+              v-if="pkg.githubSponsorsUrl"
+              :href="pkg.githubSponsorsUrl"
+              target="_blank"
+              rel="noopener"
+              class="mp-stat mp-stat--link"
+            >
+              <NbIcon name="heart" weight="fill" :size="11" />
+              Sponsor
+            </a>
+            <a
+              v-if="pkg.documentationUrl"
+              :href="pkg.documentationUrl"
+              target="_blank"
+              rel="noopener"
+              class="mp-stat mp-stat--link"
+            >
+              <NbIcon name="book-open" :size="11" />
+              Docs
+            </a>
           </div>
         </div>
 
@@ -507,6 +587,41 @@ onMounted(async () => {
   gap: 0.3rem;
   .mp-sep {
     color: #d1d5db;
+  }
+}
+
+.mp-enriched {
+  font-size: 0.68rem;
+  color: #9ca3af;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+  flex-wrap: wrap;
+}
+
+.mp-stat {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.15rem 0.4rem;
+  background: #f3f4f6;
+  border-radius: 4px;
+  color: #6b7280;
+  font-size: 0.65rem;
+  white-space: nowrap;
+
+  &.mp-stat--link {
+    cursor: pointer;
+    color: #7c3aed;
+    background: rgba(124, 58, 237, 0.08);
+    border: 1px solid rgba(124, 58, 237, 0.2);
+    text-decoration: none;
+    transition: all 0.15s;
+    &:hover {
+      background: rgba(124, 58, 237, 0.12);
+      border-color: rgba(124, 58, 237, 0.3);
+    }
   }
 }
 

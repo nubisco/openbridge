@@ -14,6 +14,9 @@ export interface PluginInstance {
   startedAt?: string
   stoppedAt?: string
   source?: 'native' | 'homebridge'
+  disabled?: boolean
+  platformName?: string
+  enrichedMetadata?: Record<string, unknown> // Cached npm metadata (downloads, stars, sponsors, docs url)
 }
 
 export interface AccessoryCharacteristic {
@@ -104,6 +107,12 @@ export interface NpmPackage {
   author?: { name: string } | string
   links?: { npm?: string; homepage?: string; repository?: string }
   date: string
+  weeklyDownloads?: number
+  githubStars?: number
+  githubSponsorsUrl?: string
+  documentationUrl?: string
+  readme?: string
+  badges?: string[]
 }
 
 export interface NpmSearchResult {
@@ -129,6 +138,15 @@ export const api = {
   pluginsRefresh: () =>
     fetch('/api/plugins/refresh', { method: 'POST' }).then((r) => r.json() as Promise<{ plugins: PluginInstance[] }>),
   plugin: (id: string) => get<PluginInstance>(`/plugins/${id}`),
+  setPluginDisabled: (id: string, disabled: boolean) =>
+    fetch(`/api/plugins/${id}/disabled`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ disabled }),
+    }).then((r) => {
+      if (!r.ok) throw new Error(`Set disabled failed: ${r.status}`)
+      return r.json() as Promise<PluginInstance>
+    }),
   bridge: () => get<BridgeConfig>('/bridge'),
   saveBridge: (config: Partial<BridgeConfig>) =>
     fetch('/api/bridge', {
@@ -201,6 +219,10 @@ export const api = {
       const params = new URLSearchParams({ q, from: String(from), size: String(size) })
       return get<NpmSearchResult>(`/marketplace/search?${params}`)
     },
+    enriched: (name: string) =>
+      fetch(`/api/marketplace/enriched/${encodeURIComponent(name)}`).then((r) =>
+        r.ok ? (r.json() as Promise<NpmPackage>) : Promise.reject(new Error(`Enrichment failed: ${r.status}`)),
+      ),
     installed: () => get<{ packages: InstalledPackage[] }>('/marketplace/installed'),
     local: () => get<{ plugins: LocalPlugin[] }>('/marketplace/local'),
     install: (pkg: string) =>

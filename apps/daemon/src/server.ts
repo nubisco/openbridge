@@ -150,7 +150,16 @@ export async function createServer(
 
   // ─── Plugins ─────────────────────────────────────────────────────────────
   app.get('/api/plugins', async () => {
-    return { plugins: registry.getAll() }
+    const plugins = registry.getAll()
+    // Attach cached enriched metadata to each plugin
+    const cache = loadMetadataCache()
+    for (const plugin of plugins) {
+      const pkgName = plugin.manifest.name
+      if (cache[pkgName]) {
+        plugin.enrichedMetadata = cache[pkgName]
+      }
+    }
+    return { plugins }
   })
 
   // Re-scan HB plugins dir and register any newly installed packages
@@ -188,13 +197,63 @@ export async function createServer(
         /* ignore */
       }
     }
-    return { plugins: registry.getAll() }
+    const plugins = registry.getAll()
+    // Attach cached enriched metadata to each plugin
+    const cache = loadMetadataCache()
+    for (const plugin of plugins) {
+      const pkgName = plugin.manifest.name
+      if (cache[pkgName]) {
+        plugin.enrichedMetadata = cache[pkgName]
+      }
+    }
+    return { plugins }
   })
 
   app.get('/api/plugins/:id', async (req) => {
     const { id } = req.params as { id: string }
     const entry = registry.get(id)
     if (!entry) throw { statusCode: 404, message: `Plugin '${id}' not found` }
+    const instance = entry.instance
+    // Attach cached enriched metadata if available
+    const cache = loadMetadataCache()
+    const pkgName = instance.manifest.name
+    if (cache[pkgName]) {
+      instance.enrichedMetadata = cache[pkgName]
+    }
+    return instance
+  })
+
+  app.post('/api/plugins/:id/disabled', async (req) => {
+    const { id } = req.params as { id: string }
+    const { disabled } = req.body as { disabled: boolean }
+    const entry = registry.get(id)
+    if (!entry) throw { statusCode: 404, message: `Plugin '${id}' not found` }
+
+    // Update the instance
+    entry.instance.disabled = disabled
+
+    // Persist to config.json under a disabledPlugins array
+    try {
+      let cfg: any = {}
+      try {
+        cfg = JSON.parse(readFileSync(configPath, 'utf8'))
+      } catch {
+        /* start fresh */
+      }
+      const disabledPlugins = cfg.disabledPlugins ?? []
+      if (disabled && !disabledPlugins.includes(id)) {
+        disabledPlugins.push(id)
+      } else if (!disabled) {
+        const idx = disabledPlugins.indexOf(id)
+        if (idx >= 0) disabledPlugins.splice(idx, 1)
+      }
+      cfg.disabledPlugins = disabledPlugins
+      writeFileSync(configPath, JSON.stringify(cfg, null, 2), 'utf8')
+      log.info(`Plugin disabled state toggled: ${id} -> ${disabled}`)
+    } catch (err) {
+      log.warn(`Failed to persist disabled state: ${err}`)
+    }
+
     return entry.instance
   })
 
@@ -447,6 +506,49 @@ export async function createServer(
     return { plugins }
   })
 
+  // ─── Plugin metadata cache helpers ─────────────────────────────────────────
+  const metadataCachePath = resolve(os.homedir(), '.openbridge', 'plugin-metadata-cache.json')
+
+  function loadMetadataCache(): Record<string, any> {
+    try {
+      if (existsSync(metadataCachePath)) {
+        return JSON.parse(readFileSync(metadataCachePath, 'utf8'))
+      }
+    } catch {
+      /* ignore */
+    }
+    return {}
+  }
+
+  function saveMetadataCache(cache: Record<string, any>) {
+    try {
+      mkdirSync(dirname(metadataCachePath), { recursive: true })
+      writeFileSync(metadataCachePath, JSON.stringify(cache, null, 2), 'utf8')
+    } catch (err) {
+      log.warn(`Failed to save metadata cache: ${err}`)
+    }
+  }
+
+  async function fetchAndCacheEnrichedMetadata(pkgName: string): Promise<Record<string, any> | undefined> {
+    try {
+      // Fetch from the enriched endpoint (same logic as GET /api/marketplace/enriched/:name)
+      const enrichedRes = await fetch(
+        `http://localhost:${process.env.PORT ?? 8000}/api/marketplace/enriched/${encodeURIComponent(pkgName)}`,
+      ).catch(() => null)
+      if (enrichedRes?.ok) {
+        const enriched = await enrichedRes.json()
+        // Save to cache
+        const cache = loadMetadataCache()
+        cache[pkgName] = enriched
+        saveMetadataCache(cache)
+        return enriched
+      }
+    } catch (err) {
+      log.warn(`Failed to fetch enriched metadata for ${pkgName}: ${err}`)
+    }
+    return undefined
+  }
+
   app.post('/api/marketplace/install', async (req) => {
     const { package: pkg } = req.body as { package: string }
     if (!pkg || !/^[a-z0-9@._/-]+$/i.test(pkg)) {
@@ -469,6 +571,10 @@ export async function createServer(
     } catch {
       /* ignore */
     }
+
+    // Fetch and cache enriched metadata in the background (non-blocking)
+    fetchAndCacheEnrichedMetadata(pkg).catch((err) => log.warn(`Failed to cache metadata for ${pkg}: ${err}`))
+
     log.info(`Installed plugin: ${pkg}`)
     return { installed: pkg, mainFile, pluginsDir: HB_PLUGINS_DIR }
   })
@@ -485,8 +591,43 @@ export async function createServer(
       })
       child.on('close', (code) => (code === 0 ? ok() : fail(new Error(`npm exited with ${code}`))))
     })
+
+    // Remove stale plugin instances from in-memory registry so /plugins updates immediately.
+    const removedInstances = registry.unregisterWhere((instance) => {
+      if (instance.manifest.name === name) return true
+      const desc = instance.manifest.description ?? ''
+      // Backward compatibility for older pseudo-plugin descriptions.
+      return desc.includes(`Homebridge platform: ${name}`)
+    })
+
+    // Also prune config.platforms entries that reference this package path.
+    try {
+      const cfg = JSON.parse(readFileSync(configPath, 'utf8')) as any
+      if (Array.isArray(cfg.platforms)) {
+        const before = cfg.platforms.length
+        cfg.platforms = cfg.platforms.filter((p: any) => {
+          const pluginPath = String(p?.plugin ?? '')
+          return !pluginPath.includes(`/node_modules/${name}/`)
+        })
+        if (cfg.platforms.length !== before) {
+          writeFileSync(configPath, JSON.stringify(cfg, null, 2), 'utf8')
+        }
+      }
+    } catch {
+      /* ignore config pruning errors */
+    }
+
+    // Clear metadata cache for this plugin
+    try {
+      const cache = loadMetadataCache()
+      delete cache[name]
+      saveMetadataCache(cache)
+    } catch {
+      /* ignore cache cleanup errors */
+    }
+
     log.info(`Uninstalled plugin: ${name}`)
-    return { uninstalled: name }
+    return { uninstalled: name, removedInstances }
   })
 
   // ─── Daemon restart ───────────────────────────────────────────────────────
@@ -544,6 +685,179 @@ export async function createServer(
       return { schema: null }
     }
     return { schema: JSON.parse(readFileSync(schemaPath, 'utf8')) }
+  })
+
+  // Helper: Extract GitHub repo URL from various sources
+  function extractGithubRepo(pkg: any): string | null {
+    let repo = pkg.repository?.url ?? pkg.repository ?? pkg.homepage ?? pkg.links?.repository ?? ''
+    if (typeof repo !== 'string') return null
+
+    // Normalize common npm package repository URL forms:
+    // - git+https://github.com/owner/repo.git
+    // - https://github.com/owner/repo
+    // - github:owner/repo
+    // - git@github.com:owner/repo.git
+    repo = repo
+      .trim()
+      .replace(/^github:/, 'https://github.com/')
+      .replace(/^git\+/, '')
+      .replace(/^git@github\.com:/, 'https://github.com/')
+
+    const match = repo.match(/github\.com\/([^/]+)\/([^/#?]+?)(?:\.git)?(?:[/?#].*)?$/)
+    return match ? `${match[1]}/${match[2]}` : null
+  }
+
+  function parseCompactGithubCount(raw: string): number | undefined {
+    const text = raw.trim().toLowerCase().replace(/,/g, '')
+    const m = text.match(/([0-9]*\.?[0-9]+)\s*([km])?/)
+    if (!m) return undefined
+    const value = Number(m[1])
+    if (Number.isNaN(value)) return undefined
+    if (m[2] === 'k') return Math.round(value * 1000)
+    if (m[2] === 'm') return Math.round(value * 1_000_000)
+    return Math.round(value)
+  }
+
+  // Enriched marketplace metadata endpoint
+  // Fetches npm download stats, GitHub stars, sponsors, and README
+  app.get('/api/marketplace/enriched/:name', async (req) => {
+    const { name } = req.params as { name: string }
+    try {
+      // Start with basic package info from npm registry
+      const npmRes = await fetch(`https://registry.npmjs.org/${encodeURIComponent(name)}`, {
+        signal: AbortSignal.timeout(5000),
+        headers: { Accept: 'application/json' },
+      })
+      if (!npmRes.ok) return { name }
+
+      const npmData = (await npmRes.json()) as any
+      const latestVersion = npmData['dist-tags']?.latest ?? npmData.version
+      const packData = npmData.versions?.[latestVersion] ?? {}
+
+      // Fetch npm download stats
+      let weeklyDownloads: number | undefined
+      try {
+        const statsRes = await fetch(`https://api.npmjs.org/downloads/point/last-week/${encodeURIComponent(name)}`, {
+          signal: AbortSignal.timeout(3000),
+          headers: { Accept: 'application/json' },
+        })
+        if (statsRes.ok) {
+          const stats = (await statsRes.json()) as { downloads?: number }
+          weeklyDownloads = stats.downloads
+        }
+      } catch {
+        /* stats not available */
+      }
+
+      // Extract GitHub repo and fetch stars + sponsors
+      const githubRepo = extractGithubRepo(packData)
+      let githubStars: number | undefined
+      let githubSponsorsUrl: string | undefined
+
+      if (githubRepo) {
+        const owner = githubRepo.split('/')[0]
+        if (owner) {
+          // Keep sponsor link available even when GitHub API rate limits.
+          githubSponsorsUrl = `https://github.com/sponsors/${owner}`
+        }
+
+        try {
+          const ghRes = await fetch(`https://api.github.com/repos/${githubRepo}`, {
+            signal: AbortSignal.timeout(5000),
+            headers: { Accept: 'application/json', 'User-Agent': 'OpenBridge' },
+          })
+          if (ghRes.ok) {
+            const ghData = (await ghRes.json()) as any
+            githubStars = ghData.stargazers_count
+          }
+        } catch {
+          /* GitHub API not available */
+        }
+
+        // Fallback: scrape stars from repo page when API is unavailable/rate-limited.
+        if (githubStars == null) {
+          try {
+            const htmlRes = await fetch(`https://github.com/${githubRepo}`, {
+              signal: AbortSignal.timeout(5000),
+              headers: { 'User-Agent': 'OpenBridge' },
+            })
+            if (htmlRes.ok) {
+              const html = await htmlRes.text()
+              const starBlock =
+                html.match(new RegExp(`href="/${githubRepo}/stargazers"[^>]*>\\s*([\\s\\S]*?)<\\/a>`, 'i'))?.[1] ?? ''
+              const starText = starBlock
+                .replace(/<[^>]*>/g, ' ')
+                .replace(/\s+/g, ' ')
+                .trim()
+              githubStars = parseCompactGithubCount(starText)
+            }
+          } catch {
+            /* HTML fallback unavailable */
+          }
+        }
+      }
+
+      // Try to fetch README
+      let readme: string | undefined
+      let badges: string[] | undefined
+      if (githubRepo) {
+        try {
+          const readmeRes = await fetch(`https://raw.githubusercontent.com/${githubRepo}/HEAD/README.md`, {
+            signal: AbortSignal.timeout(3000),
+          })
+          if (readmeRes.ok) {
+            const content = await readmeRes.text()
+            readme = content
+            // Extract badge markdown links: ![...](...)
+            const badgeMatches = content.match(/!\[.*?\]\(.*?\)/g) ?? []
+            badges = badgeMatches.slice(0, 5) // Limit to first 5 badges
+          }
+        } catch {
+          /* README not available */
+        }
+      }
+
+      // Extract documentation URL from package.json
+      let documentationUrl: string | undefined
+      if (packData.homepage) documentationUrl = packData.homepage
+      else if (packData.repository?.url) {
+        const match = packData.repository.url.match(/github\.com\/([^/]+)\/([^/]+?)(?:\.git)?$/)
+        if (match) documentationUrl = `https://github.com/${match[1]}/${match[2]}`
+      }
+
+      const enrichedPayload = {
+        name,
+        version: latestVersion,
+        description: packData.description ?? npmData.description,
+        author: packData.author,
+        links: packData.links ?? {
+          npm: `https://www.npmjs.com/package/${name}`,
+          repository: githubRepo ? `https://github.com/${githubRepo}` : undefined,
+          homepage: packData.homepage,
+        },
+        date: npmData.time?.[latestVersion] ?? new Date().toISOString(),
+        weeklyDownloads,
+        githubStars,
+        githubSponsorsUrl,
+        documentationUrl,
+        badges,
+        readme,
+      }
+
+      // Persist metadata so plugins page can reuse it across route changes/reloads.
+      try {
+        const cache = loadMetadataCache()
+        cache[name] = enrichedPayload
+        saveMetadataCache(cache)
+      } catch {
+        /* ignore cache save errors */
+      }
+
+      return enrichedPayload
+    } catch (err) {
+      log.debug(`Failed to enrich metadata for ${name}: ${err}`)
+      return { name }
+    }
   })
 
   // ─── Interactive shell WebSocket (PTY) ───────────────────────────────────
