@@ -33,4 +33,7 @@ features:
   - icon: 🔍
     title: Transparent by design
     details: MIT licensed. No paid tiers, no telemetry, no plugin gatekeeping. Fork it, audit it, ship it.
+  - icon: 🛒
+    title: Plugin Marketplace
+    details: Browse, rate, and discover community plugins at marketplace.openbridge.nubisco.io. Accessible from the dashboard or directly in your browser.
 ---

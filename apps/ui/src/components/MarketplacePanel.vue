@@ -39,8 +39,8 @@ interface MarketplacePlugin {
   verified: boolean
   deprecated: boolean
   last_published_at: string
-  rating_avg: number | null
-  rating_count: number
+  thumb_up: number
+  thumb_down: number
 }
 
 function marketplaceToNpmPackage(p: MarketplacePlugin): NpmPackage {

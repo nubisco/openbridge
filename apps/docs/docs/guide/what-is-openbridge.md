@@ -70,9 +70,17 @@ openbridge/
 
 Each package has a single responsibility and can be used independently. Plugin authors only need `@openbridge/sdk`, which re-exports the types they care about.
 
+## Plugin Marketplace
+
+The [Openbridge Marketplace](https://marketplace.openbridge.nubisco.io) is the community plugin directory for both Openbridge and Homebridge plugins. It indexes publicly available npm packages and provides a searchable interface with community ratings, reviews, and Q&A.
+
+You can discover plugins directly from the marketplace website, or browse and install them from the **Plugins** tab inside the OpenBridge dashboard. The dashboard fetches its plugin catalog from the marketplace API, so the same directory is available regardless of where you are running OpenBridge.
+
+Plugin installation is always performed directly from npm. The marketplace does not host or distribute plugin code.
+
 ## Next steps
 
-- [Getting Started](/guide/getting-started) — install, build, run, pair with HomeKit
-- [Concepts](/guide/concepts) — vocabulary: plugins, accessories, characteristics, HAP bridge
-- [Creating a Plugin](/guide/creating-a-plugin) — build and load your first native plugin
-- [Homebridge Compatibility](/guide/homebridge-compatibility) — run existing Homebridge platform plugins
+- [Getting Started](/guide/getting-started) - install, build, run, pair with HomeKit
+- [Concepts](/guide/concepts) - vocabulary: plugins, accessories, characteristics, HAP bridge
+- [Creating a Plugin](/guide/creating-a-plugin) - build and load your first native plugin
+- [Homebridge Compatibility](/guide/homebridge-compatibility) - run existing Homebridge platform plugins
