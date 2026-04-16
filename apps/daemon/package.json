@@ -42,7 +42,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "dev": "tsx watch src/index.ts",
+    "dev": "OPENBRIDGE_DEV=true tsx watch --include $HOME/.openbridge/plugins/openbridge src/index.ts",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
     "postinstall": "node scripts/fix-node-pty.mjs"

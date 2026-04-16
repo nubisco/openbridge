@@ -32,10 +32,13 @@
     "dev": "pnpm --filter @openbridge/daemon --filter @openbridge/ui --parallel dev",
     "build": "pnpm -r build",
     "start": "pnpm --filter @openbridge/daemon start",
+    "test": "pnpm -r --if-present test",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
+    "format:check": "pnpm exec prettier --check .",
+    "quality:check": "pnpm run test && pnpm run lint && pnpm run format:check && pnpm run typecheck",
     "prepare": "simple-git-hooks"
   },
   "release": {
@@ -66,7 +69,8 @@
     ]
   },
   "simple-git-hooks": {
-    "pre-commit": "npx lint-staged"
+    "pre-commit": "npx lint-staged && pnpm run quality:check",
+    "pre-push": "pnpm run quality:check"
   },
   "lint-staged": {
     "apps/**/*.ts": [
