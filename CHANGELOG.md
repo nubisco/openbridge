@@ -1,3 +1,17 @@
+# [0.6.0](https://github.com/nubisco/openbridge/compare/v0.5.0...v0.6.0) (2026-04-16)
+
+
+### Bug Fixes
+
+* **ci:** build workspace packages before release, disable hooks in CI ([8a467b3](https://github.com/nubisco/openbridge/commit/8a467b36377b8ecaa5166a180ee62d84ab60fafd))
+* export DeviceDescriptor from core, regenerate lockfile ([f6b96ef](https://github.com/nubisco/openbridge/commit/f6b96efc3d18f82a346b5170fa83218471f81988))
+* include lockfile and package.json changes for CI build ([ceca7f0](https://github.com/nubisco/openbridge/commit/ceca7f001f14b352993e7fe6734e7360f3dfc8ca))
+
+
+### Features
+
+* native devices view with controls, always-on HAP bridge, light theme ([1442c9a](https://github.com/nubisco/openbridge/commit/1442c9a462bf700621fab90df932de32f550154c))
+
 # [0.5.0](https://github.com/nubisco/openbridge/compare/v0.4.0...v0.5.0) (2026-04-08)
 
 ### Features
