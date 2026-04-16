@@ -61,7 +61,6 @@
         <NbIcon name="x" :size="12" />
       </button>
     </div>
-
     <RouterView />
   </NbShell>
 </template>
@@ -213,16 +212,17 @@ onUnmounted(() => daemon.disconnectLiveLogs())
   color: #1a1a2e;
 }
 
-// Update banner — rendered in the default (main) slot, above RouterView
+// Update banner — temporary placement in main content until NbShell gets a NotificationArea slot
 .update-banner {
   flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.45rem 1.5rem;
+  padding: 0.4rem 1.5rem;
+  margin: -1rem -1.5rem 1rem -1.5rem;
   background: #0ea5e9;
   color: #fff;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
 
   .update-link {
     color: #fff;

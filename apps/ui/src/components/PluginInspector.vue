@@ -76,6 +76,114 @@ const hasVisualSchema = computed(() => configSchema.value?.schema != null)
 
 // Show config editor for ANY homebridge-source plugin (running or stopped)
 const isHomebridge = computed(() => inspector.selectedPlugin?.source === 'homebridge')
+const isOpenbridge = computed(
+  () => inspector.selectedPlugin != null && inspector.selectedPlugin.source !== 'homebridge',
+)
+
+// ─── Native plugin config ─────────────────────────────────────────────────────
+const nativeConfigJson = ref('')
+const nativeSaving = ref(false)
+const nativeSaveError = ref<string | null>(null)
+const nativeSaveSuccess = ref(false)
+const nativeJsonValid = computed(() => {
+  try {
+    JSON.parse(nativeConfigJson.value)
+    return true
+  } catch {
+    return false
+  }
+})
+
+watch(
+  () => inspector.selectedPlugin,
+  async (plugin) => {
+    nativeConfigJson.value = ''
+    nativeSaveError.value = null
+    nativeSaveSuccess.value = false
+    if (!plugin || plugin.source === 'homebridge') return
+    try {
+      const res = await api.config.getPlugin(plugin.manifest.name)
+      nativeConfigJson.value = JSON.stringify(res.config ?? {}, null, 2)
+    } catch {
+      nativeConfigJson.value = '{}'
+    }
+  },
+)
+
+// ─── Live device telemetry ────────────────────────────────────────────────────
+const telemetry = ref<Record<string, Record<string, unknown>>>({})
+let telemetryTimer: ReturnType<typeof setInterval> | null = null
+
+async function fetchTelemetry() {
+  if (!inspector.selectedPlugin || inspector.selectedPlugin.source === 'homebridge') return
+  try {
+    const res = await api.pluginTelemetry(inspector.selectedPlugin.id)
+    telemetry.value = res.telemetry
+  } catch {
+    /* ignore — device may not have reported yet */
+  }
+}
+
+watch(
+  () => inspector.selectedPlugin,
+  (plugin) => {
+    telemetry.value = {}
+    if (telemetryTimer) {
+      clearInterval(telemetryTimer)
+      telemetryTimer = null
+    }
+    if (!plugin || plugin.source === 'homebridge') return
+    fetchTelemetry()
+    telemetryTimer = setInterval(fetchTelemetry, 3000)
+  },
+)
+onBeforeUnmount(() => {
+  if (telemetryTimer) clearInterval(telemetryTimer)
+})
+
+const TELEMETRY_LABELS: Record<string, { label: string; unit: string }> = {
+  totalForwardEnergy: { label: 'Total energy', unit: 'kWh' },
+  temperature: { label: 'Temperature', unit: '°C' },
+  leakageCurrent: { label: 'Leakage', unit: 'mA' },
+  fault: { label: 'Fault bitmap', unit: '' },
+  switchState: { label: 'Breaker', unit: '' },
+  voltage: { label: 'Voltage', unit: 'V' },
+  current: { label: 'Current', unit: 'A' },
+  power: { label: 'Active power', unit: 'W' },
+  _updatedAt: { label: '', unit: '' },
+}
+
+function formatTelemetryValue(key: string, value: unknown): string {
+  if (key === 'switchState') return value ? 'ON' : 'OFF'
+  if (key === 'fault') return value === 0 ? 'None' : `0x${(value as number).toString(16)}`
+  if (typeof value === 'number') return value.toFixed(key === 'current' ? 3 : 1)
+  return String(value)
+}
+
+async function saveNativeConfig() {
+  if (nativeSaving.value || !inspector.selectedPlugin) return
+  let parsed: Record<string, unknown>
+  try {
+    parsed = JSON.parse(nativeConfigJson.value)
+  } catch {
+    nativeSaveError.value = 'Invalid JSON — fix the syntax first'
+    return
+  }
+  nativeSaving.value = true
+  nativeSaveError.value = null
+  nativeSaveSuccess.value = false
+  try {
+    await api.config.savePlugin(inspector.selectedPlugin.manifest.name, parsed)
+    nativeSaveSuccess.value = true
+    setTimeout(() => {
+      nativeSaveSuccess.value = false
+    }, 3000)
+  } catch (e) {
+    nativeSaveError.value = String(e)
+  } finally {
+    nativeSaving.value = false
+  }
+}
 const selectedHomebridgePlatformName = computed(() => {
   const plugin = inspector.selectedPlugin
   if (!plugin || plugin.source !== 'homebridge') return ''
@@ -424,6 +532,76 @@ async function save() {
         </template>
       </section>
 
+      <!-- ── Plugin config editor for native OpenBridge plugins ───────────── -->
+      <section v-if="isOpenbridge" class="inspector-section setup-section">
+        <h3 class="section-heading">
+          <NbIcon name="gear" :size="12" />
+          Plugin config
+        </h3>
+        <div class="config-editor-wrap" :class="{ invalid: nativeConfigJson && !nativeJsonValid }">
+          <MonacoJsonEditor
+            :model-value="nativeConfigJson"
+            :height="220"
+            @update:model-value="nativeConfigJson = $event"
+          />
+          <div v-if="nativeConfigJson && !nativeJsonValid" class="json-error">Invalid JSON</div>
+        </div>
+        <div v-if="nativeSaveError" class="save-error">
+          <NbIcon name="warning" :size="13" />
+          {{ nativeSaveError }}
+        </div>
+        <div class="setup-actions">
+          <NbButton
+            variant="primary"
+            size="sm"
+            :loading="nativeSaving"
+            :disabled="nativeSaving || !nativeJsonValid"
+            :icon="nativeSaveSuccess ? 'check' : 'floppy-disk'"
+            @click="saveNativeConfig"
+          >
+            {{ nativeSaveSuccess ? 'Saved!' : 'Save config' }}
+          </NbButton>
+          <NbButton
+            v-if="nativeSaveSuccess"
+            variant="secondary"
+            size="sm"
+            outlined
+            :loading="restarting"
+            :icon="restarting ? 'spinner' : 'arrows-clockwise'"
+            @click="restartOpenBridge"
+          >
+            {{ restarting ? 'Restarting…' : 'Restart OpenBridge' }}
+          </NbButton>
+        </div>
+      </section>
+
+      <!-- ── Live device telemetry (native plugins only) ──────────────────── -->
+      <section v-if="isOpenbridge && Object.keys(telemetry).length > 0" class="inspector-section">
+        <h3 class="section-heading">
+          <NbIcon name="chart-line" :size="12" />
+          Live telemetry
+        </h3>
+        <div v-for="(deviceData, deviceId) in telemetry" :key="deviceId" class="telemetry-device">
+          <div class="telemetry-device-id">{{ deviceId }}</div>
+          <div class="telemetry-grid">
+            <template v-for="(val, key) in deviceData" :key="key">
+              <div v-if="key !== '_updatedAt'" class="telemetry-card">
+                <span class="telemetry-label">{{ TELEMETRY_LABELS[key]?.label ?? key }}</span>
+                <span class="telemetry-value">
+                  {{ formatTelemetryValue(String(key), val) }}
+                  <span v-if="TELEMETRY_LABELS[key]?.unit" class="telemetry-unit">
+                    {{ TELEMETRY_LABELS[key].unit }}
+                  </span>
+                </span>
+              </div>
+            </template>
+          </div>
+          <div v-if="deviceData._updatedAt" class="telemetry-updated">
+            Updated {{ new Date(deviceData._updatedAt as string).toLocaleTimeString() }}
+          </div>
+        </div>
+      </section>
+
       <!-- Manifest -->
       <section class="inspector-section">
         <h3 class="section-heading">Manifest</h3>
@@ -768,5 +946,61 @@ async function save() {
   color: #c9d1d9;
   flex: 1;
   word-break: break-word;
+}
+
+.telemetry-device {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.telemetry-device-id {
+  font-size: 0.7rem;
+  color: #6b7280;
+  font-family: monospace;
+  letter-spacing: 0.03em;
+}
+
+.telemetry-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 8px;
+}
+
+.telemetry-card {
+  background: #161b22;
+  border: 1px solid #21262d;
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.telemetry-label {
+  font-size: 0.65rem;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.telemetry-value {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #e6edf3;
+  line-height: 1.2;
+}
+
+.telemetry-unit {
+  font-size: 0.65rem;
+  color: #8b949e;
+  font-weight: 400;
+  margin-left: 2px;
+}
+
+.telemetry-updated {
+  font-size: 0.65rem;
+  color: #4b5563;
+  text-align: right;
 }
 </style>

@@ -11,7 +11,7 @@ import { createRequire } from 'module'
 import os from 'os'
 
 const _req = createRequire(import.meta.url)
-import type { PluginRegistry, Plugin } from '@openbridge/core'
+import type { PluginRegistry, Plugin, DeviceDescriptor } from '@openbridge/core'
 import { Logger } from '@openbridge/logger'
 import type { LogEntry } from '@openbridge/logger'
 import type { HomebridgeAPI } from '@openbridge/compatibility-homebridge'
@@ -56,6 +56,7 @@ export async function createServer(
   hapInfo: HapInfo | null = null,
   localPluginSources: string[] = [],
   knownHbPackageNames: Set<string> = new Set(),
+  controls: Map<string, (value: unknown) => void | Promise<void>> = new Map(),
 ) {
   const app = Fastify({ logger: false })
 
@@ -224,6 +225,111 @@ export async function createServer(
     return instance
   })
 
+  app.get('/api/plugins/:id/telemetry', async (req) => {
+    const { id } = req.params as { id: string }
+    const entry = registry.get(id)
+    if (!entry) throw { statusCode: 404, message: `Plugin '${id}' not found` }
+    return { telemetry: entry.instance.telemetry ?? {} }
+  })
+
+  // Returns all devices across all plugins with their descriptors and latest telemetry
+  app.get('/api/devices', async () => {
+    const devices: Array<DeviceDescriptor & { telemetry: Record<string, unknown>; pluginStatus: string }> = []
+    for (const instance of registry.getAll()) {
+      if (!instance.devices) continue
+      for (const device of Object.values(instance.devices)) {
+        const telemetry = instance.telemetry?.[device.id] ?? {}
+        devices.push({ ...device, telemetry, pluginStatus: instance.status })
+      }
+    }
+    return { devices }
+  })
+
+  app.post('/api/devices/:deviceId/control', async (req) => {
+    const { deviceId } = req.params as { deviceId: string }
+    const { control, value } = req.body as { control: string; value: unknown }
+    const key = `${deviceId}::${control}`
+    const handler = controls.get(key)
+    if (!handler) throw { statusCode: 404, message: `No control '${control}' registered for device '${deviceId}'` }
+    await handler(value)
+    return { ok: true }
+  })
+
+  app.get('/api/devices/:deviceId/history', async (req) => {
+    const { deviceId } = req.params as { deviceId: string }
+    const { period = 'day', date } = req.query as { period?: string; date?: string }
+
+    const historyDir = join(OPENBRIDGE_HOME, 'energy-history')
+    const filePath = join(historyDir, `${deviceId}.json`)
+
+    let samples: Array<{ t: string; e: number }> = []
+    try {
+      samples = JSON.parse(readFileSync(filePath, 'utf8'))
+    } catch {
+      return { period, date: date ?? new Date().toISOString().slice(0, 10), buckets: [] }
+    }
+
+    const ref = date ? new Date(date) : new Date()
+
+    if (period === 'day') {
+      // 24 hourly buckets for ref day
+      const dayStr = ref.toISOString().slice(0, 10)
+      const buckets = Array.from({ length: 24 }, (_, h) => {
+        const label = `${String(h).padStart(2, '0')}:00`
+        const start = new Date(`${dayStr}T${String(h).padStart(2, '0')}:00:00Z`)
+        const end = new Date(
+          `${dayStr}T${String(h + 1).padStart(2, '0') === '24' ? '23:59:59' : String(h + 1).padStart(2, '0') + ':00:00'}Z`,
+        )
+        const inWindow = samples.filter((s) => s.t >= start.toISOString() && s.t < end.toISOString())
+        if (inWindow.length < 2) return { label, kwh: null }
+        const kwh = inWindow[inWindow.length - 1].e - inWindow[0].e
+        return { label, kwh: Math.max(0, Math.round(kwh * 100) / 100) }
+      })
+      const totalKwh = buckets.reduce((sum, b) => sum + (b.kwh ?? 0), 0)
+      return { period, date: dayStr, buckets, totalKwh: Math.round(totalKwh * 100) / 100 }
+    }
+
+    if (period === 'month') {
+      // Daily buckets for ref month
+      const year = ref.getFullYear()
+      const month = ref.getMonth()
+      const daysInMonth = new Date(year, month + 1, 0).getDate()
+      const monthStr = `${year}-${String(month + 1).padStart(2, '0')}`
+      const buckets = Array.from({ length: daysInMonth }, (_, d) => {
+        const dayStr = `${monthStr}-${String(d + 1).padStart(2, '0')}`
+        const start = new Date(`${dayStr}T00:00:00Z`)
+        const end = new Date(`${dayStr}T23:59:59Z`)
+        const inWindow = samples.filter((s) => s.t >= start.toISOString() && s.t <= end.toISOString())
+        if (inWindow.length < 2) return { label: String(d + 1), kwh: null }
+        const kwh = inWindow[inWindow.length - 1].e - inWindow[0].e
+        return { label: String(d + 1), kwh: Math.max(0, Math.round(kwh * 100) / 100) }
+      })
+      const totalKwh = buckets.reduce((sum, b) => sum + (b.kwh ?? 0), 0)
+      return { period, date: monthStr, buckets, totalKwh: Math.round(totalKwh * 100) / 100 }
+    }
+
+    // period === 'year'
+    const year = ref.getFullYear()
+    const buckets = Array.from({ length: 12 }, (_, m) => {
+      const monthStr = `${year}-${String(m + 1).padStart(2, '0')}`
+      const start = new Date(`${monthStr}-01T00:00:00Z`)
+      const end = new Date(year, m + 1, 0, 23, 59, 59)
+      const inWindow = samples.filter((s) => s.t >= start.toISOString() && s.t <= end.toISOString())
+      if (inWindow.length < 2)
+        return {
+          label: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][m],
+          kwh: null,
+        }
+      const kwh = inWindow[inWindow.length - 1].e - inWindow[0].e
+      return {
+        label: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][m],
+        kwh: Math.max(0, Math.round(kwh * 100) / 100),
+      }
+    })
+    const totalKwh = buckets.reduce((sum, b) => sum + (b.kwh ?? 0), 0)
+    return { period, date: String(year), buckets, totalKwh: Math.round(totalKwh * 100) / 100 }
+  })
+
   app.post('/api/plugins/:id/disabled', async (req) => {
     const { id } = req.params as { id: string }
     const { disabled } = req.body as { disabled: boolean }
@@ -375,6 +481,38 @@ export async function createServer(
     } catch {
       return { config: null }
     }
+  })
+
+  // Get a single native plugin's config
+  app.get('/api/config/plugin/:name', async (req) => {
+    const { name } = req.params as { name: string }
+    try {
+      const cfg = JSON.parse(readFileSync(configPath, 'utf8'))
+      const entry = (cfg.plugins ?? []).find((p: any) => p.name === name)
+      return { config: entry?.config ?? null }
+    } catch {
+      return { config: null }
+    }
+  })
+
+  // Upsert a native plugin's config entry
+  app.post('/api/config/plugin', async (req) => {
+    const { name, config } = req.body as { name: string; config: Record<string, unknown> }
+    if (!name) throw { statusCode: 400, message: 'name is required' }
+    let cfg: any = {}
+    try {
+      cfg = JSON.parse(readFileSync(configPath, 'utf8'))
+    } catch {
+      /* start fresh */
+    }
+    const plugins: any[] = cfg.plugins ?? []
+    const idx = plugins.findIndex((p: any) => p.name === name)
+    if (idx >= 0) plugins[idx] = { ...plugins[idx], config }
+    else plugins.push({ name, enabled: true, config })
+    cfg.plugins = plugins
+    writeFileSync(configPath, JSON.stringify(cfg, null, 2), 'utf8')
+    log.info(`Plugin config saved: ${name}`)
+    return { saved: true, name }
   })
 
   // ─── Marketplace ──────────────────────────────────────────────────────────
@@ -636,9 +774,9 @@ export async function createServer(
     log.info('Restart requested via API — respawning...')
     await reply.send({ restarting: true })
     setTimeout(() => {
-      // In dev mode (tsx watch), tsx's supervisor detects process exit and restarts automatically.
+      // In dev mode (OPENBRIDGE_DEV=true set by the dev script), tsx watch detects the exit and restarts.
       // In prod mode (node dist/index.js), we respawn using the same entry point.
-      const isTsx = process.argv.some((a) => a.includes('tsx'))
+      const isTsx = process.env.OPENBRIDGE_DEV === 'true'
       if (isTsx) {
         // Let tsx watch restart us
         process.exit(0)

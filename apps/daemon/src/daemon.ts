@@ -2,10 +2,10 @@ import { resolve, join } from 'path'
 import { createRequire } from 'module'
 import { fileURLToPath } from 'url'
 import { dirname } from 'path'
-import { existsSync, mkdirSync, readFileSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import os from 'os'
 import { PluginRegistry, PluginLifecycle, loadPluginsFromDirectory } from '@openbridge/core'
-import type { PluginContext, Plugin } from '@openbridge/core'
+import type { PluginContext, Plugin, DeviceDescriptor } from '@openbridge/core'
 import { Logger } from '@openbridge/logger'
 import { loadConfig, defaultConfigPath } from '@openbridge/config'
 import type { OpenBridgeConfig } from '@openbridge/config'
@@ -26,12 +26,15 @@ export interface DaemonOptions {
   port?: number
 }
 
+type ControlHandler = (value: unknown) => void | Promise<void>
+
 export class Daemon {
   private registry = new PluginRegistry()
   private lifecycle = new PluginLifecycle(this.registry)
   private loadedPlugins: Plugin[] = []
   /** npm package names of HB plugins already running via config.platforms — skip in discovery */
   private knownHbPackageNames = new Set<string>()
+  private controls = new Map<string, ControlHandler>()
 
   async start(options: DaemonOptions = {}) {
     const configPath = options.configPath ?? defaultConfigPath()
@@ -52,54 +55,56 @@ export class Daemon {
     log.info(`OpenBridge home: ${OPENBRIDGE_HOME}`)
 
     // ── HAP Bridge (HomeKit) ──────────────────────────────────────────────────
+    // The default bridge is ALWAYS created — it advertises all accessories
+    // from both native plugins and Homebridge-compatible platforms.
     let hapBridge: any = null
     let homebridgeAPI: HomebridgeAPI | null = null
     let hapInfo: HapInfo | null = null
 
-    if (config.platforms && config.platforms.length > 0) {
-      log.info(`Setting up HAP bridge for ${config.platforms.length} platform(s)...`)
+    try {
+      // Load hap-nodejs — look in daemon or workspace node_modules
+      const hapCandidates = [
+        resolve(__dirname, '../node_modules/hap-nodejs'), // apps/daemon/node_modules (from dist/)
+        resolve(__dirname, '../../node_modules/hap-nodejs'), // apps/node_modules
+        resolve(__dirname, '../../../node_modules/hap-nodejs'), // workspace root node_modules
+        resolve(process.cwd(), 'node_modules/hap-nodejs'),
+      ]
 
-      try {
-        // Load hap-nodejs — look in daemon or workspace node_modules
-        const hapCandidates = [
-          resolve(__dirname, '../node_modules/hap-nodejs'), // apps/daemon/node_modules (from dist/)
-          resolve(__dirname, '../../node_modules/hap-nodejs'), // apps/node_modules
-          resolve(__dirname, '../../../node_modules/hap-nodejs'), // workspace root node_modules
-          resolve(process.cwd(), 'node_modules/hap-nodejs'),
-        ]
-
-        let hapNodeJs: any = null
-        for (const candidate of hapCandidates) {
-          try {
-            hapNodeJs = req(candidate)
-            log.info(`Loaded hap-nodejs from ${candidate}`)
-            break
-          } catch {
-            /* try next */
-          }
+      let hapNodeJs: any = null
+      for (const candidate of hapCandidates) {
+        try {
+          hapNodeJs = req(candidate)
+          log.info(`Loaded hap-nodejs from ${candidate}`)
+          break
+        } catch {
+          /* try next */
         }
+      }
 
-        if (!hapNodeJs) {
-          throw new Error('hap-nodejs not found. Run: pnpm add hap-nodejs --filter @openbridge/daemon')
-        }
+      if (!hapNodeJs) {
+        throw new Error('hap-nodejs not found. Run: pnpm add hap-nodejs --filter @openbridge/daemon')
+      }
 
-        // Init HAP storage
-        const storagePath = resolve(process.env.HOME ?? '.', '.openbridge', 'hap-storage')
-        hapNodeJs.HAPStorage.setCustomStoragePath(storagePath)
+      // Init HAP storage
+      const storagePath = resolve(process.env.HOME ?? '.', '.openbridge', 'hap-storage')
+      hapNodeJs.HAPStorage.setCustomStoragePath(storagePath)
 
-        // Create the bridge
-        hapBridge = new hapNodeJs.Bridge(config.bridge.name, hapNodeJs.uuid.generate(config.bridge.name))
+      // Create the bridge
+      hapBridge = new hapNodeJs.Bridge(config.bridge.name, hapNodeJs.uuid.generate(config.bridge.name))
 
-        hapBridge
-          .getService(hapNodeJs.Service.AccessoryInformation)
-          .setCharacteristic(hapNodeJs.Characteristic.Manufacturer, 'Nubisco')
-          .setCharacteristic(hapNodeJs.Characteristic.Model, 'OpenBridge')
-          .setCharacteristic(hapNodeJs.Characteristic.SoftwareRevision, '0.1.0')
+      hapBridge
+        .getService(hapNodeJs.Service.AccessoryInformation)
+        .setCharacteristic(hapNodeJs.Characteristic.Manufacturer, 'Nubisco')
+        .setCharacteristic(hapNodeJs.Characteristic.Model, 'OpenBridge')
+        .setCharacteristic(hapNodeJs.Characteristic.SoftwareRevision, '0.1.0')
 
-        // Create the HomebridgeAPI shim
-        homebridgeAPI = new HomebridgeAPI(hapNodeJs, hapBridge)
+      // Create the HomebridgeAPI shim
+      homebridgeAPI = new HomebridgeAPI(hapNodeJs, hapBridge)
 
-        // Load each platform plugin
+      // Load Homebridge-compatible platform plugins (if any)
+      if (config.platforms && config.platforms.length > 0) {
+        log.info(`Loading ${config.platforms.length} Homebridge platform(s)...`)
+
         for (const platformConfig of config.platforms) {
           if (!platformConfig.plugin) {
             log.warn(`Platform "${platformConfig.platform}" has no "plugin" path, skipping`)
@@ -133,26 +138,26 @@ export class Daemon {
         // Launch platforms (instantiate them with config, emit didFinishLaunching)
         const platformLogger = Logger.create('hap')
         await homebridgeAPI.launchPlatforms(config.platforms as any[], platformLogger, this.registry)
-
-        // Publish the HAP bridge
-        const hapPort = config.bridge.hapPort ?? 51826
-        const pincode = config.bridge.pincode ?? '031-45-154'
-
-        const username = config.bridge.username ?? generateUsername(config.bridge.name)
-
-        hapBridge.publish({
-          username,
-          pincode,
-          port: hapPort,
-          category: hapNodeJs.Categories.BRIDGE,
-        })
-
-        hapInfo = { setupURI: hapBridge.setupURI(), pincode }
-        log.info(`HAP bridge published — PIN: ${pincode}`)
-        printPairingInfo(hapInfo.setupURI, pincode)
-      } catch (err) {
-        log.error(`HAP bridge setup failed: ${err}`)
       }
+
+      // Publish the HAP bridge
+      const hapPort = config.bridge.hapPort ?? 51826
+      const pincode = config.bridge.pincode ?? '031-45-154'
+
+      const username = config.bridge.username ?? generateUsername(config.bridge.name)
+
+      hapBridge.publish({
+        username,
+        pincode,
+        port: hapPort,
+        category: hapNodeJs.Categories.BRIDGE,
+      })
+
+      hapInfo = { setupURI: hapBridge.setupURI(), pincode }
+      log.info(`HAP bridge published — PIN: ${pincode}`)
+      printPairingInfo(hapInfo.setupURI, pincode)
+    } catch (err) {
+      log.error(`HAP bridge setup failed: ${err}`)
     }
 
     // ── OpenBridge native plugins ─────────────────────────────────────────────
@@ -193,8 +198,19 @@ export class Daemon {
       hapInfo,
       localPluginSources,
       this.knownHbPackageNames,
+      this.controls,
     )
     await server.listen({ port, host: '0.0.0.0' })
+
+    // ── Energy history sampling ───────────────────────────────────────────────
+    setInterval(
+      () => {
+        this.sampleEnergyHistory()
+      },
+      5 * 60 * 1000,
+    )
+    // Also sample immediately on startup (after a short delay for devices to connect)
+    setTimeout(() => this.sampleEnergyHistory(), 30_000)
 
     log.info(`OpenBridge running at http://localhost:${port}`)
 
@@ -258,9 +274,57 @@ export class Daemon {
 
   private makeContext(plugin: Plugin, config: OpenBridgeConfig): PluginContext {
     const pluginConfig = config.plugins.find((p) => p.name === plugin.manifest.name)?.config ?? {}
+    const registry = this.registry
+    const controls = this.controls
     return {
       config: pluginConfig,
       log: Logger.create(plugin.manifest.name),
+      reportTelemetry(deviceId: string, data: Record<string, unknown>) {
+        const entry = registry.get(plugin.manifest.name)
+        if (!entry) return
+        if (!entry.instance.telemetry) entry.instance.telemetry = {}
+        entry.instance.telemetry[deviceId] = { ...data, _updatedAt: new Date().toISOString() }
+      },
+      registerDevice(device: Omit<DeviceDescriptor, 'pluginId'>) {
+        const entry = registry.get(plugin.manifest.name)
+        if (!entry) return
+        if (!entry.instance.devices) entry.instance.devices = {}
+        entry.instance.devices[device.id] = { ...device, pluginId: plugin.manifest.name }
+      },
+      registerControl(deviceId: string, controlId: string, handler: ControlHandler) {
+        controls.set(`${deviceId}::${controlId}`, handler)
+      },
+    }
+  }
+
+  private sampleEnergyHistory() {
+    const historyDir = join(OPENBRIDGE_HOME, 'energy-history')
+    mkdirSync(historyDir, { recursive: true })
+
+    for (const instance of this.registry.getAll()) {
+      if (!instance.devices) continue
+      for (const device of Object.values(instance.devices)) {
+        if (device.widgetType !== 'energy_meter') continue
+        const energy = instance.telemetry?.[device.id]?.totalForwardEnergy
+        if (energy === undefined || energy === null) continue
+
+        const filePath = join(historyDir, `${device.id}.json`)
+        let samples: Array<{ t: string; e: number }> = []
+        try {
+          samples = JSON.parse(readFileSync(filePath, 'utf8'))
+        } catch {
+          /* start fresh */
+        }
+
+        const now = new Date().toISOString()
+        samples.push({ t: now, e: Number(energy) })
+
+        // Keep only 2 years of 5-minute samples ≈ 210k entries max
+        const cutoff = new Date(Date.now() - 2 * 365 * 24 * 60 * 60 * 1000).toISOString()
+        samples = samples.filter((s) => s.t >= cutoff)
+
+        writeFileSync(filePath, JSON.stringify(samples))
+      }
     }
   }
 }

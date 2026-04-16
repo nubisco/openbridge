@@ -130,6 +130,15 @@ export interface LocalPlugin {
   displayName?: string
 }
 
+export interface DeviceDescriptor {
+  id: string
+  name: string
+  widgetType: string
+  manufacturer?: string
+  model?: string
+  pluginId: string
+}
+
 export const api = {
   health: () => get<HealthResponse>('/health'),
   system: () => get<SystemInfo>('/system'),
@@ -158,6 +167,29 @@ export const api = {
       return r.json()
     }),
   accessories: () => get<{ accessories: Accessory[] }>('/accessories'),
+  devices: () =>
+    get<{ devices: Array<DeviceDescriptor & { telemetry: Record<string, unknown>; pluginStatus: string }> }>(
+      '/devices',
+    ),
+  controlDevice: (deviceId: string, control: string, value: unknown) =>
+    fetch(`/api/devices/${encodeURIComponent(deviceId)}/control`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ control, value }),
+    }).then((r) => {
+      if (!r.ok) throw new Error(`Control failed: ${r.status}`)
+      return r.json()
+    }),
+  deviceHistory: (deviceId: string, period: 'day' | 'month' | 'year', date?: string) => {
+    const params = new URLSearchParams({ period })
+    if (date) params.set('date', date)
+    return get<{
+      period: string
+      date: string
+      buckets: Array<{ label: string; kwh: number | null }>
+      totalKwh: number
+    }>(`/devices/${encodeURIComponent(deviceId)}/history?${params}`)
+  },
   setCharacteristic: (uuid: string, serviceUuid: string, charUuid: string, value: unknown) =>
     fetch(`/api/accessories/${uuid}/characteristics`, {
       method: 'POST',
@@ -172,6 +204,8 @@ export const api = {
     if (plugin) q.set('plugin', plugin)
     return get<{ entries: LogEntry[] }>(`/logs?${q}`)
   },
+  pluginTelemetry: (id: string) =>
+    get<{ telemetry: Record<string, Record<string, unknown>> }>(`/plugins/${encodeURIComponent(id)}/telemetry`),
   config: {
     get: () => get<{ content: string }>('/config'),
     save: (content: string) =>
@@ -190,6 +224,17 @@ export const api = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ platform }),
+      }).then((r) => {
+        if (!r.ok) throw new Error(`Save failed: ${r.status}`)
+        return r.json()
+      }),
+    getPlugin: (name: string) =>
+      get<{ config: Record<string, unknown> | null }>(`/config/plugin/${encodeURIComponent(name)}`),
+    savePlugin: (name: string, config: Record<string, unknown>) =>
+      fetch('/api/config/plugin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, config }),
       }).then((r) => {
         if (!r.ok) throw new Error(`Save failed: ${r.status}`)
         return r.json()
