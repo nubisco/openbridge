@@ -114,3 +114,13 @@ If you are **contributing to core** (daemon, packages, UI, docs), follow this gu
 - Avoid unrelated refactors in the same PR
 - Update docs when plugin APIs, HTTP endpoints, config schema, or the dashboard change
 - Add or update tests for non-trivial logic changes
+
+## Quality gate
+
+Before committing or pushing, run:
+
+```sh
+pnpm run quality:check
+```
+
+The local Git hooks are expected to enforce the same gate automatically. Commits must not proceed unless tests, linting, formatting, and type checks all pass.
