@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { ref, watch, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useInspectorStore } from '@/stores/inspector'
+import { useDaemonStore } from '@/stores/daemon'
 import { api, type LogEntry } from '@/api'
 import MonacoJsonEditor from './MonacoJsonEditor.vue'
 import PluginConfigForm from './PluginConfigForm.vue'
 
+const daemon = useDaemonStore()
 const restarting = ref(false)
 
 async function restartOpenBridge() {
@@ -40,6 +42,27 @@ const statusLabel: Record<string, string> = {
   running: 'Running',
   stopped: 'Stopped',
   error: 'Error',
+}
+
+// ─── Plugin removal ──────────────────────────────────────────────────────────
+const confirmingRemove = ref(false)
+const removing = ref(false)
+
+async function removePlugin() {
+  if (!inspector.selectedPlugin || removing.value) return
+  removing.value = true
+  try {
+    await api.marketplace.uninstall(inspector.selectedPlugin.manifest.name)
+    await daemon.fetchPlugins()
+    inspector.close()
+    // Trigger a restart to fully clean up
+    await api.daemon.restart()
+  } catch (err) {
+    console.error('Failed to remove plugin:', err)
+  } finally {
+    removing.value = false
+    confirmingRemove.value = false
+  }
 }
 
 // ─── Plugin disabled toggle ───────────────────────────────────────────────────
@@ -432,6 +455,39 @@ async function save() {
         </div>
       </section>
 
+      <!-- ── Remove plugin ─────────────────────────────────────────────────── -->
+      <section class="inspector-section">
+        <NbButton
+          v-if="!confirmingRemove"
+          variant="ghost"
+          size="sm"
+          icon="trash"
+          style="color: #dc2626"
+          @click="confirmingRemove = true"
+        >
+          Remove plugin
+        </NbButton>
+        <div v-else class="remove-confirm">
+          <p class="remove-warning">
+            This will uninstall
+            <strong>{{ inspector.selectedPlugin.manifest.name }}</strong>
+            and remove its configuration. A restart is required.
+          </p>
+          <div class="remove-actions">
+            <NbButton variant="ghost" size="sm" @click="confirmingRemove = false">Cancel</NbButton>
+            <NbButton
+              variant="primary"
+              size="sm"
+              :loading="removing"
+              style="background: #dc2626; border-color: #dc2626"
+              @click="removePlugin"
+            >
+              Remove
+            </NbButton>
+          </div>
+        </div>
+      </section>
+
       <!-- ── Platform config editor for all Homebridge-source plugins ───────── -->
       <section v-if="isHomebridge" class="inspector-section setup-section">
         <h3 class="section-heading">
@@ -715,6 +771,24 @@ async function save() {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+}
+
+.remove-confirm {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 0.75rem;
+}
+.remove-warning {
+  margin: 0 0 0.5rem;
+  font-size: 0.78rem;
+  color: #991b1b;
+  line-height: 1.4;
+}
+.remove-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
 }
 
 .section-heading {

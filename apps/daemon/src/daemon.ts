@@ -4,7 +4,7 @@ import { fileURLToPath } from 'url'
 import { dirname } from 'path'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import os from 'os'
-import { PluginRegistry, PluginLifecycle, loadPluginsFromDirectory } from '@nubisco/openbridge-core'
+import { PluginRegistry, PluginLifecycle, loadPluginsFromDirectory, loadPlugin } from '@nubisco/openbridge-core'
 import type { PluginContext, Plugin, DeviceDescriptor } from '@nubisco/openbridge-core'
 import { Logger } from '@nubisco/openbridge-logger'
 import { loadConfig, defaultConfigPath } from '@nubisco/openbridge-config'
@@ -170,14 +170,16 @@ export class Daemon {
     }
     this.loadedPlugins = plugins
 
-    // Load disabled plugins list from config and apply to instances
+    // Load disabled plugins list from config
+    let disabledPlugins: string[] = []
     try {
       const rawConfig = JSON.parse(readFileSync(configPath, 'utf8'))
-      const disabledPlugins = (rawConfig.disabledPlugins ?? []) as string[]
+      disabledPlugins = (rawConfig.disabledPlugins ?? []) as string[]
       for (const disabledId of disabledPlugins) {
         const entry = this.registry.get(disabledId)
         if (entry) {
           entry.instance.disabled = true
+          this.registry.updateStatus(disabledId, 'stopped')
           log.debug(`Plugin marked as disabled: ${disabledId}`)
         }
       }
@@ -185,10 +187,10 @@ export class Daemon {
       /* config file may not exist yet */
     }
 
-    await this.lifecycle.startAll(plugins, (plugin) => this.makeContext(plugin, config))
-
-    // ── Marketplace-installed plugins (discovery) ──────────────────────────────
-    this.discoverMarketplacePlugins()
+    // Only start plugins that are not disabled
+    const enabledPlugins = plugins.filter((p) => !disabledPlugins.includes(p.manifest.name))
+    await this.lifecycle.startAll(enabledPlugins, (plugin) => this.makeContext(plugin, config))
+    await this.discoverMarketplacePlugins(config, disabledPlugins)
 
     // ── HTTP server ───────────────────────────────────────────────────────────
     const localPluginSources = config.localPluginSources ?? []
@@ -227,7 +229,7 @@ export class Daemon {
     process.on('SIGTERM', shutdown)
   }
 
-  private discoverMarketplacePlugins() {
+  private async discoverMarketplacePlugins(config: OpenBridgeConfig, disabledPlugins: string[]) {
     const pluginsRoot = HB_PLUGINS_DIR
     const manifestPath = join(pluginsRoot, 'package.json')
     if (!existsSync(manifestPath)) return
@@ -250,9 +252,44 @@ export class Daemon {
       try {
         const pkg = JSON.parse(readFileSync(pkgJsonPath, 'utf8'))
         const name: string = pkg.name ?? pkgName
+        const isNative =
+          (Array.isArray(pkg.keywords) && pkg.keywords.includes('openbridge-plugin')) || pkg.openbridge != null
         const isHb =
           name.startsWith('homebridge-') || (Array.isArray(pkg.keywords) && pkg.keywords.includes('homebridge-plugin'))
 
+        // Native OpenBridge plugins — load via the plugin loader and start them
+        if (isNative) {
+          const pluginDir = join(pluginsRoot, 'node_modules', pkgName)
+          const candidates = [join(pluginDir, 'dist', 'index.js'), join(pluginDir, 'index.js')]
+          let loaded = false
+          for (const candidate of candidates) {
+            if (existsSync(candidate)) {
+              try {
+                const plugin = await loadPlugin(candidate)
+                this.registry.register(plugin)
+                this.loadedPlugins.push(plugin)
+
+                // Check if disabled
+                if (!disabledPlugins.includes(name)) {
+                  await this.lifecycle.startAll([plugin], (p) => this.makeContext(p, config))
+                } else {
+                  const entry = this.registry.get(name)
+                  if (entry) entry.instance.disabled = true
+                  this.registry.updateStatus(name, 'stopped')
+                }
+
+                log.info(`Loaded native plugin from marketplace: ${name} v${pkg.version ?? '?'}`)
+                loaded = true
+                break
+              } catch (err) {
+                log.error(`Failed to load native plugin ${name}: ${err}`)
+              }
+            }
+          }
+          if (loaded) continue
+        }
+
+        // Homebridge-compatible or unconfigured plugins — register as pseudo-plugin
         const pseudoPlugin: Plugin = {
           manifest: {
             name,
