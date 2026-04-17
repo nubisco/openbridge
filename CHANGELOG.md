@@ -1,3 +1,10 @@
+## [0.6.1](https://github.com/nubisco/openbridge/compare/v0.6.0...v0.6.1) (2026-04-17)
+
+
+### Bug Fixes
+
+* **ci:** build workspace packages before release, disable hooks in CI ([b628d11](https://github.com/nubisco/openbridge/commit/b628d11503385bd15917fdd9b0fa1234152f866d))
+
 # [0.6.0](https://github.com/nubisco/openbridge/compare/v0.5.0...v0.6.0) (2026-04-16)
 
 ### Bug Fixes
