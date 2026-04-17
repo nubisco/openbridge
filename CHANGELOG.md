@@ -1,3 +1,10 @@
+# [0.7.0](https://github.com/nubisco/openbridge/compare/v0.6.1...v0.7.0) (2026-04-17)
+
+
+### Features
+
+* rename all packages from @openbridge/* to @nubisco/openbridge-* ([daa25d7](https://github.com/nubisco/openbridge/commit/daa25d7ad14bc948bd7dfd0a5394954881241f56))
+
 ## [0.6.1](https://github.com/nubisco/openbridge/compare/v0.6.0...v0.6.1) (2026-04-17)
 
 ### Bug Fixes
