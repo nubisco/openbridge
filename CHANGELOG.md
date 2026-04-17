@@ -1,14 +1,12 @@
 ## [0.7.2](https://github.com/nubisco/openbridge/compare/v0.7.1...v0.7.2) (2026-04-17)
 
-
 ### Bug Fixes
 
-* revert to QEMU Docker builds, fix energy history date reset ([0c3f934](https://github.com/nubisco/openbridge/commit/0c3f934a6b6fbdc43bdd016fccf471a711e7102e))
-
+- revert to QEMU Docker builds, fix energy history date reset ([0c3f934](https://github.com/nubisco/openbridge/commit/0c3f934a6b6fbdc43bdd016fccf471a711e7102e))
 
 ### Performance Improvements
 
-* **ci:** use ubuntu-24.04-arm runner for native ARM64 Docker builds ([ba72fcf](https://github.com/nubisco/openbridge/commit/ba72fcf92304006564ba1cf996c0e19c7710d6de))
+- **ci:** use ubuntu-24.04-arm runner for native ARM64 Docker builds ([ba72fcf](https://github.com/nubisco/openbridge/commit/ba72fcf92304006564ba1cf996c0e19c7710d6de))
 
 ## [0.7.1](https://github.com/nubisco/openbridge/compare/v0.7.0...v0.7.1) (2026-04-17)
 

@@ -10,11 +10,11 @@ services:
       - openbridge-config:/root/.openbridge
       # Plugin directory — npm packages installed here by the UI marketplace
       - openbridge-plugins:/plugins
+      # App directory — enables self-updates from the UI
+      - openbridge-app:/opt/openbridge
     environment:
       TZ: Europe/Lisbon
       NODE_ENV: production
-      # Must match WATCHTOWER_HTTP_API_TOKEN below — change in a .env file
-      WATCHTOWER_TOKEN: ${WATCHTOWER_TOKEN:-openbridge-update-token}
     healthcheck:
       test: ['CMD', 'wget', '-qO-', 'http://localhost:8582/api/health']
       interval: 30s
@@ -22,21 +22,7 @@ services:
       retries: 3
       start_period: 20s
 
-  # Watches for new ghcr.io/nubisco/openbridge images and applies them on demand
-  # via the UI (Settings → Updates). Override WATCHTOWER_TOKEN in a .env file.
-  watchtower:
-    image: containrrr/watchtower
-    container_name: openbridge-watchtower
-    restart: unless-stopped
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      WATCHTOWER_HTTP_API_UPDATE: 'true'
-      WATCHTOWER_HTTP_API_TOKEN: ${WATCHTOWER_TOKEN:-openbridge-update-token}
-      WATCHTOWER_CLEANUP: 'true'
-      WATCHTOWER_NO_STARTUP_MESSAGE: 'true'
-    command: openbridge
-
 volumes:
   openbridge-config:
   openbridge-plugins:
+  openbridge-app:

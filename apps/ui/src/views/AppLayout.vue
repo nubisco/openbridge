@@ -40,27 +40,32 @@
       <component :is="layout.actionsComponent" v-if="layout.actionsComponent" />
     </template>
 
+    <!-- ═══ Notification banner ═══ -->
+    <template v-if="updateAvailable && !updateDismissed" #notification>
+      <div class="update-banner">
+        <NbIcon name="arrow-circle-up" :size="14" />
+        <span>
+          OpenBridge
+          <strong>v{{ updateAvailable }}</strong>
+          is available.
+        </span>
+        <a href="https://github.com/nubisco/openbridge/releases" target="_blank" rel="noopener" class="update-link">
+          See what's new
+        </a>
+        <button class="update-dismiss" @click="updateDismissed = true">
+          <NbIcon name="x" :size="12" />
+        </button>
+      </div>
+    </template>
+
     <!-- ═══ Inspector ═══ -->
     <template #inspector>
       <PluginInspector v-if="inspector.mode === 'plugin'" />
       <MarketplacePanel v-else-if="inspector.mode === 'marketplace'" />
+      <DeviceInspector v-else-if="inspector.mode === 'device'" />
     </template>
 
     <!-- ═══ Main content ═══ -->
-    <div v-if="updateAvailable && !updateDismissed" class="update-banner">
-      <NbIcon name="arrow-circle-up" :size="14" />
-      <span>
-        OpenBridge
-        <strong>v{{ updateAvailable }}</strong>
-        is available.
-      </span>
-      <a href="https://github.com/nubisco/openbridge/releases" target="_blank" rel="noopener" class="update-link">
-        See what's new
-      </a>
-      <button class="update-dismiss" @click="updateDismissed = true">
-        <NbIcon name="x" :size="12" />
-      </button>
-    </div>
     <RouterView />
   </NbShell>
 </template>
@@ -73,6 +78,7 @@ import { useInspectorStore } from '@/stores/inspector'
 import { useLayoutStore } from '@/stores/layout'
 import PluginInspector from '@/components/PluginInspector.vue'
 import MarketplacePanel from '@/components/MarketplacePanel.vue'
+import DeviceInspector from '@/components/DeviceInspector.vue'
 
 const route = useRoute()
 const daemon = useDaemonStore()
@@ -212,14 +218,12 @@ onUnmounted(() => daemon.disconnectLiveLogs())
   color: #1a1a2e;
 }
 
-// Update banner — temporary placement in main content until NbShell gets a NotificationArea slot
+// Update banner — rendered in the #notification slot above the topbar
 .update-banner {
-  flex-shrink: 0;
   display: flex;
   align-items: center;
   gap: 0.5rem;
   padding: 0.4rem 1.5rem;
-  margin: -1rem -1.5rem 1rem -1.5rem;
   background: #0ea5e9;
   color: #fff;
   font-size: 0.78rem;

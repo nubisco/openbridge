@@ -17,15 +17,17 @@ jobs:
     runs-on: ${{ matrix.runner }}
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     permissions:
-      contents: read
+      contents: write
       packages: write
     strategy:
       matrix:
         include:
           - platform: linux/amd64
             runner: ubuntu-latest
+            arch: amd64
           - platform: linux/arm64
             runner: ubuntu-24.04-arm
+            arch: arm64
 
     steps:
       - uses: actions/checkout@v4
@@ -52,8 +54,38 @@ jobs:
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
 
-      - name: Build and push by digest
-        id: build
+      - name: Build and load locally
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: ${{ matrix.platform }}
+          build-args: APP_VERSION=${{ steps.version.outputs.VERSION }}
+          labels: ${{ steps.meta.outputs.labels }}
+          load: true
+          tags: openbridge-local:build
+          cache-from: type=gha,scope=${{ matrix.platform }}
+          cache-to: type=gha,scope=${{ matrix.platform }},mode=max
+
+      - name: Extract app files and create update tarball
+        run: |
+          CONTAINER_ID=$(docker create openbridge-local:build)
+          mkdir -p /tmp/app-export
+          docker cp "$CONTAINER_ID:/app/." /tmp/app-export/
+          docker rm "$CONTAINER_ID"
+          tar czf "/tmp/openbridge-v${{ steps.version.outputs.VERSION }}-linux-${{ matrix.arch }}.tar.gz" \
+            -C /tmp/app-export .
+
+      - name: Upload update tarball to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TARBALL="/tmp/openbridge-v${{ steps.version.outputs.VERSION }}-linux-${{ matrix.arch }}.tar.gz"
+          TAG="v${{ steps.version.outputs.VERSION }}"
+          # Upload to the release (created by semantic-release). --clobber replaces if re-run.
+          gh release upload "$TAG" "$TARBALL" --clobber || echo "Release $TAG not found — skipping tarball upload"
+
+      - name: Push image by digest
+        id: push
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -62,18 +94,17 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha,scope=${{ matrix.platform }}
-          cache-to: type=gha,scope=${{ matrix.platform }},mode=max
 
       - name: Export digest
         run: |
           mkdir -p /tmp/digests
-          digest="${{ steps.build.outputs.digest }}"
+          digest="${{ steps.push.outputs.digest }}"
           touch "/tmp/digests/${digest#sha256:}"
 
       - name: Upload digest
         uses: actions/upload-artifact@v4
         with:
-          name: digests-${{ matrix.platform == 'linux/amd64' && 'amd64' || 'arm64' }}
+          name: digests-${{ matrix.arch }}
           path: /tmp/digests/*
           if-no-files-found: error
           retention-days: 1

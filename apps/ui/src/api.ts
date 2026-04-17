@@ -59,6 +59,9 @@ export interface UpdateStatus {
   current: string
   latest: string | null
   updateAvailable: boolean
+  updateMethod: 'self' | 'manual'
+  releaseUrl?: string
+  releaseNotes?: string
 }
 
 export interface SystemInfo {
@@ -257,6 +260,11 @@ export const api = {
       fetch('/api/updates/apply', { method: 'POST' }).then((r) => {
         if (!r.ok) throw new Error(`Update failed: ${r.status}`)
         return r.json() as Promise<{ updating: boolean }>
+      }),
+    rollback: () =>
+      fetch('/api/updates/rollback', { method: 'POST' }).then((r) => {
+        if (!r.ok) throw new Error(`Rollback failed: ${r.status}`)
+        return r.json() as Promise<{ rollingBack: boolean; version: string }>
       }),
   },
   marketplace: {

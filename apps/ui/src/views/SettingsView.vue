@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { api, type BridgeConfig, type UpdateStatus } from '@/api'
 import { useLayoutStore } from '@/stores/layout'
 
@@ -14,6 +14,10 @@ const updateStatus = ref<UpdateStatus | null>(null)
 const checkingUpdate = ref(false)
 const applying = ref(false)
 const updateError = ref<string | null>(null)
+const updateStage = ref('')
+const updateProgressPct = ref(0)
+const updateMessage = ref('')
+let updateWs: WebSocket | null = null
 
 async function checkUpdate() {
   checkingUpdate.value = true
@@ -27,31 +31,85 @@ async function checkUpdate() {
   }
 }
 
+function connectUpdateWs() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws'
+  updateWs = new WebSocket(`${proto}://${location.host}/ws/updates`)
+  updateWs.onmessage = (ev) => {
+    try {
+      const msg = JSON.parse(ev.data)
+      updateStage.value = msg.stage ?? ''
+      updateProgressPct.value = Math.round((msg.progress ?? 0) * 100)
+      updateMessage.value = msg.message ?? ''
+
+      if (msg.stage === 'restarting') {
+        // Daemon will restart — poll health
+        pollAfterRestart()
+      }
+      if (msg.stage === 'error') {
+        updateError.value = msg.message
+        applying.value = false
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  updateWs.onclose = () => {
+    // If we were applying and WS closed, daemon likely restarted
+    if (applying.value) pollAfterRestart()
+  }
+}
+
+function pollAfterRestart() {
+  let attempts = 0
+  const poll = setInterval(async () => {
+    attempts++
+    try {
+      await api.health()
+      clearInterval(poll)
+      applying.value = false
+      updateStage.value = ''
+      updateMessage.value = ''
+      updateStatus.value = null
+      await checkUpdate()
+    } catch {
+      /* still restarting */
+    }
+    if (attempts > 60) {
+      clearInterval(poll)
+      applying.value = false
+      updateError.value = 'Timed out waiting for restart'
+    }
+  }, 2000)
+}
+
 async function applyUpdate() {
   if (applying.value) return
   applying.value = true
   updateError.value = null
+  updateStage.value = 'downloading'
+  updateMessage.value = 'Starting update...'
+  updateProgressPct.value = 0
+
+  // Connect WebSocket for live progress
+  connectUpdateWs()
+
   try {
     await api.updates.apply()
-    // Container will restart — poll health until it comes back up
-    let attempts = 0
-    const poll = setInterval(async () => {
-      attempts++
-      try {
-        await api.health()
-        clearInterval(poll)
-        applying.value = false
-        updateStatus.value = null
-        await checkUpdate()
-      } catch {
-        /* still restarting */
-      }
-      if (attempts > 60) {
-        clearInterval(poll)
-        applying.value = false
-        updateError.value = 'Timed out waiting for restart'
-      }
-    }, 2000)
+    // The async update runs in the background — WS will report progress
+  } catch (e) {
+    updateError.value = String(e)
+    applying.value = false
+  }
+}
+
+async function rollbackUpdate() {
+  if (applying.value) return
+  applying.value = true
+  updateError.value = null
+  updateMessage.value = 'Rolling back...'
+  try {
+    await api.updates.rollback()
+    pollAfterRestart()
   } catch (e) {
     updateError.value = String(e)
     applying.value = false
@@ -85,6 +143,13 @@ onMounted(async () => {
     /* use defaults */
   }
   checkUpdate()
+})
+
+onUnmounted(() => {
+  if (updateWs) {
+    updateWs.close()
+    updateWs = null
+  }
 })
 
 async function save() {
@@ -307,13 +372,49 @@ function generatePin() {
         </div>
       </div>
 
-      <p v-if="applying" class="update-notice">
+      <!-- Progress bar during self-update -->
+      <div v-if="applying && updateStage" class="update-progress">
+        <div class="update-progress-info">
+          <span class="update-progress-stage">{{ updateMessage }}</span>
+          <span v-if="updateStage === 'downloading' && updateProgressPct > 0" class="update-progress-pct">
+            {{ updateProgressPct }}%
+          </span>
+        </div>
+        <div class="update-progress-bar">
+          <div
+            class="update-progress-fill"
+            :style="{
+              width:
+                updateStage === 'downloading'
+                  ? updateProgressPct + '%'
+                  : updateStage === 'extracting'
+                    ? '80%'
+                    : updateStage === 'swapping'
+                      ? '90%'
+                      : '100%',
+              transition: 'width 0.3s ease',
+            }"
+          />
+        </div>
+      </div>
+
+      <p v-if="applying && !updateStage" class="update-notice">
         <NbIcon name="info" :size="12" />
-        Pulling new image — the container will restart. This page will reconnect automatically.
+        Starting update... This page will reconnect automatically.
       </p>
+
+      <p v-if="updateStatus?.updateMethod === 'manual' && updateStatus.updateAvailable" class="update-notice">
+        <NbIcon name="info" :size="12" />
+        Self-update is not available. Pull the latest Docker image to update:
+        <code>docker pull ghcr.io/nubisco/openbridge:latest</code>
+      </p>
+
       <p v-if="updateError" class="update-notice update-notice--error">
         <NbIcon name="warning" :size="12" />
         {{ updateError }}
+        <NbButton v-if="updateError" variant="ghost" size="sm" style="margin-left: 0.5rem" @click="rollbackUpdate">
+          Rollback
+        </NbButton>
       </p>
     </section>
 
@@ -544,6 +645,36 @@ function generatePin() {
   gap: 0.5rem;
 }
 
+.update-progress {
+  margin-top: 0.75rem;
+}
+.update-progress-info {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.78rem;
+  color: #6b7280;
+  margin-bottom: 0.35rem;
+}
+.update-progress-stage {
+  color: #374151;
+  font-weight: 500;
+}
+.update-progress-pct {
+  color: #7c3aed;
+  font-weight: 600;
+}
+.update-progress-bar {
+  height: 6px;
+  background: #f3f4f6;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.update-progress-fill {
+  height: 100%;
+  background: #7c3aed;
+  border-radius: 3px;
+}
+
 .update-notice {
   display: flex;
   align-items: center;
@@ -551,6 +682,13 @@ function generatePin() {
   font-size: 0.78rem;
   color: #6b7280;
   margin: 0.75rem 0 0;
+
+  code {
+    background: #f3f4f6;
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.72rem;
+  }
 
   &--error {
     color: #dc2626;

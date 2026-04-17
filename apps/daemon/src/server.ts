@@ -21,10 +21,34 @@ const log = Logger.create('system')
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
-// Version: injected at Docker build time via OPENBRIDGE_VERSION env var,
-// falls back to apps/daemon/package.json for local dev.
+// Version: prefer the volume's version.json (set by entrypoint or self-update),
+// then OPENBRIDGE_VERSION env var, then package.json for local dev.
 const _ownPkg = _req('../package.json') as { version: string }
-export const OPENBRIDGE_VERSION: string = process.env.OPENBRIDGE_VERSION ?? _ownPkg.version
+const APP_VOLUME = '/opt/openbridge'
+const VERSION_FILE = join(APP_VOLUME, 'version.json')
+
+function resolveVersion(): string {
+  try {
+    const vf = JSON.parse(readFileSync(VERSION_FILE, 'utf8'))
+    if (vf.version) return vf.version
+  } catch {
+    /* not on volume */
+  }
+  return process.env.OPENBRIDGE_VERSION ?? _ownPkg.version
+}
+
+export const OPENBRIDGE_VERSION: string = resolveVersion()
+
+// Self-update state (shared with WebSocket clients)
+type UpdateStage = 'idle' | 'downloading' | 'extracting' | 'swapping' | 'restarting' | 'error'
+interface UpdateProgress {
+  stage: UpdateStage
+  progress?: number
+  message?: string
+  version?: string
+}
+let updateProgress: UpdateProgress = { stage: 'idle' }
+const updateListeners = new Set<(msg: UpdateProgress) => void>()
 
 // Resolve UI dist: env override → npm layout (../ui-dist) → monorepo dev layout
 const uiDist =
@@ -78,34 +102,271 @@ export async function createServer(
         signal: AbortSignal.timeout(8000),
         headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'openbridge-daemon' },
       })
-      if (!res.ok) return { current: OPENBRIDGE_VERSION, latest: null, updateAvailable: false }
-      const data = (await res.json()) as { tag_name: string }
+      if (!res.ok) return { current: OPENBRIDGE_VERSION, latest: null, updateAvailable: false, updateMethod: 'manual' }
+      const data = (await res.json()) as { tag_name: string; html_url: string; body: string }
       const latest = data.tag_name.replace(/^v/, '')
       const updateAvailable = latest !== OPENBRIDGE_VERSION
-      return { current: OPENBRIDGE_VERSION, latest, updateAvailable }
+
+      // Detect if self-update is possible (volume is writable)
+      let updateMethod: 'self' | 'manual' = 'manual'
+      try {
+        const testFile = join(APP_VOLUME, '.write-test')
+        writeFileSync(testFile, 'ok')
+        const { unlinkSync } = await import('fs')
+        unlinkSync(testFile)
+        updateMethod = 'self'
+      } catch {
+        /* volume not writable — manual update only */
+      }
+
+      return {
+        current: OPENBRIDGE_VERSION,
+        latest,
+        updateAvailable,
+        updateMethod,
+        releaseUrl: data.html_url,
+        releaseNotes: data.body,
+      }
     } catch {
-      return { current: OPENBRIDGE_VERSION, latest: null, updateAvailable: false }
+      return { current: OPENBRIDGE_VERSION, latest: null, updateAvailable: false, updateMethod: 'manual' }
     }
   })
 
-  // ─── Update apply (triggers Watchtower pull + container restart) ──────────
+  // ─── Update progress WebSocket ────────────────────────────────────────────
+  app.get('/ws/updates', { websocket: true }, (connection: SocketStream) => {
+    const ws = connection.socket
+    const listener = (msg: UpdateProgress) => {
+      try {
+        ws.send(JSON.stringify(msg))
+      } catch {
+        /* disconnected */
+      }
+    }
+    updateListeners.add(listener)
+    // Send current state immediately
+    ws.send(JSON.stringify(updateProgress))
+    ws.on('close', () => updateListeners.delete(listener))
+  })
+
+  // ─── Self-update apply ────────────────────────────────────────────────────
   app.post('/api/updates/apply', async () => {
-    const token = process.env.WATCHTOWER_TOKEN
-    if (!token) {
-      throw { statusCode: 503, message: 'Update service not configured (WATCHTOWER_TOKEN not set)' }
+    if (updateProgress.stage !== 'idle' && updateProgress.stage !== 'error') {
+      throw { statusCode: 409, message: 'Update already in progress' }
     }
+
+    const arch = os.arch() === 'x64' ? 'amd64' : os.arch() === 'arm64' ? 'arm64' : os.arch()
+    const currentDir = join(APP_VOLUME, 'current')
+    const stagingDir = join(APP_VOLUME, 'staging')
+    const previousDir = join(APP_VOLUME, 'previous')
+
+    // Check volume is writable
     try {
-      const res = await fetch('http://watchtower:8080/v1/update', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        signal: AbortSignal.timeout(10000),
-      })
-      if (!res.ok) throw new Error(`Watchtower responded with ${res.status}`)
-      log.info('Update triggered via Watchtower — container will restart shortly')
-      return { updating: true }
-    } catch (err) {
-      throw { statusCode: 502, message: `Failed to contact update service: ${err}` }
+      mkdirSync(stagingDir, { recursive: true })
+    } catch {
+      throw { statusCode: 503, message: 'Update volume not available. Mount /opt/openbridge as a Docker volume.' }
     }
+
+    function broadcast(msg: UpdateProgress) {
+      updateProgress = msg
+      for (const listener of updateListeners) listener(msg)
+    }
+
+    // Run update async — respond immediately
+    ;(async () => {
+      try {
+        // 1. Fetch release info
+        broadcast({ stage: 'downloading', progress: 0, message: 'Fetching release info...' })
+        const releaseRes = await fetch('https://api.github.com/repos/nubisco/openbridge/releases/latest', {
+          headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'openbridge-daemon' },
+        })
+        if (!releaseRes.ok) throw new Error(`GitHub API returned ${releaseRes.status}`)
+        const release = (await releaseRes.json()) as {
+          tag_name: string
+          assets: Array<{ name: string; browser_download_url: string; size: number }>
+        }
+        const version = release.tag_name.replace(/^v/, '')
+        const assetName = `openbridge-v${version}-linux-${arch}.tar.gz`
+        const asset = release.assets.find((a) => a.name === assetName)
+        if (!asset)
+          throw new Error(`Release asset ${assetName} not found. Your architecture (${arch}) may not be supported yet.`)
+
+        // 2. Download tarball
+        broadcast({ stage: 'downloading', progress: 0.1, message: `Downloading v${version}...`, version })
+        const dlRes = await fetch(asset.browser_download_url, {
+          headers: { 'User-Agent': 'openbridge-daemon' },
+          redirect: 'follow',
+        })
+        if (!dlRes.ok || !dlRes.body) throw new Error(`Download failed: ${dlRes.status}`)
+
+        const tarballPath = join(APP_VOLUME, 'download.tar.gz')
+        const { createWriteStream } = await import('fs')
+        const { pipeline } = await import('stream/promises')
+        const { Readable } = await import('stream')
+
+        // Stream download with progress
+        const totalSize = asset.size
+        let downloaded = 0
+        const progressStream = new (await import('stream')).Transform({
+          transform(chunk, _encoding, callback) {
+            downloaded += chunk.length
+            if (totalSize > 0) {
+              const pct = Math.round((downloaded / totalSize) * 100) / 100
+              broadcast({
+                stage: 'downloading',
+                progress: pct,
+                message: `Downloading v${version}... ${Math.round(pct * 100)}%`,
+                version,
+              })
+            }
+            callback(null, chunk)
+          },
+        })
+
+        await pipeline(Readable.fromWeb(dlRes.body as any), progressStream, createWriteStream(tarballPath))
+        log.info(`Downloaded ${assetName} (${(downloaded / 1024 / 1024).toFixed(1)} MB)`)
+
+        // 3. Extract
+        broadcast({ stage: 'extracting', message: `Extracting v${version}...`, version })
+        // Clean staging
+        const { rmSync } = await import('fs')
+        rmSync(stagingDir, { recursive: true, force: true })
+        mkdirSync(stagingDir, { recursive: true })
+
+        await new Promise<void>((resolve, reject) => {
+          const tar = spawn('tar', ['xzf', tarballPath, '-C', stagingDir])
+          tar.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`tar exited with ${code}`))))
+          tar.on('error', reject)
+        })
+
+        // Clean up tarball
+        rmSync(tarballPath, { force: true })
+        log.info(`Extracted to staging directory`)
+
+        // 4. Swap: current → previous, staging → current
+        broadcast({ stage: 'swapping', message: 'Installing update...', version })
+        rmSync(previousDir, { recursive: true, force: true })
+        if (existsSync(currentDir)) {
+          const { renameSync } = await import('fs')
+          renameSync(currentDir, previousDir)
+        }
+        const { renameSync } = await import('fs')
+        renameSync(stagingDir, currentDir)
+
+        // Fix node-pty permissions
+        try {
+          const { execSync } = await import('child_process')
+          execSync(`find "${currentDir}/apps/daemon/node_modules" -name "spawn-helper" -exec chmod +x {} \\;`, {
+            stdio: 'ignore',
+          })
+        } catch {
+          /* ignore */
+        }
+
+        // 5. Write version.json
+        writeFileSync(
+          VERSION_FILE,
+          JSON.stringify(
+            {
+              version,
+              arch,
+              source: 'self-update',
+              installedAt: new Date().toISOString(),
+              previousVersion: OPENBRIDGE_VERSION,
+            },
+            null,
+            2,
+          ),
+        )
+
+        log.info(`Update to v${version} installed successfully — restarting...`)
+        broadcast({ stage: 'restarting', message: `Restarting with v${version}...`, version })
+
+        // 6. Restart the daemon
+        setTimeout(() => {
+          const isTsx = process.env.OPENBRIDGE_DEV === 'true'
+          if (isTsx) {
+            process.exit(0)
+          } else {
+            const child = spawn(process.execPath, process.argv.slice(1), {
+              detached: true,
+              stdio: 'inherit',
+              env: process.env,
+            })
+            child.unref()
+            process.exit(0)
+          }
+        }, 500)
+      } catch (err: any) {
+        log.error(`Self-update failed: ${err.message}`)
+        broadcast({ stage: 'error', message: err.message })
+        // Clean up staging on failure
+        try {
+          const { rmSync } = await import('fs')
+          rmSync(stagingDir, { recursive: true, force: true })
+          rmSync(join(APP_VOLUME, 'download.tar.gz'), { force: true })
+        } catch {
+          /* ignore */
+        }
+      }
+    })()
+
+    return { updating: true }
+  })
+
+  // ─── Rollback ─────────────────────────────────────────────────────────────
+  app.post('/api/updates/rollback', async () => {
+    const currentDir = join(APP_VOLUME, 'current')
+    const previousDir = join(APP_VOLUME, 'previous')
+
+    if (!existsSync(previousDir)) {
+      throw { statusCode: 404, message: 'No previous version available for rollback' }
+    }
+
+    const { rmSync, renameSync } = await import('fs')
+    const rollbackDir = join(APP_VOLUME, 'rollback-tmp')
+
+    // Swap: current → rollback-tmp, previous → current
+    if (existsSync(currentDir)) renameSync(currentDir, rollbackDir)
+    renameSync(previousDir, currentDir)
+    rmSync(rollbackDir, { recursive: true, force: true })
+
+    // Read version from rolled-back files
+    let rolledBackVersion = 'unknown'
+    try {
+      const vf = JSON.parse(readFileSync(VERSION_FILE, 'utf8'))
+      rolledBackVersion = vf.previousVersion ?? 'unknown'
+    } catch {
+      /* ignore */
+    }
+
+    writeFileSync(
+      VERSION_FILE,
+      JSON.stringify(
+        {
+          version: rolledBackVersion,
+          arch: os.arch() === 'x64' ? 'amd64' : os.arch(),
+          source: 'rollback',
+          installedAt: new Date().toISOString(),
+        },
+        null,
+        2,
+      ),
+    )
+
+    log.info(`Rolled back to v${rolledBackVersion} — restarting...`)
+
+    // Restart
+    setTimeout(() => {
+      const child = spawn(process.execPath, process.argv.slice(1), {
+        detached: true,
+        stdio: 'inherit',
+        env: process.env,
+      })
+      child.unref()
+      process.exit(0)
+    }, 300)
+
+    return { rollingBack: true, version: rolledBackVersion }
   })
 
   // ─── System info ──────────────────────────────────────────────────────────

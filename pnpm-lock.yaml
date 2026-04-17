@@ -148,8 +148,8 @@ importers:
         specifier: ^1.7.0
         version: 1.7.0
       '@nubisco/ui':
-        specifier: ^1.8.0
-        version: 1.8.0(vue-i18n@11.3.0(vue@3.5.32(typescript@5.9.3)))(vue@3.5.32(typescript@5.9.3))
+        specifier: ^1.9.0
+        version: 1.9.0(vue-i18n@11.3.0(vue@3.5.32(typescript@5.9.3)))(vue@3.5.32(typescript@5.9.3))
       '@xterm/addon-fit':
         specifier: ^0.11.0
         version: 0.11.0
@@ -987,9 +987,9 @@ packages:
       { integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg== }
     engines: { node: '>= 8' }
 
-  '@nubisco/ui@1.8.0':
+  '@nubisco/ui@1.9.0':
     resolution:
-      { integrity: sha512-CHqTdh9JzzyusBmVwqnaXrJDSVSSE+MEOXc1g4oyYfcvyOLQ6see7Tq37tbnGWjGHuiM6ffppnJxLx720Qkc+g== }
+      { integrity: sha512-77qygjJgr52CLXfXNIjuaAcaujtfll7gK2gmUJBL+Li/duey5/ePZuOauDi5hrpq/9Wys7BOlvbtu9xrA7kQFA== }
     engines: { node: '>=20.0.0' }
     peerDependencies:
       vue: ^3.5.30
@@ -5836,7 +5836,7 @@ snapshots:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.1
 
-  '@nubisco/ui@1.8.0(vue-i18n@11.3.0(vue@3.5.32(typescript@5.9.3)))(vue@3.5.32(typescript@5.9.3))':
+  '@nubisco/ui@1.9.0(vue-i18n@11.3.0(vue@3.5.32(typescript@5.9.3)))(vue@3.5.32(typescript@5.9.3))':
     dependencies:
       vue: 3.5.32(typescript@5.9.3)
       vue-i18n: 11.3.0(vue@3.5.32(typescript@5.9.3))

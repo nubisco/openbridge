@@ -56,8 +56,15 @@ COPY --from=build /repo/apps/ui/dist            ./apps/ui/dist
 # Ensure spawn-helper is executable (node-pty native binary)
 RUN find ./apps/daemon/node_modules -name "spawn-helper" -exec chmod +x {} \; 2>/dev/null || true
 
+# Entrypoint script (manages volume overlay for self-updates)
+COPY apps/daemon/scripts/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Ensure spawn-helper is executable (node-pty native binary)
+RUN find ./apps/daemon/node_modules -name "spawn-helper" -exec chmod +x {} \; 2>/dev/null || true
+
 # Runtime directories
-RUN mkdir -p /plugins /root/.openbridge
+RUN mkdir -p /plugins /root/.openbridge /opt/openbridge
 
 ARG APP_VERSION=development
 ENV NODE_ENV=production
@@ -69,4 +76,4 @@ EXPOSE 8581
 HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
   CMD wget -qO- http://localhost:8581/api/health || exit 1
 
-CMD ["node", "apps/daemon/dist/index.js"]
+CMD ["/entrypoint.sh"]
