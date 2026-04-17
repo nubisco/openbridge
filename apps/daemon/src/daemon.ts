@@ -259,6 +259,15 @@ export class Daemon {
 
         // Native OpenBridge plugins — load via the plugin loader and start them
         if (isNative) {
+          // Ensure the plugin can resolve peer dependencies (like hap-nodejs) from the daemon's node_modules
+          const daemonModules = resolve(__dirname, '../node_modules')
+          if (!process.env.NODE_PATH?.includes(daemonModules)) {
+            process.env.NODE_PATH = process.env.NODE_PATH ? `${process.env.NODE_PATH}:${daemonModules}` : daemonModules
+            // Re-initialize the module resolution paths
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            require('module').Module._initPaths()
+          }
+
           const pluginDir = join(pluginsRoot, 'node_modules', pkgName)
           const candidates = [join(pluginDir, 'dist', 'index.js'), join(pluginDir, 'index.js')]
           let loaded = false
