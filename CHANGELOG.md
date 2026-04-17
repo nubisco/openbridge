@@ -1,9 +1,8 @@
 ## [0.7.1](https://github.com/nubisco/openbridge/compare/v0.7.0...v0.7.1) (2026-04-17)
 
-
 ### Performance Improvements
 
-* **ci:** native multi-arch Docker builds with parallel runners ([2ac2f1f](https://github.com/nubisco/openbridge/commit/2ac2f1fb21d751cf0ee8cb461fd30da3b4220bdf))
+- **ci:** native multi-arch Docker builds with parallel runners ([2ac2f1f](https://github.com/nubisco/openbridge/commit/2ac2f1fb21d751cf0ee8cb461fd30da3b4220bdf))
 
 # [0.7.0](https://github.com/nubisco/openbridge/compare/v0.6.1...v0.7.0) (2026-04-17)
 

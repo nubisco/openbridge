@@ -260,8 +260,8 @@ function navigateHistory(direction: -1 | 1) {
   }
 }
 
-watch([historyPeriod, () => selected.value], () => {
-  // Reset date to today/this-month/this-year when switching period
+watch(historyPeriod, () => {
+  // Reset date to today/this-month/this-year when switching period tab
   const now = new Date()
   if (historyPeriod.value === 'day') historyDate.value = now.toISOString().slice(0, 10)
   else if (historyPeriod.value === 'month') historyDate.value = now.toISOString().slice(0, 7)
