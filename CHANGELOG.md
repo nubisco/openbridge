@@ -1,3 +1,10 @@
+## [0.8.3](https://github.com/nubisco/openbridge/compare/v0.8.2...v0.8.3) (2026-04-17)
+
+
+### Bug Fixes
+
+* disabled plugins now actually stop — applies to both Homebridge platforms and native plugins ([d69b5a1](https://github.com/nubisco/openbridge/commit/d69b5a16ac5df7fd375cae19002bc33d83358fb7))
+
 ## [0.8.2](https://github.com/nubisco/openbridge/compare/v0.8.1...v0.8.2) (2026-04-17)
 
 
