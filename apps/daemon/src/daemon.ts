@@ -61,6 +61,15 @@ export class Daemon {
     let homebridgeAPI: HomebridgeAPI | null = null
     let hapInfo: HapInfo | null = null
 
+    // Load disabled plugins list early — applies to both Homebridge platforms and native plugins
+    let disabledPlugins: string[] = []
+    try {
+      const rawCfg = JSON.parse(readFileSync(configPath, 'utf8'))
+      disabledPlugins = (rawCfg.disabledPlugins ?? []) as string[]
+    } catch {
+      /* config file may not exist yet */
+    }
+
     try {
       // Load hap-nodejs — look in daemon or workspace node_modules
       const hapCandidates = [
@@ -103,9 +112,18 @@ export class Daemon {
 
       // Load Homebridge-compatible platform plugins (if any)
       if (config.platforms && config.platforms.length > 0) {
-        log.info(`Loading ${config.platforms.length} Homebridge platform(s)...`)
+        // Filter out disabled platforms
+        const enabledPlatforms = config.platforms.filter((p) => !disabledPlugins.includes(p.platform as string))
+        const skippedPlatforms = config.platforms.filter((p) => disabledPlugins.includes(p.platform as string))
 
-        for (const platformConfig of config.platforms) {
+        if (enabledPlatforms.length > 0) {
+          log.info(`Loading ${enabledPlatforms.length} Homebridge platform(s)...`)
+        }
+        for (const p of skippedPlatforms) {
+          log.info(`Skipping disabled platform: ${p.platform}`)
+        }
+
+        for (const platformConfig of enabledPlatforms) {
           if (!platformConfig.plugin) {
             log.warn(`Platform "${platformConfig.platform}" has no "plugin" path, skipping`)
             continue
@@ -135,9 +153,9 @@ export class Daemon {
           }
         }
 
-        // Launch platforms (instantiate them with config, emit didFinishLaunching)
+        // Launch only enabled platforms
         const platformLogger = Logger.create('hap')
-        await homebridgeAPI.launchPlatforms(config.platforms as any[], platformLogger, this.registry)
+        await homebridgeAPI.launchPlatforms(enabledPlatforms as any[], platformLogger, this.registry)
       }
 
       // Publish the HAP bridge
@@ -170,21 +188,14 @@ export class Daemon {
     }
     this.loadedPlugins = plugins
 
-    // Load disabled plugins list from config
-    let disabledPlugins: string[] = []
-    try {
-      const rawConfig = JSON.parse(readFileSync(configPath, 'utf8'))
-      disabledPlugins = (rawConfig.disabledPlugins ?? []) as string[]
-      for (const disabledId of disabledPlugins) {
-        const entry = this.registry.get(disabledId)
-        if (entry) {
-          entry.instance.disabled = true
-          this.registry.updateStatus(disabledId, 'stopped')
-          log.debug(`Plugin marked as disabled: ${disabledId}`)
-        }
+    // Mark disabled native plugins
+    for (const disabledId of disabledPlugins) {
+      const entry = this.registry.get(disabledId)
+      if (entry) {
+        entry.instance.disabled = true
+        this.registry.updateStatus(disabledId, 'stopped')
+        log.debug(`Plugin marked as disabled: ${disabledId}`)
       }
-    } catch {
-      /* config file may not exist yet */
     }
 
     // Only start plugins that are not disabled
