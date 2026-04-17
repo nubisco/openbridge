@@ -1,5 +1,5 @@
 {
-  "name": "@openbridge/compatibility-homebridge",
+  "name": "@nubisco/openbridge-compatibility-homebridge",
   "version": "0.1.0",
   "description": "Homebridge platform plugin compatibility shim for OpenBridge",
   "author": "José Silva <jose@nubisco.io>",
@@ -46,6 +46,6 @@
     "typescript": "^5.4.0"
   },
   "dependencies": {
-    "@openbridge/logger": "workspace:^"
+    "@nubisco/openbridge-logger": "workspace:^"
   }
 }

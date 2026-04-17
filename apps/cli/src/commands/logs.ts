@@ -1,6 +1,6 @@
 import chalk from 'chalk'
 import { apiGet, checkDaemon } from '../api.js'
-import type { LogEntry } from '@openbridge/logger'
+import type { LogEntry } from '@nubisco/openbridge-logger'
 
 export async function logsCommand(options: { plugin?: string; follow?: boolean }) {
   const alive = await checkDaemon()

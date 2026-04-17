@@ -4,13 +4,13 @@ import { fileURLToPath } from 'url'
 import { dirname } from 'path'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import os from 'os'
-import { PluginRegistry, PluginLifecycle, loadPluginsFromDirectory } from '@openbridge/core'
-import type { PluginContext, Plugin, DeviceDescriptor } from '@openbridge/core'
-import { Logger } from '@openbridge/logger'
-import { loadConfig, defaultConfigPath } from '@openbridge/config'
-import type { OpenBridgeConfig } from '@openbridge/config'
+import { PluginRegistry, PluginLifecycle, loadPluginsFromDirectory } from '@nubisco/openbridge-core'
+import type { PluginContext, Plugin, DeviceDescriptor } from '@nubisco/openbridge-core'
+import { Logger } from '@nubisco/openbridge-logger'
+import { loadConfig, defaultConfigPath } from '@nubisco/openbridge-config'
+import type { OpenBridgeConfig } from '@nubisco/openbridge-config'
 import { createServer, type HapInfo } from './server.js'
-import { HomebridgeAPI, loadHomebridgePlugin } from '@openbridge/compatibility-homebridge'
+import { HomebridgeAPI, loadHomebridgePlugin } from '@nubisco/openbridge-compatibility-homebridge'
 
 const log = Logger.create('system')
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -82,7 +82,7 @@ export class Daemon {
       }
 
       if (!hapNodeJs) {
-        throw new Error('hap-nodejs not found. Run: pnpm add hap-nodejs --filter @openbridge/daemon')
+        throw new Error('hap-nodejs not found. Run: pnpm add hap-nodejs --filter @nubisco/openbridge-daemon')
       }
 
       // Init HAP storage

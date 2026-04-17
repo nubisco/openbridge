@@ -1,6 +1,6 @@
 import chalk from 'chalk'
 import { apiGet, checkDaemon } from '../api.js'
-import type { PluginInstance } from '@openbridge/core'
+import type { PluginInstance } from '@nubisco/openbridge-core'
 
 export async function pluginsListCommand() {
   const alive = await checkDaemon()

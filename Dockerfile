@@ -24,19 +24,19 @@ FROM deps AS build
 COPY . .
 
 # Build internal packages first (daemon depends on them)
-RUN pnpm --filter @openbridge/core build
-RUN pnpm --filter @openbridge/logger build
-RUN pnpm --filter @openbridge/config build
-RUN pnpm --filter @openbridge/sdk build
-RUN pnpm --filter @openbridge/compatibility-homebridge build
+RUN pnpm --filter @nubisco/openbridge-core build
+RUN pnpm --filter @nubisco/openbridge-logger build
+RUN pnpm --filter @nubisco/openbridge-config build
+RUN pnpm --filter @nubisco/openbridge-sdk build
+RUN pnpm --filter @nubisco/openbridge-compatibility-homebridge build
 # Build UI (served as static files by the daemon)
-RUN pnpm --filter @openbridge/ui build
+RUN pnpm --filter @nubisco/openbridge-ui build
 # Build daemon last
-RUN pnpm --filter @openbridge/daemon build
+RUN pnpm --filter @nubisco/openbridge-daemon build
 
 # ─── Stage 3: Prune to production-only node_modules ─────────────────────────
 FROM build AS prune
-RUN pnpm --filter @openbridge/daemon deploy --prod /pruned
+RUN pnpm --filter @nubisco/openbridge-daemon deploy --prod /pruned
 
 # ─── Stage 4: Minimal runtime image ─────────────────────────────────────────
 FROM node:22-alpine AS runtime

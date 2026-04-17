@@ -15,7 +15,7 @@ Required confirmation statement (do not remove):
 
 - [ ] Bug fix
 - [ ] New feature (daemon, API, dashboard)
-- [ ] New or updated package API (`@openbridge/*`)
+- [ ] New or updated package API (`@nubisco/openbridge-*`)
 - [ ] Plugin SDK change
 - [ ] Homebridge compatibility change
 - [ ] Documentation update

@@ -148,10 +148,10 @@ Calls `POST /api/daemon/restart`. The daemon process restarts, all plugins go th
 
 ## Dev vs. production URL
 
-| Mode           | URL                     | How to start                       |
-| -------------- | ----------------------- | ---------------------------------- |
-| Production     | `http://localhost:8582` | `node apps/daemon/dist/index.js`   |
-| UI development | `http://localhost:5174` | `pnpm --filter @openbridge/ui dev` |
+| Mode           | URL                     | How to start                               |
+| -------------- | ----------------------- | ------------------------------------------ |
+| Production     | `http://localhost:8582` | `node apps/daemon/dist/index.js`           |
+| UI development | `http://localhost:5174` | `pnpm --filter @nubisco/openbridge-ui dev` |
 
 In UI development mode, the Vite server at 5174 proxies `/api/*` and `/ws/*` requests to the daemon at 8582. Both must be running. The daemon does not need to be in dev mode — you can run the compiled daemon while developing the UI.
 

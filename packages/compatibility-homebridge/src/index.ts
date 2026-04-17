@@ -1,5 +1,5 @@
 /**
- * @openbridge/compatibility-homebridge
+ * @nubisco/openbridge-compatibility-homebridge
  *
  * Homebridge API compatibility shim for OpenBridge.
  * Wraps hap-nodejs so Homebridge platform plugins can run inside OpenBridge.
@@ -10,7 +10,7 @@ import { createRequire } from 'module'
 import { fileURLToPath } from 'url'
 import { dirname, resolve } from 'path'
 import os from 'os'
-import { Logger } from '@openbridge/logger'
+import { Logger } from '@nubisco/openbridge-logger'
 
 const hapLog = Logger.create('hap-compat')
 
@@ -31,7 +31,7 @@ export function loadHapSync(): any {
       /* try next */
     }
   }
-  throw new Error('hap-nodejs not found. Run: pnpm add hap-nodejs --filter @openbridge/daemon')
+  throw new Error('hap-nodejs not found. Run: pnpm add hap-nodejs --filter @nubisco/openbridge-daemon')
 }
 
 export let hap: any = null

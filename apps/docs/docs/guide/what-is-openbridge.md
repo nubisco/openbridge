@@ -46,7 +46,7 @@ When you start the daemon, this is what happens in order:
 | WebSocket log stream      | No                          | Yes                              |
 | Config validation         | Partial                     | Full Zod schema                  |
 | Homebridge plugin support | Native                      | Compatibility shim               |
-| Native plugin SDK         | No                          | `@openbridge/sdk`                |
+| Native plugin SDK         | No                          | `@nubisco/openbridge-sdk`        |
 | Child bridges             | Yes                         | Not yet                          |
 | Cached accessory restore  | Yes                         | Not yet                          |
 | Cloud dependency          | Never                       | Never                            |
@@ -68,7 +68,7 @@ openbridge/
     compatibility-homebridge/ → Homebridge API shim
 ```
 
-Each package has a single responsibility and can be used independently. Plugin authors only need `@openbridge/sdk`, which re-exports the types they care about.
+Each package has a single responsibility and can be used independently. Plugin authors only need `@nubisco/openbridge-sdk`, which re-exports the types they care about.
 
 ## Plugin Marketplace
 

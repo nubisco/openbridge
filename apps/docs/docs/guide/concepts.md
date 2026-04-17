@@ -12,10 +12,10 @@ OpenBridge supports two kinds of plugins:
 
 ### Native plugins
 
-Written specifically for OpenBridge using `@openbridge/sdk`. They export a `Plugin` object with a manifest and three lifecycle hooks (`setup`, `start`, `stop`). The daemon discovers them in `~/.openbridge/plugins/openbridge/` or loads them from explicit paths in `plugins[]` config.
+Written specifically for OpenBridge using `@nubisco/openbridge-sdk`. They export a `Plugin` object with a manifest and three lifecycle hooks (`setup`, `start`, `stop`). The daemon discovers them in `~/.openbridge/plugins/openbridge/` or loads them from explicit paths in `plugins[]` config.
 
 ```typescript
-import { definePlugin } from '@openbridge/sdk'
+import { definePlugin } from '@nubisco/openbridge-sdk'
 
 export default definePlugin({
   manifest: { name: 'my-plugin', version: '1.0.0' },
@@ -110,7 +110,7 @@ Characteristics live inside **Services** (e.g., the `Lightbulb` service contains
 
 ## Logger
 
-Every plugin gets a **scoped logger** — a `PluginLogger` instance created by `@openbridge/logger` with the plugin name as its scope. All output from a plugin's logger is tagged with that name.
+Every plugin gets a **scoped logger** — a `PluginLogger` instance created by `@nubisco/openbridge-logger` with the plugin name as its scope. All output from a plugin's logger is tagged with that name.
 
 Logs are:
 

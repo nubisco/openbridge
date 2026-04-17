@@ -7,14 +7,14 @@ Native OpenBridge plugins are TypeScript modules that export a plugin object. Th
 Install the SDK in your plugin project:
 
 ```bash
-npm install @openbridge/sdk
+npm install @nubisco/openbridge-sdk
 ```
 
 Create the entry file:
 
 ```typescript
 // src/index.ts
-import { definePlugin } from '@openbridge/sdk'
+import { definePlugin } from '@nubisco/openbridge-sdk'
 
 export default definePlugin({
   manifest: {
@@ -48,7 +48,7 @@ Here is a realistic plugin that polls a value on an interval, reads config, and 
 
 ```typescript
 // src/index.ts
-import { definePlugin } from '@openbridge/sdk'
+import { definePlugin } from '@nubisco/openbridge-sdk'
 
 export default definePlugin({
   manifest: {
@@ -267,7 +267,7 @@ my-plugin/
     "build": "tsc"
   },
   "dependencies": {
-    "@openbridge/sdk": "*"
+    "@nubisco/openbridge-sdk": "*"
   },
   "devDependencies": {
     "typescript": "^5.0.0"
@@ -329,7 +329,7 @@ If you want others to use your plugin:
 1. **Namespace your package** — use `openbridge-` as a prefix, e.g. `openbridge-temperature-logger`.
 2. **Add `"openbridge-plugin"` to your package.json keywords** — this makes it discoverable in the marketplace search.
 3. **Ship a `config.schema.json`** alongside `dist/index.js` — the UI uses this to render a visual config form for your plugin. The schema format is the same as Homebridge uses (JSON Schema draft-07).
-4. **Pin your `@openbridge/sdk` version** in `peerDependencies` so users get a clear error if there is a version mismatch.
+4. **Pin your `@nubisco/openbridge-sdk` version** in `peerDependencies` so users get a clear error if there is a version mismatch.
 
 ## Next steps
 

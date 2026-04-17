@@ -1,5 +1,5 @@
 // ─── Core plugin types ───────────────────────────────────────────────────────
-export type { Plugin, PluginManifest, PluginContext, PluginLogger, DeviceDescriptor } from '@openbridge/core'
+export type { Plugin, PluginManifest, PluginContext, PluginLogger, DeviceDescriptor } from '@nubisco/openbridge-core'
 
 // ─── HAP types for accessory development ─────────────────────────────────────
 // Re-exported from hap-nodejs so plugin authors don't need a direct dependency.
@@ -55,6 +55,8 @@ export interface API {
 // ─── Helper ──────────────────────────────────────────────────────────────────
 
 /** Define a plugin with type safety */
-export function definePlugin(plugin: import('@openbridge/core').Plugin): import('@openbridge/core').Plugin {
+export function definePlugin(
+  plugin: import('@nubisco/openbridge-core').Plugin,
+): import('@nubisco/openbridge-core').Plugin {
   return plugin
 }

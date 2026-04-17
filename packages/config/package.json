@@ -1,5 +1,5 @@
 {
-  "name": "@openbridge/config",
+  "name": "@nubisco/openbridge-config",
   "version": "0.1.0",
   "description": "Zod-validated JSON configuration loader for OpenBridge",
   "author": "José Silva <jose@nubisco.io>",

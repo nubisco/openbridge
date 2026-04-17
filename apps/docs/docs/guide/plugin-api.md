@@ -1,15 +1,15 @@
 # Plugin API Reference
 
-This page is the authoritative reference for the `@openbridge/sdk` and `@openbridge/core` types available to plugin authors. For a tutorial approach, see [Creating a Plugin](/guide/creating-a-plugin).
+This page is the authoritative reference for the `@nubisco/openbridge-sdk` and `@nubisco/openbridge-core` types available to plugin authors. For a tutorial approach, see [Creating a Plugin](/guide/creating-a-plugin).
 
 ---
 
 ## `definePlugin(plugin)`
 
-The entry point for every native plugin. Import it from `@openbridge/sdk`.
+The entry point for every native plugin. Import it from `@nubisco/openbridge-sdk`.
 
 ```typescript
-import { definePlugin } from '@openbridge/sdk'
+import { definePlugin } from '@nubisco/openbridge-sdk'
 
 export default definePlugin({ ... })
 ```

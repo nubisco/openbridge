@@ -55,7 +55,7 @@ Open two terminals.
 **Terminal 1 — daemon with hot reload:**
 
 ```bash
-pnpm --filter @openbridge/daemon dev
+pnpm --filter @nubisco/openbridge-daemon dev
 ```
 
 This uses `tsx watch` to restart the daemon whenever a source file changes. The API and plugin engine run on **port 8582**.
@@ -63,7 +63,7 @@ This uses `tsx watch` to restart the daemon whenever a source file changes. The 
 **Terminal 2 — UI dev server (optional):**
 
 ```bash
-pnpm --filter @openbridge/ui dev
+pnpm --filter @nubisco/openbridge-ui dev
 ```
 
 This starts Vite's development server on **port 5174** with hot module replacement. The UI at port 5174 proxies API calls to the daemon at 8582, so both need to be running.
@@ -180,7 +180,7 @@ The plugin will initialize, and its accessories will appear in the Home app with
 
 ## Plugin directory structure
 
-Native OpenBridge plugins (written with `@openbridge/sdk`) live in a different directory:
+Native OpenBridge plugins (written with `@nubisco/openbridge-sdk`) live in a different directory:
 
 ```
 ~/.openbridge/

@@ -29,9 +29,9 @@
     "docker"
   ],
   "scripts": {
-    "dev": "pnpm --filter @openbridge/daemon --filter @openbridge/ui --parallel dev",
+    "dev": "pnpm --filter @nubisco/openbridge-daemon --filter @nubisco/openbridge-ui --parallel dev",
     "build": "pnpm -r build",
-    "start": "pnpm --filter @openbridge/daemon start",
+    "start": "pnpm --filter @nubisco/openbridge-daemon start",
     "test": "pnpm -r --if-present test",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",

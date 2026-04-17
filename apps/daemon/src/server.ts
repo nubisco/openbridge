@@ -11,10 +11,10 @@ import { createRequire } from 'module'
 import os from 'os'
 
 const _req = createRequire(import.meta.url)
-import type { PluginRegistry, Plugin, DeviceDescriptor } from '@openbridge/core'
-import { Logger } from '@openbridge/logger'
-import type { LogEntry } from '@openbridge/logger'
-import type { HomebridgeAPI } from '@openbridge/compatibility-homebridge'
+import type { PluginRegistry, Plugin, DeviceDescriptor } from '@nubisco/openbridge-core'
+import { Logger } from '@nubisco/openbridge-logger'
+import type { LogEntry } from '@nubisco/openbridge-logger'
+import type { HomebridgeAPI } from '@nubisco/openbridge-compatibility-homebridge'
 import { startMetrics, onMetrics, getHistory } from './metrics.js'
 
 const log = Logger.create('system')
@@ -560,7 +560,7 @@ export async function createServer(
     }
 
     try {
-      const { loadHomebridgePlugin } = await import('@openbridge/compatibility-homebridge')
+      const { loadHomebridgePlugin } = await import('@nubisco/openbridge-compatibility-homebridge')
       const fn = loadHomebridgePlugin(mainFile)
       fn(spyAPI)
     } catch {

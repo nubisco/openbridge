@@ -87,18 +87,18 @@ Open **http://localhost:8582** — the dashboard loads immediately.
 pnpm build
 
 # Start the daemon in watch mode (terminal 1)
-pnpm --filter @openbridge/daemon dev
+pnpm --filter @nubisco/openbridge-daemon dev
 
 # Start the UI dev server with HMR (terminal 2)
-pnpm --filter @openbridge/ui dev
+pnpm --filter @nubisco/openbridge-ui dev
 # → UI at http://localhost:5174 (proxies /api and /ws to daemon on :8582)
 ```
 
 To rebuild individual packages during development:
 
 ```bash
-pnpm --filter @openbridge/core dev       # watch mode
-pnpm --filter @openbridge/logger dev
+pnpm --filter @nubisco/openbridge-core dev       # watch mode
+pnpm --filter @nubisco/openbridge-logger dev
 ```
 
 ---
@@ -106,7 +106,7 @@ pnpm --filter @openbridge/logger dev
 ## Writing a Plugin
 
 ```typescript
-import { definePlugin } from '@openbridge/sdk'
+import { definePlugin } from '@nubisco/openbridge-sdk'
 
 export default definePlugin({
   manifest: {

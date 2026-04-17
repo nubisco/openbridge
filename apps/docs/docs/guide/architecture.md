@@ -17,8 +17,8 @@ flowchart TB
 
     subgraph daemonCoreRow[" "]
       direction LR
-      cfg["@openbridge/config"]
-      core["@openbridge/core<br/>PluginRegistry<br/>PluginLifecycle<br/>loadPlugin()"]
+      cfg["@nubisco/openbridge-config"]
+      core["@nubisco/openbridge-core<br/>PluginRegistry<br/>PluginLifecycle<br/>loadPlugin()"]
     end
 
     subgraph daemonPluginRow[" "]
@@ -49,13 +49,13 @@ flowchart TB
 
 ## Packages
 
-| Package                                | Responsibility                           | Key exports                                                                                                                    |
-| -------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `@openbridge/core`                     | Plugin types, registry, lifecycle engine | `Plugin`, `PluginManifest`, `PluginContext`, `PluginRegistry`, `PluginLifecycle`, `loadPlugin()`, `loadPluginsFromDirectory()` |
-| `@openbridge/sdk`                      | Plugin authoring surface                 | `definePlugin()`, re-exports of all core types                                                                                 |
-| `@openbridge/config`                   | Zod-validated config load/save           | `loadConfig()`, `saveConfig()`, `ConfigSchema`                                                                                 |
-| `@openbridge/logger`                   | Scoped structured logger                 | `Logger.create(name)`, `Logger.subscribe(fn)`, `Logger.getEntries()`                                                           |
-| `@openbridge/compatibility-homebridge` | Homebridge API shim                      | `HomebridgeAPI`, `PlatformAccessory`, `Service`, `Characteristic`                                                              |
+| Package                                        | Responsibility                           | Key exports                                                                                                                    |
+| ---------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `@nubisco/openbridge-core`                     | Plugin types, registry, lifecycle engine | `Plugin`, `PluginManifest`, `PluginContext`, `PluginRegistry`, `PluginLifecycle`, `loadPlugin()`, `loadPluginsFromDirectory()` |
+| `@nubisco/openbridge-sdk`                      | Plugin authoring surface                 | `definePlugin()`, re-exports of all core types                                                                                 |
+| `@nubisco/openbridge-config`                   | Zod-validated config load/save           | `loadConfig()`, `saveConfig()`, `ConfigSchema`                                                                                 |
+| `@nubisco/openbridge-logger`                   | Scoped structured logger                 | `Logger.create(name)`, `Logger.subscribe(fn)`, `Logger.getEntries()`                                                           |
+| `@nubisco/openbridge-compatibility-homebridge` | Homebridge API shim                      | `HomebridgeAPI`, `PlatformAccessory`, `Service`, `Characteristic`                                                              |
 
 **`apps/daemon`** orchestrates everything: it imports from all packages, owns the Fastify server, manages the HAP bridge, and is the only app that touches the filesystem for config and plugin discovery.
 
@@ -67,15 +67,15 @@ flowchart TB
 
 ## Data flow, step by step
 
-1. **Config load** — `@openbridge/config` reads `~/.openbridge/config.json`, parses it, and validates it against the Zod schema. Invalid config throws with a structured error listing every invalid field.
+1. **Config load** — `@nubisco/openbridge-config` reads `~/.openbridge/config.json`, parses it, and validates it against the Zod schema. Invalid config throws with a structured error listing every invalid field.
 
-2. **Logger init** — `@openbridge/logger` is initialized. It creates an in-memory ring buffer and starts accepting subscriptions. Anything that calls `Logger.create()` gets a scoped logger that writes to the shared buffer.
+2. **Logger init** — `@nubisco/openbridge-logger` is initialized. It creates an in-memory ring buffer and starts accepting subscriptions. Anything that calls `Logger.create()` gets a scoped logger that writes to the shared buffer.
 
 3. **Plugin discovery** — the daemon scans `~/.openbridge/plugins/openbridge/` (and any `localPluginSources`). For each subdirectory with a `dist/index.js`, it calls `loadPlugin()` which dynamically imports the module and reads `module.default`.
 
 4. **Plugin registration** — each loaded plugin is added to `PluginRegistry` with status `Pending`. Plugins from `platforms[]` are loaded through the Homebridge shim instead.
 
-5. **Lifecycle: setup** — `PluginLifecycle` calls `plugin.setup(ctx)` on each plugin in order. Each gets its own `ctx` with `config` from the matching `plugins[]` entry (or `{}` if none) and a scoped `log` from `@openbridge/logger`.
+5. **Lifecycle: setup** — `PluginLifecycle` calls `plugin.setup(ctx)` on each plugin in order. Each gets its own `ctx` with `config` from the matching `plugins[]` entry (or `{}` if none) and a scoped `log` from `@nubisco/openbridge-logger`.
 
 6. **Lifecycle: start** — after all `setup()` calls complete, `start(ctx)` is called on each plugin. Plugins may begin polling, opening sockets, or registering HAP accessories here.
 
@@ -128,7 +128,7 @@ Every log call flows through this pipeline:
 plugin.ctx.log.info('message')
   │
   ▼
-@openbridge/logger  ←  Logger.create('plugin-name')
+@nubisco/openbridge-logger  ←  Logger.create('plugin-name')
   │
   ├──▶ stdout (formatted with timestamp + level + name)
   │

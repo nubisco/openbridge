@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { Daemon } from './daemon.js'
-import { Logger } from '@openbridge/logger'
+import { Logger } from '@nubisco/openbridge-logger'
 
 const log = Logger.create('system')
 

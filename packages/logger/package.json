@@ -1,5 +1,5 @@
 {
-  "name": "@openbridge/logger",
+  "name": "@nubisco/openbridge-logger",
   "version": "0.1.0",
   "description": "Structured logger with in-memory buffer and WebSocket streaming for OpenBridge",
   "author": "José Silva <jose@nubisco.io>",

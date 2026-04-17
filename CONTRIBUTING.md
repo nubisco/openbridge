@@ -23,10 +23,10 @@ pnpm format         # Prettier
 To work on a specific package in watch mode:
 
 ```bash
-pnpm --filter @openbridge/daemon dev
-pnpm --filter @openbridge/ui dev        # Vue dashboard — dev server at :5174
-pnpm --filter @openbridge/core dev
-pnpm --filter @openbridge/logger dev
+pnpm --filter @nubisco/openbridge-daemon dev
+pnpm --filter @nubisco/openbridge-ui dev        # Vue dashboard — dev server at :5174
+pnpm --filter @nubisco/openbridge-core dev
+pnpm --filter @nubisco/openbridge-logger dev
 ```
 
 **Notes:**
@@ -72,18 +72,18 @@ openbridge/
     cli/        Command-line interface
     docs/       VitePress documentation site (private — not published)
   packages/
-    core/       @openbridge/core — plugin types, registry, lifecycle
-    logger/     @openbridge/logger — structured logging
-    config/     @openbridge/config — Zod-validated config schema
-    sdk/        @openbridge/sdk — definePlugin() helper for plugin authors
-    compatibility-homebridge/  @openbridge/compatibility-homebridge — Homebridge adapter
+    core/       @nubisco/openbridge-core — plugin types, registry, lifecycle
+    logger/     @nubisco/openbridge-logger — structured logging
+    config/     @nubisco/openbridge-config — Zod-validated config schema
+    sdk/        @nubisco/openbridge-sdk — definePlugin() helper for plugin authors
+    compatibility-homebridge/  @nubisco/openbridge-compatibility-homebridge — Homebridge adapter
 ```
 
-Published npm packages: `openbridge` (daemon), `@openbridge/core`, `@openbridge/logger`, `@openbridge/config`, `@openbridge/sdk`, `@openbridge/compatibility-homebridge`.
+Published npm packages: `openbridge` (daemon), `@nubisco/openbridge-core`, `@nubisco/openbridge-logger`, `@nubisco/openbridge-config`, `@nubisco/openbridge-sdk`, `@nubisco/openbridge-compatibility-homebridge`.
 
 ## Writing a Plugin vs. Contributing to Core
 
-If you are **writing a plugin**, you do not need to fork this repo — use the `@openbridge/sdk` package directly. See the [Plugin Development guide](apps/docs/docs/guide/creating-a-plugin.md).
+If you are **writing a plugin**, you do not need to fork this repo — use the `@nubisco/openbridge-sdk` package directly. See the [Plugin Development guide](apps/docs/docs/guide/creating-a-plugin.md).
 
 If you are **contributing to core** (daemon, packages, UI, docs), follow this guide.
 

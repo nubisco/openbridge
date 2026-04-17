@@ -62,7 +62,7 @@ The `bridge` object configures both the HTTP server and the HAP bridge that Home
 
 ## `plugins[]`
 
-The `plugins` array configures **native OpenBridge plugins** — those written with `@openbridge/sdk`. Each entry corresponds to one plugin.
+The `plugins` array configures **native OpenBridge plugins** — those written with `@nubisco/openbridge-sdk`. Each entry corresponds to one plugin.
 
 | Field     | Type      | Default | Required | Description                                                           |
 | --------- | --------- | ------- | -------- | --------------------------------------------------------------------- |
