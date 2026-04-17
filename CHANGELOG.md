@@ -1,3 +1,10 @@
+## [0.8.1](https://github.com/nubisco/openbridge/compare/v0.8.0...v0.8.1) (2026-04-17)
+
+
+### Bug Fixes
+
+* plugin management — native loading, disabled state, removal ([30605d0](https://github.com/nubisco/openbridge/commit/30605d0be4329b873683ca69809a42b9593d5b8b))
+
 # [0.8.0](https://github.com/nubisco/openbridge/compare/v0.7.2...v0.8.0) (2026-04-17)
 
 ### Features
