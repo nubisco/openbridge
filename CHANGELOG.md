@@ -1,3 +1,10 @@
+# [0.8.0](https://github.com/nubisco/openbridge/compare/v0.7.2...v0.8.0) (2026-04-17)
+
+
+### Features
+
+* self-update mechanism with progress UI ([267f7c3](https://github.com/nubisco/openbridge/commit/267f7c3b20f1289c8ca11960f89bf6570d9e76db)), closes [#notification](https://github.com/nubisco/openbridge/issues/notification)
+
 ## [0.7.2](https://github.com/nubisco/openbridge/compare/v0.7.1...v0.7.2) (2026-04-17)
 
 ### Bug Fixes
