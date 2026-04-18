@@ -59,7 +59,9 @@ jobs:
         with:
           context: .
           platforms: ${{ matrix.platform }}
-          build-args: APP_VERSION=${{ steps.version.outputs.VERSION }}
+          build-args: |
+            APP_VERSION=${{ steps.version.outputs.VERSION }}
+            BUILD_HASH=${{ github.sha }}
           labels: ${{ steps.meta.outputs.labels }}
           load: true
           tags: openbridge-local:build
@@ -90,7 +92,9 @@ jobs:
         with:
           context: .
           platforms: ${{ matrix.platform }}
-          build-args: APP_VERSION=${{ steps.version.outputs.VERSION }}
+          build-args: |
+            APP_VERSION=${{ steps.version.outputs.VERSION }}
+            BUILD_HASH=${{ github.sha }}
           labels: ${{ steps.meta.outputs.labels }}
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
           cache-from: type=gha,scope=${{ matrix.platform }}

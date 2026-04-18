@@ -67,8 +67,10 @@ RUN find ./apps/daemon/node_modules -name "spawn-helper" -exec chmod +x {} \; 2>
 RUN mkdir -p /plugins /root/.openbridge /opt/openbridge
 
 ARG APP_VERSION=development
+ARG BUILD_HASH=unknown
 ENV NODE_ENV=production
 ENV OPENBRIDGE_VERSION=$APP_VERSION
+ENV OPENBRIDGE_BUILD_HASH=$BUILD_HASH
 ENV OPENBRIDGE_PLUGINS_DIR=/plugins
 
 EXPOSE 8581
