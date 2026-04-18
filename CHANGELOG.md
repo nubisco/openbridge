@@ -1,3 +1,10 @@
+## [0.8.8](https://github.com/nubisco/openbridge/compare/v0.8.7...v0.8.8) (2026-04-18)
+
+
+### Bug Fixes
+
+* plugin uninstall prunes config.plugins, HAP bridge info for plugins ([8bdf23f](https://github.com/nubisco/openbridge/commit/8bdf23f86945bfac2336094baff58f4e44e528f4))
+
 ## [0.8.7](https://github.com/nubisco/openbridge/compare/v0.8.6...v0.8.7) (2026-04-18)
 
 
