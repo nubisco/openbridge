@@ -164,7 +164,7 @@ function githubAvatarUrl(pkg: NpmPackage): string | null {
 }
 
 function isOpenBridge(pkg: NpmPackage) {
-  return pkg.name.startsWith('openbridge-')
+  return pkg.name.includes('openbridge-') || (Array.isArray(pkg.badges) && pkg.badges.includes('openbridge-plugin'))
 }
 
 function authorName(pkg: NpmPackage): string {

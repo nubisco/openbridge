@@ -7,10 +7,9 @@
 
 ## [0.8.2](https://github.com/nubisco/openbridge/compare/v0.8.1...v0.8.2) (2026-04-17)
 
-
 ### Bug Fixes
 
-* inject daemon node_modules into NODE_PATH for marketplace native plugins ([a915d87](https://github.com/nubisco/openbridge/commit/a915d870187382cbfc0c71a6d689ad27ee19bd43))
+- inject daemon node_modules into NODE_PATH for marketplace native plugins ([a915d87](https://github.com/nubisco/openbridge/commit/a915d870187382cbfc0c71a6d689ad27ee19bd43))
 
 ## [0.8.1](https://github.com/nubisco/openbridge/compare/v0.8.0...v0.8.1) (2026-04-17)
 

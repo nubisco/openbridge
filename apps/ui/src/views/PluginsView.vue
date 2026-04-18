@@ -50,7 +50,7 @@ function selectPlugin(plugin: PluginInstance) {
 }
 
 function isOpenBridge(plugin: PluginInstance) {
-  return plugin.manifest.name.startsWith('openbridge-')
+  return plugin.manifest.name.includes('openbridge-') || plugin.source === 'native'
 }
 
 function pluginEnriched(plugin: PluginInstance): NpmPackage | undefined {
