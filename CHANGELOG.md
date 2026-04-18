@@ -1,3 +1,10 @@
+## [0.8.9](https://github.com/nubisco/openbridge/compare/v0.8.8...v0.8.9) (2026-04-18)
+
+
+### Bug Fixes
+
+* add logging to registerHapBridge for diagnostics ([8d861dc](https://github.com/nubisco/openbridge/commit/8d861dc5e095809e75952eee3a334f5f93fa4f0e))
+
 ## [0.8.8](https://github.com/nubisco/openbridge/compare/v0.8.7...v0.8.8) (2026-04-18)
 
 
