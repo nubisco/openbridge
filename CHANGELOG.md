@@ -1,3 +1,10 @@
+# [0.10.0](https://github.com/nubisco/openbridge/compare/v0.9.1...v0.10.0) (2026-04-18)
+
+
+### Features
+
+* add unit and integration test suite (36 tests) ([a88e579](https://github.com/nubisco/openbridge/commit/a88e5791fa6adcaefd832895f4295ac75138dc5c))
+
 ## [0.9.1](https://github.com/nubisco/openbridge/compare/v0.9.0...v0.9.1) (2026-04-18)
 
 
