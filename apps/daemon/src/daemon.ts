@@ -289,6 +289,10 @@ export class Daemon {
 
           const pluginDir = join(pluginsRoot, 'node_modules', pkgName)
           const candidates = [join(pluginDir, 'dist', 'index.js'), join(pluginDir, 'index.js')]
+          log.info(`Native plugin ${name}: looking in ${pluginDir}`)
+          log.info(
+            `  dist/index.js exists: ${existsSync(candidates[0])}, index.js exists: ${existsSync(candidates[1])}`,
+          )
           let loaded = false
           for (const candidate of candidates) {
             if (existsSync(candidate)) {
