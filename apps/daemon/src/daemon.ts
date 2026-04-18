@@ -253,9 +253,17 @@ export class Daemon {
       return
     }
 
+    log.info(`Marketplace deps: ${Object.keys(topLevel).join(', ')}`)
+
     for (const pkgName of Object.keys(topLevel)) {
-      if (this.registry.get(pkgName)) continue // already in registry by exact name
-      if (this.knownHbPackageNames.has(pkgName)) continue // already running via config.platforms
+      if (this.registry.get(pkgName)) {
+        log.info(`Skipping ${pkgName}: already in registry`)
+        continue
+      }
+      if (this.knownHbPackageNames.has(pkgName)) {
+        log.info(`Skipping ${pkgName}: known HB package`)
+        continue
+      }
 
       const pkgJsonPath = join(pluginsRoot, 'node_modules', pkgName, 'package.json')
       if (!existsSync(pkgJsonPath)) continue
