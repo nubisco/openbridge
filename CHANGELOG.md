@@ -1,3 +1,10 @@
+## [0.8.4](https://github.com/nubisco/openbridge/compare/v0.8.3...v0.8.4) (2026-04-18)
+
+
+### Bug Fixes
+
+* detect @nubisco/ scoped OpenBridge plugins for native badge ([dd9f785](https://github.com/nubisco/openbridge/commit/dd9f785d4145aae0e5660c2f82c55694d50adba7))
+
 ## [0.8.3](https://github.com/nubisco/openbridge/compare/v0.8.2...v0.8.3) (2026-04-17)
 
 
