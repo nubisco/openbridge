@@ -7,10 +7,9 @@
 
 # [0.9.0](https://github.com/nubisco/openbridge/compare/v0.8.9...v0.9.0) (2026-04-18)
 
-
 ### Features
 
-* show plugin HAP bridge QR code and PIN in plugin inspector ([6b5b585](https://github.com/nubisco/openbridge/commit/6b5b585c7af9e3d5dab6a1d7b4fb3cb9ccc7e108))
+- show plugin HAP bridge QR code and PIN in plugin inspector ([6b5b585](https://github.com/nubisco/openbridge/commit/6b5b585c7af9e3d5dab6a1d7b4fb3cb9ccc7e108))
 
 ## [0.8.9](https://github.com/nubisco/openbridge/compare/v0.8.8...v0.8.9) (2026-04-18)
 
