@@ -972,11 +972,39 @@ export async function createServer(
       /* ignore */
     }
 
+    // Detect if native OpenBridge plugin and register immediately
+    let isNative = false
+    try {
+      const pkgPath = join(HB_PLUGINS_DIR, 'node_modules', pkg, 'package.json')
+      const p = JSON.parse(readFileSync(pkgPath, 'utf8'))
+      isNative = (Array.isArray(p.keywords) && p.keywords.includes('openbridge-plugin')) || p.openbridge != null
+
+      if (isNative) {
+        // Register as a pseudo-plugin so it appears in the UI immediately
+        // It will be fully loaded on next restart
+        const pseudoPlugin: import('@nubisco/openbridge-core').Plugin = {
+          manifest: {
+            name: p.name ?? pkg,
+            version: p.version ?? '?.?.?',
+            description: p.description ?? '',
+            author: typeof p.author === 'string' ? p.author : (p.author?.name ?? ''),
+          },
+        }
+        if (!registry.get(p.name ?? pkg)) {
+          registry.register(pseudoPlugin)
+          registry.updateStatus(p.name ?? pkg, 'stopped')
+        }
+        log.info(`Discovered plugin: ${p.name ?? pkg}`)
+      }
+    } catch {
+      /* ignore detection errors */
+    }
+
     // Fetch and cache enriched metadata in the background (non-blocking)
     fetchAndCacheEnrichedMetadata(pkg).catch((err) => log.warn(`Failed to cache metadata for ${pkg}: ${err}`))
 
     log.info(`Installed plugin: ${pkg}`)
-    return { installed: pkg, mainFile, pluginsDir: HB_PLUGINS_DIR }
+    return { installed: pkg, mainFile, pluginsDir: HB_PLUGINS_DIR, isNative, needsRestart: isNative }
   })
 
   app.delete('/api/marketplace/uninstall/:name', async (req) => {
@@ -1000,21 +1028,58 @@ export async function createServer(
       return desc.includes(`Homebridge platform: ${name}`)
     })
 
-    // Also prune config.platforms entries that reference this package path.
+    // Prune config.platforms AND config.plugins entries for this package.
     try {
       const cfg = JSON.parse(readFileSync(configPath, 'utf8')) as any
+      let changed = false
+
+      // Remove from platforms (Homebridge-compat plugins)
       if (Array.isArray(cfg.platforms)) {
         const before = cfg.platforms.length
         cfg.platforms = cfg.platforms.filter((p: any) => {
           const pluginPath = String(p?.plugin ?? '')
           return !pluginPath.includes(`/node_modules/${name}/`)
         })
-        if (cfg.platforms.length !== before) {
-          writeFileSync(configPath, JSON.stringify(cfg, null, 2), 'utf8')
-        }
+        if (cfg.platforms.length !== before) changed = true
+      }
+
+      // Remove from plugins (native OpenBridge plugins)
+      if (Array.isArray(cfg.plugins)) {
+        const before = cfg.plugins.length
+        cfg.plugins = cfg.plugins.filter((p: any) => p?.name !== name)
+        if (cfg.plugins.length !== before) changed = true
+      }
+
+      if (changed) {
+        writeFileSync(configPath, JSON.stringify(cfg, null, 2), 'utf8')
       }
     } catch {
       /* ignore config pruning errors */
+    }
+
+    // Remove any symlink in the native plugins dir
+    try {
+      const { readdirSync, lstatSync, unlinkSync, readlinkSync } = await import('fs')
+      const nativeDir = join(OPENBRIDGE_HOME, 'plugins', 'openbridge')
+      if (existsSync(nativeDir)) {
+        for (const entry of readdirSync(nativeDir)) {
+          const entryPath = join(nativeDir, entry)
+          try {
+            const stat = lstatSync(entryPath)
+            if (stat.isSymbolicLink()) {
+              const target = readlinkSync(entryPath)
+              if (entry.includes(name.replace(/^@[^/]+\//, '')) || target.includes(name)) {
+                unlinkSync(entryPath)
+                log.info(`Removed symlink: ${entryPath}`)
+              }
+            }
+          } catch {
+            /* skip */
+          }
+        }
+      }
+    } catch {
+      /* ignore symlink cleanup errors */
     }
 
     // Clear metadata cache for this plugin

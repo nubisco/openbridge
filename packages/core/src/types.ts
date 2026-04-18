@@ -27,6 +27,8 @@ export interface PluginContext {
   registerDevice(device: Omit<DeviceDescriptor, 'pluginId'>): void
   /** Register a command handler so the UI can control a device */
   registerControl(deviceId: string, controlId: string, handler: (value: unknown) => void | Promise<void>): void
+  /** Register a HAP bridge so its QR/PIN appear in the OpenBridge UI */
+  registerHapBridge(info: { setupURI: string; pincode: string; port: number; name: string }): void
 }
 
 export interface PluginLogger {
@@ -60,4 +62,6 @@ export interface PluginInstance {
   telemetry?: Record<string, Record<string, unknown>>
   /** Registered devices keyed by device ID, set via ctx.registerDevice() */
   devices?: Record<string, DeviceDescriptor>
+  /** HAP bridge info if the plugin publishes its own bridge */
+  hapBridge?: { setupURI: string; pincode: string; port: number; name: string }
 }

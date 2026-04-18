@@ -253,17 +253,9 @@ export class Daemon {
       return
     }
 
-    log.info(`Marketplace deps: ${Object.keys(topLevel).join(', ')}`)
-
     for (const pkgName of Object.keys(topLevel)) {
-      if (this.registry.get(pkgName)) {
-        log.info(`Skipping ${pkgName}: already in registry`)
-        continue
-      }
-      if (this.knownHbPackageNames.has(pkgName)) {
-        log.info(`Skipping ${pkgName}: known HB package`)
-        continue
-      }
+      if (this.registry.get(pkgName)) continue
+      if (this.knownHbPackageNames.has(pkgName)) continue
 
       const pkgJsonPath = join(pluginsRoot, 'node_modules', pkgName, 'package.json')
       if (!existsSync(pkgJsonPath)) continue
@@ -289,10 +281,6 @@ export class Daemon {
 
           const pluginDir = join(pluginsRoot, 'node_modules', pkgName)
           const candidates = [join(pluginDir, 'dist', 'index.js'), join(pluginDir, 'index.js')]
-          log.info(`Native plugin ${name}: looking in ${pluginDir}`)
-          log.info(
-            `  dist/index.js exists: ${existsSync(candidates[0])}, index.js exists: ${existsSync(candidates[1])}`,
-          )
           let loaded = false
           for (const candidate of candidates) {
             if (existsSync(candidate)) {
@@ -362,6 +350,11 @@ export class Daemon {
       },
       registerControl(deviceId: string, controlId: string, handler: ControlHandler) {
         controls.set(`${deviceId}::${controlId}`, handler)
+      },
+      registerHapBridge(info: { setupURI: string; pincode: string; port: number; name: string }) {
+        const entry = registry.get(plugin.manifest.name)
+        if (!entry) return
+        entry.instance.hapBridge = info
       },
     }
   }
