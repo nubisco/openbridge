@@ -7,10 +7,9 @@
 
 ## [0.8.7](https://github.com/nubisco/openbridge/compare/v0.8.6...v0.8.7) (2026-04-18)
 
-
 ### Bug Fixes
 
-* add path diagnostic logs for native plugin loading from marketplace ([6161821](https://github.com/nubisco/openbridge/commit/6161821fe9838000d9502f9c85672ba1d9adc05c))
+- add path diagnostic logs for native plugin loading from marketplace ([6161821](https://github.com/nubisco/openbridge/commit/6161821fe9838000d9502f9c85672ba1d9adc05c))
 
 ## [0.8.6](https://github.com/nubisco/openbridge/compare/v0.8.5...v0.8.6) (2026-04-18)
 

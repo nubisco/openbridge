@@ -353,8 +353,12 @@ export class Daemon {
       },
       registerHapBridge(info: { setupURI: string; pincode: string; port: number; name: string }) {
         const entry = registry.get(plugin.manifest.name)
-        if (!entry) return
+        if (!entry) {
+          log.warn(`registerHapBridge: plugin ${plugin.manifest.name} not found in registry`)
+          return
+        }
         entry.instance.hapBridge = info
+        log.info(`Plugin ${plugin.manifest.name} registered HAP bridge on port ${info.port} (PIN: ${info.pincode})`)
       },
     }
   }
