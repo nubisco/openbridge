@@ -1,3 +1,10 @@
+## [0.9.1](https://github.com/nubisco/openbridge/compare/v0.9.0...v0.9.1) (2026-04-18)
+
+
+### Bug Fixes
+
+* replace telemetry in plugin inspector with device list ([1a26e4e](https://github.com/nubisco/openbridge/commit/1a26e4e2098d8b41910d73825873ab42fc521fe1))
+
 # [0.9.0](https://github.com/nubisco/openbridge/compare/v0.8.9...v0.9.0) (2026-04-18)
 
 
