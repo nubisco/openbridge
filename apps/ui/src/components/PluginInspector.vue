@@ -3,11 +3,13 @@ import { ref, watch, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useInspectorStore } from '@/stores/inspector'
 import { useDaemonStore } from '@/stores/daemon'
 import { api, type LogEntry } from '@/api'
+import QRCode from 'qrcode'
 import MonacoJsonEditor from './MonacoJsonEditor.vue'
 import PluginConfigForm from './PluginConfigForm.vue'
 
 const daemon = useDaemonStore()
 const restarting = ref(false)
+const pluginQrUrl = ref('')
 
 async function restartOpenBridge() {
   if (restarting.value) return
@@ -35,6 +37,23 @@ async function restartOpenBridge() {
 }
 
 const inspector = useInspectorStore()
+
+// Generate QR code when plugin has a HAP bridge
+watch(
+  () => inspector.selectedPlugin?.hapBridge?.setupURI,
+  async (uri) => {
+    if (uri) {
+      try {
+        pluginQrUrl.value = await QRCode.toDataURL(uri, { width: 160, margin: 1 })
+      } catch {
+        pluginQrUrl.value = ''
+      }
+    } else {
+      pluginQrUrl.value = ''
+    }
+  },
+  { immediate: true },
+)
 
 const statusLabel: Record<string, string> = {
   idle: 'Idle',
@@ -455,6 +474,34 @@ async function save() {
         </div>
       </section>
 
+      <!-- ── HAP Bridge (if plugin publishes its own bridge) ───────────────── -->
+      <section v-if="inspector.selectedPlugin.hapBridge" class="inspector-section">
+        <h3 class="section-heading">
+          <NbIcon name="qr-code" :size="12" />
+          HomeKit Pairing
+        </h3>
+        <div class="hap-bridge-info">
+          <div class="hap-qr">
+            <img v-if="pluginQrUrl" :src="pluginQrUrl" alt="HomeKit QR Code" class="hap-qr-img" />
+          </div>
+          <div class="hap-details">
+            <div class="field-row">
+              <span class="field-label">PIN</span>
+              <span class="field-value mono">{{ inspector.selectedPlugin.hapBridge.pincode }}</span>
+            </div>
+            <div class="field-row">
+              <span class="field-label">Port</span>
+              <span class="field-value">{{ inspector.selectedPlugin.hapBridge.port }}</span>
+            </div>
+            <div class="field-row">
+              <span class="field-label">Bridge</span>
+              <span class="field-value">{{ inspector.selectedPlugin.hapBridge.name }}</span>
+            </div>
+          </div>
+        </div>
+        <p class="hap-hint">Scan with the Home app or enter the PIN manually to pair this plugin's devices.</p>
+      </section>
+
       <!-- ── Remove plugin ─────────────────────────────────────────────────── -->
       <section class="inspector-section">
         <NbButton
@@ -756,6 +803,31 @@ async function save() {
 .inspector-version {
   font-size: 0.75rem;
   color: #9ca3af;
+}
+
+.hap-bridge-info {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+.hap-qr {
+  flex-shrink: 0;
+}
+.hap-qr-img {
+  width: 120px;
+  height: 120px;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+.hap-details {
+  flex: 1;
+  min-width: 0;
+}
+.hap-hint {
+  margin: 0.5rem 0 0;
+  font-size: 0.72rem;
+  color: #9ca3af;
+  line-height: 1.4;
 }
 
 .inspector-body {

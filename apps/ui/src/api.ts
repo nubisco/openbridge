@@ -17,6 +17,7 @@ export interface PluginInstance {
   disabled?: boolean
   platformName?: string
   enrichedMetadata?: Record<string, unknown> // Cached npm metadata (downloads, stars, sponsors, docs url)
+  hapBridge?: { setupURI: string; pincode: string; port: number; name: string }
 }
 
 export interface AccessoryCharacteristic {
