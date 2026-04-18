@@ -2,7 +2,7 @@
 import { ref, watch, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useInspectorStore } from '@/stores/inspector'
 import { useDaemonStore } from '@/stores/daemon'
-import { api, type LogEntry } from '@/api'
+import { api, type LogEntry, type DeviceDescriptor } from '@/api'
 import QRCode from 'qrcode'
 import MonacoJsonEditor from './MonacoJsonEditor.vue'
 import PluginConfigForm from './PluginConfigForm.vue'
@@ -54,6 +54,26 @@ watch(
   },
   { immediate: true },
 )
+
+// ─── Plugin devices ──────────────────────────────────────────────────────────
+const pluginDevices = computed((): DeviceDescriptor[] => {
+  const plugin = inspector.selectedPlugin
+  if (!plugin?.devices) return []
+  return Object.values(plugin.devices) as DeviceDescriptor[]
+})
+
+const WIDGET_ICON: Record<string, string> = {
+  switch: 'plugs',
+  light: 'lamp',
+  thermostat: 'thermometer',
+  dehumidifier: 'drop',
+  energy_meter: 'lightning',
+  sensor: 'activity',
+}
+
+function widgetIcon(widgetType: string): string {
+  return WIDGET_ICON[widgetType] ?? 'cube'
+}
 
 const statusLabel: Record<string, string> = {
   idle: 'Idle',
@@ -151,56 +171,6 @@ watch(
     }
   },
 )
-
-// ─── Live device telemetry ────────────────────────────────────────────────────
-const telemetry = ref<Record<string, Record<string, unknown>>>({})
-let telemetryTimer: ReturnType<typeof setInterval> | null = null
-
-async function fetchTelemetry() {
-  if (!inspector.selectedPlugin || inspector.selectedPlugin.source === 'homebridge') return
-  try {
-    const res = await api.pluginTelemetry(inspector.selectedPlugin.id)
-    telemetry.value = res.telemetry
-  } catch {
-    /* ignore — device may not have reported yet */
-  }
-}
-
-watch(
-  () => inspector.selectedPlugin,
-  (plugin) => {
-    telemetry.value = {}
-    if (telemetryTimer) {
-      clearInterval(telemetryTimer)
-      telemetryTimer = null
-    }
-    if (!plugin || plugin.source === 'homebridge') return
-    fetchTelemetry()
-    telemetryTimer = setInterval(fetchTelemetry, 3000)
-  },
-)
-onBeforeUnmount(() => {
-  if (telemetryTimer) clearInterval(telemetryTimer)
-})
-
-const TELEMETRY_LABELS: Record<string, { label: string; unit: string }> = {
-  totalForwardEnergy: { label: 'Total energy', unit: 'kWh' },
-  temperature: { label: 'Temperature', unit: '°C' },
-  leakageCurrent: { label: 'Leakage', unit: 'mA' },
-  fault: { label: 'Fault bitmap', unit: '' },
-  switchState: { label: 'Breaker', unit: '' },
-  voltage: { label: 'Voltage', unit: 'V' },
-  current: { label: 'Current', unit: 'A' },
-  power: { label: 'Active power', unit: 'W' },
-  _updatedAt: { label: '', unit: '' },
-}
-
-function formatTelemetryValue(key: string, value: unknown): string {
-  if (key === 'switchState') return value ? 'ON' : 'OFF'
-  if (key === 'fault') return value === 0 ? 'None' : `0x${(value as number).toString(16)}`
-  if (typeof value === 'number') return value.toFixed(key === 'current' ? 3 : 1)
-  return String(value)
-}
 
 async function saveNativeConfig() {
   if (nativeSaving.value || !inspector.selectedPlugin) return
@@ -678,30 +648,16 @@ async function save() {
         </div>
       </section>
 
-      <!-- ── Live device telemetry (native plugins only) ──────────────────── -->
-      <section v-if="isOpenbridge && Object.keys(telemetry).length > 0" class="inspector-section">
+      <!-- ── Devices registered by this plugin ────────────────────────────── -->
+      <section v-if="pluginDevices.length > 0" class="inspector-section">
         <h3 class="section-heading">
-          <NbIcon name="chart-line" :size="12" />
-          Live telemetry
+          <NbIcon name="devices" :size="12" />
+          Devices ({{ pluginDevices.length }})
         </h3>
-        <div v-for="(deviceData, deviceId) in telemetry" :key="deviceId" class="telemetry-device">
-          <div class="telemetry-device-id">{{ deviceId }}</div>
-          <div class="telemetry-grid">
-            <template v-for="(val, key) in deviceData" :key="key">
-              <div v-if="key !== '_updatedAt'" class="telemetry-card">
-                <span class="telemetry-label">{{ TELEMETRY_LABELS[key]?.label ?? key }}</span>
-                <span class="telemetry-value">
-                  {{ formatTelemetryValue(String(key), val) }}
-                  <span v-if="TELEMETRY_LABELS[key]?.unit" class="telemetry-unit">
-                    {{ TELEMETRY_LABELS[key].unit }}
-                  </span>
-                </span>
-              </div>
-            </template>
-          </div>
-          <div v-if="deviceData._updatedAt" class="telemetry-updated">
-            Updated {{ new Date(deviceData._updatedAt as string).toLocaleTimeString() }}
-          </div>
+        <div v-for="dev in pluginDevices" :key="dev.id" class="plugin-device-row">
+          <NbIcon :name="widgetIcon(dev.widgetType)" :size="14" />
+          <span class="plugin-device-name">{{ dev.name }}</span>
+          <span class="plugin-device-type">{{ dev.widgetType }}</span>
         </div>
       </section>
 
@@ -1094,59 +1050,24 @@ async function save() {
   word-break: break-word;
 }
 
-.telemetry-device {
+.plugin-device-row {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.5rem;
+  border-radius: 6px;
+  background: #f9f9fc;
+  border: 1px solid #f3f4f6;
+  font-size: 0.8rem;
 }
-
-.telemetry-device-id {
+.plugin-device-name {
+  flex: 1;
+  font-weight: 500;
+  color: #111827;
+}
+.plugin-device-type {
   font-size: 0.7rem;
-  color: #6b7280;
-  font-family: monospace;
-  letter-spacing: 0.03em;
-}
-
-.telemetry-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-  gap: 8px;
-}
-
-.telemetry-card {
-  background: #161b22;
-  border: 1px solid #21262d;
-  border-radius: 8px;
-  padding: 8px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.telemetry-label {
-  font-size: 0.65rem;
-  color: #6b7280;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-.telemetry-value {
-  font-size: 1rem;
-  font-weight: 600;
-  color: #e6edf3;
-  line-height: 1.2;
-}
-
-.telemetry-unit {
-  font-size: 0.65rem;
-  color: #8b949e;
-  font-weight: 400;
-  margin-left: 2px;
-}
-
-.telemetry-updated {
-  font-size: 0.65rem;
-  color: #4b5563;
-  text-align: right;
+  color: #9ca3af;
+  text-transform: capitalize;
 }
 </style>
