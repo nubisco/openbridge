@@ -1,3 +1,10 @@
+## [0.8.6](https://github.com/nubisco/openbridge/compare/v0.8.5...v0.8.6) (2026-04-18)
+
+
+### Bug Fixes
+
+* add diagnostic logging to marketplace plugin discovery ([a2aefb8](https://github.com/nubisco/openbridge/commit/a2aefb85dfc0e625ebdda40e80984698c6069746))
+
 ## [0.8.5](https://github.com/nubisco/openbridge/compare/v0.8.4...v0.8.5) (2026-04-18)
 
 
