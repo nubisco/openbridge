@@ -1,3 +1,10 @@
+## [0.8.5](https://github.com/nubisco/openbridge/compare/v0.8.4...v0.8.5) (2026-04-18)
+
+
+### Bug Fixes
+
+* entrypoint uses build hash to detect Docker image changes ([aa8d4ef](https://github.com/nubisco/openbridge/commit/aa8d4efb07258c303181777422542c8dbbd2873f))
+
 ## [0.8.4](https://github.com/nubisco/openbridge/compare/v0.8.3...v0.8.4) (2026-04-18)
 
 
