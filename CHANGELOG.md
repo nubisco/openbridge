@@ -1,3 +1,10 @@
+# [0.15.0](https://github.com/nubisco/openbridge/compare/v0.14.0...v0.15.0) (2026-04-19)
+
+
+### Features
+
+* device rename, NbBarChart for energy history, @nubisco/ui 1.10.0 ([506b1aa](https://github.com/nubisco/openbridge/commit/506b1aaf92b57f3838615cd11b89109a3fc33723))
+
 # [0.14.0](https://github.com/nubisco/openbridge/compare/v0.13.0...v0.14.0) (2026-04-19)
 
 
