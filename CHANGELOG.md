@@ -7,10 +7,9 @@
 
 ## [0.11.1](https://github.com/nubisco/openbridge/compare/v0.11.0...v0.11.1) (2026-04-19)
 
-
 ### Bug Fixes
 
-* plugin config saves to config.plugins instead of config.platforms ([f834d35](https://github.com/nubisco/openbridge/commit/f834d35b4ae476a16bd8b972ccc90a35ab7b6412))
+- plugin config saves to config.plugins instead of config.platforms ([f834d35](https://github.com/nubisco/openbridge/commit/f834d35b4ae476a16bd8b972ccc90a35ab7b6412))
 
 # [0.11.0](https://github.com/nubisco/openbridge/compare/v0.10.0...v0.11.0) (2026-04-19)
 

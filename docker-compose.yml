@@ -3,8 +3,11 @@ services:
     image: ghcr.io/nubisco/openbridge:latest
     container_name: openbridge
     restart: unless-stopped
-    ports:
-      - '8582:8582'
+    # Host networking is required for:
+    # - mDNS device discovery (Shelly, Tuya UDP broadcast)
+    # - WebSocket connections to smart devices (Shelly gen2)
+    # - HomeKit (HAP) bridge advertisement on the local network
+    network_mode: host
     volumes:
       # Persistent config and pairing data
       - openbridge-config:/root/.openbridge
