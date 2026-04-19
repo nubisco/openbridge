@@ -7,10 +7,9 @@
 
 # [0.14.0](https://github.com/nubisco/openbridge/compare/v0.13.0...v0.14.0) (2026-04-19)
 
-
 ### Features
 
-* restrictControl for safety enforcement at API level ([b734879](https://github.com/nubisco/openbridge/commit/b734879de35028c3658f47cd0aad26271044ff0d))
+- restrictControl for safety enforcement at API level ([b734879](https://github.com/nubisco/openbridge/commit/b734879de35028c3658f47cd0aad26271044ff0d))
 
 # [0.13.0](https://github.com/nubisco/openbridge/compare/v0.12.0...v0.13.0) (2026-04-19)
 

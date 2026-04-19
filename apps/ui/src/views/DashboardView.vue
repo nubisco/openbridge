@@ -4,7 +4,7 @@ import QRCode from 'qrcode'
 import { api, type SystemInfo, type MetricsSnapshot } from '@/api'
 import { useDaemonStore } from '@/stores/daemon'
 import { useLayoutStore } from '@/stores/layout'
-import SparklineChart from '@/components/SparklineChart.vue'
+// NbSparkline replaced by NbSparkline from @nubisco/ui (globally registered)
 
 const daemon = useDaemonStore()
 const layout = useLayoutStore()
@@ -272,7 +272,7 @@ onUnmounted(() => {
             <div v-if="latest?.cpuTemp && latest.cpuTemp > 0" class="metric-sub">{{ latest.cpuTemp }}°C</div>
           </div>
           <div class="metric-chart">
-            <SparklineChart :data="cpuHistory" color="#7c3aed" :height="40" gradient-id="cpu-grad" />
+            <NbSparkline :data="cpuHistory" color="#7c3aed" :height="40" />
           </div>
         </div>
 
@@ -291,7 +291,7 @@ onUnmounted(() => {
           </div>
           <div class="mem-bar-wrap"><div class="mem-bar" :style="{ width: memPct + '%' }" /></div>
           <div class="metric-chart">
-            <SparklineChart :data="memHistory" color="#3b82f6" :height="32" gradient-id="mem-grad" />
+            <NbSparkline :data="memHistory" color="#3b82f6" :height="32" />
           </div>
         </div>
 
@@ -344,8 +344,8 @@ onUnmounted(() => {
             </div>
           </div>
           <div class="metric-chart net-charts">
-            <SparklineChart :data="netRxHistory" color="#10b981" :height="28" gradient-id="rx-grad" />
-            <SparklineChart :data="netTxHistory" color="#f59e0b" :height="28" gradient-id="tx-grad" />
+            <NbSparkline :data="netRxHistory" color="#10b981" :height="28" />
+            <NbSparkline :data="netTxHistory" color="#f59e0b" :height="28" />
           </div>
         </div>
       </div>
