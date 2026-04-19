@@ -35,6 +35,7 @@ export class Daemon {
   /** npm package names of HB plugins already running via config.platforms — skip in discovery */
   private knownHbPackageNames = new Set<string>()
   private controls = new Map<string, ControlHandler>()
+  private restrictedControls = new Set<string>()
 
   async start(options: DaemonOptions = {}) {
     const configPath = options.configPath ?? defaultConfigPath()
@@ -210,6 +211,7 @@ export class Daemon {
       localPluginSources,
       this.knownHbPackageNames,
       this.controls,
+      this.restrictedControls,
     )
     await server.listen({ port, host: '0.0.0.0' })
 
@@ -374,6 +376,7 @@ export class Daemon {
     const pluginConfig = config.plugins.find((p) => p.name === plugin.manifest.name)?.config ?? {}
     const registry = this.registry
     const controls = this.controls
+    const restrictedControls = this.restrictedControls
     return {
       config: pluginConfig,
       log: Logger.create(plugin.manifest.name),
@@ -400,6 +403,10 @@ export class Daemon {
         }
         entry.instance.hapBridge = info
         log.info(`Plugin ${plugin.manifest.name} registered HAP bridge on port ${info.port} (PIN: ${info.pincode})`)
+      },
+      restrictControl(deviceId: string, controlId: string) {
+        restrictedControls.add(`${deviceId}::${controlId}`)
+        log.info(`Control restricted: ${deviceId}::${controlId}`)
       },
     }
   }

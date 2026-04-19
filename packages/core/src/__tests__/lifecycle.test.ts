@@ -21,6 +21,7 @@ function makeContext(): PluginContext {
     registerDevice: vi.fn(),
     registerControl: vi.fn(),
     registerHapBridge: vi.fn(),
+    restrictControl: vi.fn(),
   }
 }
 

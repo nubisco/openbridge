@@ -81,6 +81,7 @@ export async function createServer(
   localPluginSources: string[] = [],
   knownHbPackageNames: Set<string> = new Set(),
   controls: Map<string, (value: unknown) => void | Promise<void>> = new Map(),
+  restrictedControls: Set<string> = new Set(),
 ) {
   const app = Fastify({ logger: false })
 
@@ -510,6 +511,9 @@ export async function createServer(
     const { deviceId } = req.params as { deviceId: string }
     const { control, value } = req.body as { control: string; value: unknown }
     const key = `${deviceId}::${control}`
+    if (restrictedControls.has(key)) {
+      throw { statusCode: 403, message: `Control '${control}' is restricted for device '${deviceId}'` }
+    }
     const handler = controls.get(key)
     if (!handler) throw { statusCode: 404, message: `No control '${control}' registered for device '${deviceId}'` }
     await handler(value)

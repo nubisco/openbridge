@@ -29,6 +29,8 @@ export interface PluginContext {
   registerControl(deviceId: string, controlId: string, handler: (value: unknown) => void | Promise<void>): void
   /** Register a HAP bridge so its QR/PIN appear in the OpenBridge UI */
   registerHapBridge(info: { setupURI: string; pincode: string; port: number; name: string }): void
+  /** Block a device control from being changed via UI or HomeKit */
+  restrictControl(deviceId: string, controlId: string): void
 }
 
 export interface PluginLogger {
