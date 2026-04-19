@@ -176,6 +176,7 @@ export async function createServer(
     ;(async () => {
       try {
         // 1. Fetch release info
+        log.info('Self-update: fetching release info...')
         broadcast({ stage: 'downloading', progress: 0, message: 'Fetching release info...' })
         const releaseRes = await fetch('https://api.github.com/repos/nubisco/openbridge/releases/latest', {
           headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'openbridge-daemon' },
@@ -192,6 +193,7 @@ export async function createServer(
           throw new Error(`Release asset ${assetName} not found. Your architecture (${arch}) may not be supported yet.`)
 
         // 2. Download tarball
+        log.info(`Self-update: downloading ${assetName} (${(asset.size / 1024 / 1024).toFixed(1)} MB)...`)
         broadcast({ stage: 'downloading', progress: 0.1, message: `Downloading v${version}...`, version })
         const dlRes = await fetch(asset.browser_download_url, {
           headers: { 'User-Agent': 'openbridge-daemon' },
@@ -282,20 +284,10 @@ export async function createServer(
         log.info(`Update to v${version} installed successfully — restarting...`)
         broadcast({ stage: 'restarting', message: `Restarting with v${version}...`, version })
 
-        // 6. Restart the daemon
+        // 6. Restart — just exit; Docker's restart policy will bring us back
+        // The entrypoint will see source:"self-update" in version.json and keep the updated files
         setTimeout(() => {
-          const isTsx = process.env.OPENBRIDGE_DEV === 'true'
-          if (isTsx) {
-            process.exit(0)
-          } else {
-            const child = spawn(process.execPath, process.argv.slice(1), {
-              detached: true,
-              stdio: 'inherit',
-              env: process.env,
-            })
-            child.unref()
-            process.exit(0)
-          }
+          process.exit(0)
         }, 500)
       } catch (err: any) {
         log.error(`Self-update failed: ${err.message}`)
