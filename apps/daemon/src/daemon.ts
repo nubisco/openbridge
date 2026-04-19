@@ -110,14 +110,14 @@ export class Daemon {
       // Create the HomebridgeAPI shim
       homebridgeAPI = new HomebridgeAPI(hapNodeJs, hapBridge)
 
-      // Load Homebridge-compatible platform plugins (if any)
+      // ── Load Homebridge-compatible plugins ────────────────────────────────
+      // Legacy: config.platforms[] with explicit file paths (backward compat)
       if (config.platforms && config.platforms.length > 0) {
-        // Filter out disabled platforms
         const enabledPlatforms = config.platforms.filter((p) => !disabledPlugins.includes(p.platform as string))
         const skippedPlatforms = config.platforms.filter((p) => disabledPlugins.includes(p.platform as string))
 
         if (enabledPlatforms.length > 0) {
-          log.info(`Loading ${enabledPlatforms.length} Homebridge platform(s)...`)
+          log.info(`Loading ${enabledPlatforms.length} legacy platform(s) from config.platforms...`)
         }
         for (const p of skippedPlatforms) {
           log.info(`Skipping disabled platform: ${p.platform}`)
@@ -133,7 +133,6 @@ export class Daemon {
           log.info(`Loading Homebridge plugin: ${pluginPath}`)
 
           try {
-            // Inject version from plugin's package.json if available
             const pkgPath = pluginPath
               .replace(/\/dist\/.*$/, '/package.json')
               .replace(/\/index\.js$/, '/../package.json')
@@ -153,7 +152,6 @@ export class Daemon {
           }
         }
 
-        // Launch only enabled platforms
         const platformLogger = Logger.create('hap')
         await homebridgeAPI.launchPlatforms(enabledPlatforms as any[], platformLogger, this.registry)
       }
@@ -201,7 +199,7 @@ export class Daemon {
     // Only start plugins that are not disabled
     const enabledPlugins = plugins.filter((p) => !disabledPlugins.includes(p.manifest.name))
     await this.lifecycle.startAll(enabledPlugins, (plugin) => this.makeContext(plugin, config))
-    await this.discoverMarketplacePlugins(config, disabledPlugins)
+    await this.discoverMarketplacePlugins(config, disabledPlugins, homebridgeAPI)
 
     // ── HTTP server ───────────────────────────────────────────────────────────
     const localPluginSources = config.localPluginSources ?? []
@@ -240,7 +238,11 @@ export class Daemon {
     process.on('SIGTERM', shutdown)
   }
 
-  private async discoverMarketplacePlugins(config: OpenBridgeConfig, disabledPlugins: string[]) {
+  private async discoverMarketplacePlugins(
+    config: OpenBridgeConfig,
+    disabledPlugins: string[],
+    homebridgeAPI: HomebridgeAPI | null,
+  ) {
     const pluginsRoot = HB_PLUGINS_DIR
     const manifestPath = join(pluginsRoot, 'package.json')
     if (!existsSync(manifestPath)) return
@@ -309,7 +311,38 @@ export class Daemon {
           if (loaded) continue
         }
 
-        // Homebridge-compatible or unconfigured plugins — register as pseudo-plugin
+        // Homebridge-compatible plugins — auto-load if configured in config.plugins
+        if (isHb && homebridgeAPI) {
+          const pluginEntry = config.plugins.find((p) => p.name === name)
+          const pluginDir = join(pluginsRoot, 'node_modules', pkgName)
+          const mainFile = join(pluginDir, pkg.main ?? 'dist/index.js')
+
+          if (existsSync(mainFile) && !disabledPlugins.includes(name)) {
+            try {
+              this.knownHbPackageNames.add(name)
+              const pluginFn = loadHomebridgePlugin(mainFile)
+              pluginFn(homebridgeAPI as any)
+
+              // Build a platform config from the plugin entry
+              const platformName = pkg.openbridge?.platform ?? pkg.platform ?? name
+              const platformConfig = {
+                platform: platformName,
+                plugin: mainFile,
+                ...(pluginEntry?.config ?? {}),
+              }
+
+              const platformLogger = Logger.create('hap')
+              await homebridgeAPI.launchPlatforms([platformConfig as any], platformLogger, this.registry)
+
+              log.info(`Loaded Homebridge plugin from marketplace: ${name} v${pkg.version ?? '?'}`)
+              continue
+            } catch (err) {
+              log.error(`Failed to load Homebridge plugin ${name}: ${err}`)
+            }
+          }
+        }
+
+        // Unconfigured or failed plugins — register as pseudo-plugin (stopped)
         const pseudoPlugin: Plugin = {
           manifest: {
             name,

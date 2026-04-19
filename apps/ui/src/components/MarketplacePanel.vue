@@ -309,14 +309,6 @@ onMounted(async () => {
         <div class="mp-info">
           <div class="mp-name-row">
             <span class="mp-name">{{ pkg.name }}</span>
-            <span v-if="isOpenBridge(pkg)" class="badge badge--native">
-              <NbIcon name="diamond" :size="9" />
-              Native
-            </span>
-            <span v-else class="badge badge--hb">
-              <NbIcon name="intersect" :size="9" />
-              HB
-            </span>
             <span class="mp-ver">v{{ pkg.version }}</span>
           </div>
           <p v-if="pkg.description" class="mp-desc">{{ pkg.description }}</p>

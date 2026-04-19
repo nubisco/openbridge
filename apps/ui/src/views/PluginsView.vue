@@ -248,17 +248,6 @@ watch(
           <div class="plugin-status-badge" :class="plugin.status">{{ plugin.status }}</div>
         </div>
 
-        <div class="plugin-badges">
-          <span v-if="isOpenBridge(plugin)" class="badge badge--native">
-            <NbIcon name="diamond" :size="9" />
-            Native
-          </span>
-          <span v-else class="badge badge--hb">
-            <NbIcon name="intersect" :size="9" />
-            Homebridge
-          </span>
-        </div>
-
         <p v-if="plugin.manifest.description" class="plugin-desc">{{ plugin.manifest.description }}</p>
         <p v-if="plugin.manifest.author" class="plugin-author">by {{ plugin.manifest.author }}</p>
         <div v-if="pluginEnriched(plugin)" class="plugin-enriched">
