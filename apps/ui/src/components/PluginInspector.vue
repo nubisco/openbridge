@@ -377,21 +377,18 @@ const LOG_COLORS: Record<string, string> = {
 }
 
 async function save() {
-  if (saving.value) return
+  if (saving.value || !inspector.selectedPlugin) return
   const parsed = parseJson()
   if (!parsed) {
     saveError.value = 'Invalid JSON — fix the syntax first'
-    return
-  }
-  if (typeof parsed.platform !== 'string' || !parsed.platform) {
-    saveError.value = 'Config must include a "platform" string field'
     return
   }
   saving.value = true
   saveError.value = null
   saveSuccess.value = false
   try {
-    await api.config.savePlatform(parsed)
+    // Save to config.plugins (unified — works for both native and Homebridge plugins)
+    await api.config.savePlugin(inspector.selectedPlugin.manifest.name, parsed)
     saveSuccess.value = true
     setTimeout(() => {
       saveSuccess.value = false

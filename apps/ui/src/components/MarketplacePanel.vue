@@ -138,15 +138,10 @@ async function activateLocal(local: LocalPlugin) {
   installing.value = local.name
   error.value = null
   try {
-    // Find the main file: look for dist/index.js or index.js
-    const mainFile = `${local.path}/dist/index.js`
-    const platform: Record<string, unknown> = {
-      platform: local.platform,
-      plugin: mainFile,
-    }
-    await api.config.savePlatform(platform)
-    installed.value.set(local.name, mainFile)
-    justInstalled.value = { name: local.name, mainFile }
+    // Save as a unified plugin entry in config.plugins
+    await api.config.savePlugin(local.name, { platform: local.platform })
+    installed.value.set(local.name, `${local.path}/dist/index.js`)
+    justInstalled.value = { name: local.name, mainFile: `${local.path}/dist/index.js` }
     await daemon.fetchPlugins()
     notify.success(`Activated ${local.name}`)
   } catch (e) {
