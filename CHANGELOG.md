@@ -7,10 +7,9 @@
 
 # [0.11.0](https://github.com/nubisco/openbridge/compare/v0.10.0...v0.11.0) (2026-04-19)
 
-
 ### Features
 
-* unify plugin vs platform — Homebridge plugins auto-load from marketplace ([0452a2f](https://github.com/nubisco/openbridge/commit/0452a2f51e34dea71ca067aeb08b3cf48b89080d))
+- unify plugin vs platform — Homebridge plugins auto-load from marketplace ([0452a2f](https://github.com/nubisco/openbridge/commit/0452a2f51e34dea71ca067aeb08b3cf48b89080d))
 
 # [0.10.0](https://github.com/nubisco/openbridge/compare/v0.9.1...v0.10.0) (2026-04-18)
 

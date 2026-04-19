@@ -172,6 +172,67 @@ watch(
   },
 )
 
+// ─── Import / Export ──────────────────────────────────────────────────────────
+const importInput = ref<HTMLInputElement | null>(null)
+
+function triggerImport() {
+  importInput.value?.click()
+}
+
+function exportConfig() {
+  if (!inspector.selectedPlugin) return
+  const name = inspector.selectedPlugin.manifest.name
+  const configData = isHomebridge.value ? configJson.value : nativeConfigJson.value
+  if (!configData) return
+
+  const blob = new Blob([configData], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${name.replace(/[^a-z0-9-]/gi, '-')}-config.json`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+async function importConfig(event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  if (!file || !inspector.selectedPlugin) return
+
+  try {
+    const text = await file.text()
+    const parsed = JSON.parse(text)
+
+    // Detect if this is a Homebridge platform config (has "platform" field at root)
+    // or a native OpenBridge plugin config
+    let configToSave: Record<string, unknown>
+
+    if (parsed.platform && typeof parsed.platform === 'string') {
+      // Homebridge format: { platform: "ShellyDS9", devices: [...], ... }
+      // Strip the "plugin" path field (Homebridge-specific) and keep the rest
+      const { plugin: _plugin, ...deviceConfig } = parsed
+      configToSave = deviceConfig
+    } else {
+      // Native format or raw config object
+      configToSave = parsed
+    }
+
+    // Save to config.plugins
+    await api.config.savePlugin(inspector.selectedPlugin.manifest.name, configToSave)
+
+    // Update the editor
+    if (isHomebridge.value) {
+      configJson.value = JSON.stringify(configToSave, null, 2)
+    } else {
+      nativeConfigJson.value = JSON.stringify(configToSave, null, 2)
+    }
+
+    // Reset file input
+    if (importInput.value) importInput.value.value = ''
+  } catch (e) {
+    console.error('Import failed:', e)
+  }
+}
+
 async function saveNativeConfig() {
   if (nativeSaving.value || !inspector.selectedPlugin) return
   let parsed: Record<string, unknown>
@@ -645,6 +706,15 @@ async function save() {
         </div>
       </section>
 
+      <!-- ── Import / Export config ──────────────────────────────────────── -->
+      <section class="inspector-section">
+        <div class="import-export-row">
+          <NbButton variant="ghost" size="sm" icon="download" @click="exportConfig">Export config</NbButton>
+          <NbButton variant="ghost" size="sm" icon="upload" @click="triggerImport">Import config</NbButton>
+          <input ref="importInput" type="file" accept=".json" style="display: none" @change="importConfig" />
+        </div>
+      </section>
+
       <!-- ── Devices registered by this plugin ────────────────────────────── -->
       <section v-if="pluginDevices.length > 0" class="inspector-section">
         <h3 class="section-heading">
@@ -1045,6 +1115,11 @@ async function save() {
   color: #c9d1d9;
   flex: 1;
   word-break: break-word;
+}
+
+.import-export-row {
+  display: flex;
+  gap: 0.5rem;
 }
 
 .plugin-device-row {

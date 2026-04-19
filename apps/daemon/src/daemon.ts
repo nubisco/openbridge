@@ -320,15 +320,23 @@ export class Daemon {
           if (existsSync(mainFile) && !disabledPlugins.includes(name)) {
             try {
               this.knownHbPackageNames.add(name)
+              const regCountBefore = (homebridgeAPI as any)._platformRegistrations?.length ?? 0
               const pluginFn = loadHomebridgePlugin(mainFile)
               pluginFn(homebridgeAPI as any)
 
-              // Build a platform config from the plugin entry
-              const platformName = pkg.openbridge?.platform ?? pkg.platform ?? name
+              // Get the platform name from the plugin's registerPlatform() call
+              const regs = (homebridgeAPI as any)._platformRegistrations ?? []
+              const newReg = regs[regs.length - 1]
+              const platformName =
+                newReg && regs.length > regCountBefore
+                  ? newReg.platformName
+                  : ((pluginEntry?.config?.platform as string) ?? name)
+
+              const pluginConfig = pluginEntry?.config ?? {}
               const platformConfig = {
                 platform: platformName,
                 plugin: mainFile,
-                ...(pluginEntry?.config ?? {}),
+                ...pluginConfig,
               }
 
               const platformLogger = Logger.create('hap')
