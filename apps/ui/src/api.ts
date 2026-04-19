@@ -185,6 +185,15 @@ export const api = {
       if (!r.ok) throw new Error(`Control failed: ${r.status}`)
       return r.json()
     }),
+  renameDevice: (deviceId: string, name: string) =>
+    fetch(`/api/devices/${encodeURIComponent(deviceId)}/rename`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
+    }).then((r) => {
+      if (!r.ok) throw new Error(`Rename failed: ${r.status}`)
+      return r.json()
+    }),
   deviceHistory: (deviceId: string, period: 'day' | 'month' | 'year', date?: string) => {
     const params = new URLSearchParams({ period })
     if (date) params.set('date', date)

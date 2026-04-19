@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick } from 'vue'
 import { useInspectorStore, type NativeDevice } from '@/stores/inspector'
 import { api, type Accessory } from '@/api'
 
@@ -80,6 +80,31 @@ function formatValue(ch: { value: unknown; format: string }): string {
 
 function isWritable(ch: { perms: string[] }) {
   return ch.perms.includes('pw')
+}
+
+// ─── Device rename ───────────────────────────────────────────────────────────
+const editingName = ref(false)
+const renameValue = ref('')
+const renameInput = ref<HTMLInputElement | null>(null)
+
+function startRename(currentName: string) {
+  renameValue.value = currentName
+  editingName.value = true
+  nextTick(() => renameInput.value?.focus())
+}
+
+async function saveRename(deviceId: string) {
+  if (!renameValue.value.trim()) return
+  try {
+    await api.renameDevice(deviceId, renameValue.value.trim())
+    editingName.value = false
+    // Refresh devices
+    const { useDaemonStore } = await import('@/stores/daemon')
+    const daemon = useDaemonStore()
+    await daemon.fetchAccessories()
+  } catch (e) {
+    console.error('Rename failed:', e)
+  }
 }
 
 async function setHapCharacteristic(accUuid: string, svcUuid: string, chUuid: string, value: unknown) {
@@ -192,9 +217,18 @@ watch(currentDeviceId, (newId, oldId) => {
   }
 })
 
-function maxKwh(buckets: Array<{ kwh: number | null }>) {
-  return Math.max(...buckets.map((b) => b.kwh ?? 0), 0.001)
-}
+const historyChartSeries = computed(() => {
+  if (!historyData.value?.buckets) return []
+  return [
+    {
+      name: 'Energy (kWh)',
+      data: historyData.value.buckets.map((b) => ({
+        x: b.label,
+        y: b.kwh ?? 0,
+      })),
+    },
+  ]
+})
 </script>
 
 <template>
@@ -206,7 +240,27 @@ function maxKwh(buckets: Array<{ kwh: number | null }>) {
           <NbIcon :name="widgetIcon((selected as any).dev.widgetType)" :size="26" />
         </div>
         <div style="flex: 1; min-width: 0">
-          <h2 class="detail-name">{{ (selected as any).dev.name }}</h2>
+          <h2
+            v-if="!editingName"
+            class="detail-name"
+            :title="'Click to rename'"
+            style="cursor: pointer"
+            @click="startRename((selected as any).dev.name)"
+          >
+            {{ (selected as any).dev.name }}
+            <NbIcon name="pencil" :size="10" style="opacity: 0.4; margin-left: 4px" />
+          </h2>
+          <div v-else class="rename-row">
+            <input
+              ref="renameInput"
+              v-model="renameValue"
+              class="rename-input"
+              @keyup.enter="saveRename((selected as any).dev.id)"
+              @keyup.escape="editingName = false"
+            />
+            <NbButton variant="primary" size="sm" icon="check" @click="saveRename((selected as any).dev.id)" />
+            <NbButton variant="ghost" size="sm" icon="x" @click="editingName = false" />
+          </div>
           <div class="detail-type">{{ widgetLabel((selected as any).dev.widgetType) }}</div>
         </div>
         <NbButton variant="ghost" size="sm" icon="x" @click="inspector.close()" />
@@ -342,24 +396,21 @@ function maxKwh(buckets: Array<{ kwh: number | null }>) {
         </div>
 
         <!-- Bar chart -->
-        <div v-if="historyData && historyData.buckets.length > 0" class="history-chart">
-          <div v-for="(b, i) in historyData.buckets" :key="i" class="history-bar-wrap">
-            <div
-              class="history-bar"
-              :style="{
-                height: b.kwh !== null ? Math.max(2, (b.kwh / maxKwh(historyData!.buckets)) * 100) + '%' : '2px',
-                opacity: b.kwh !== null ? 1 : 0.2,
-              }"
-              :title="b.kwh !== null ? b.label + ': ' + b.kwh + ' kWh' : b.label + ': no data'"
-            />
-          </div>
-        </div>
+        <NbBarChart
+          v-if="historyData && historyData.buckets.length > 0"
+          :series="historyChartSeries"
+          :height="120"
+          :show-legend="false"
+          :show-grid="false"
+        />
 
         <div v-if="historyData && historyData.buckets.length === 0" class="no-history">
           No data yet — history accumulates as the device runs.
         </div>
 
-        <div v-if="!historyData && !historyLoading" class="no-history">Loading history…</div>
+        <div v-if="!historyData && !historyLoading" class="no-history">No data available for this period.</div>
+
+        <div v-if="historyLoading" class="no-history">Loading history…</div>
       </div>
 
       <!-- All telemetry data -->
@@ -381,7 +432,27 @@ function maxKwh(buckets: Array<{ kwh: number | null }>) {
           <NbIcon :name="categoryInfo((selected as any).acc.category).icon" :size="26" />
         </div>
         <div style="flex: 1; min-width: 0">
-          <h2 class="detail-name">{{ (selected as any).acc.displayName }}</h2>
+          <h2
+            v-if="!editingName"
+            class="detail-name"
+            :title="'Click to rename'"
+            style="cursor: pointer"
+            @click="startRename((selected as any).acc.displayName)"
+          >
+            {{ (selected as any).acc.displayName }}
+            <NbIcon name="pencil" :size="10" style="opacity: 0.4; margin-left: 4px" />
+          </h2>
+          <div v-else class="rename-row">
+            <input
+              ref="renameInput"
+              v-model="renameValue"
+              class="rename-input"
+              @keyup.enter="saveRename((selected as any).acc.uuid)"
+              @keyup.escape="editingName = false"
+            />
+            <NbButton variant="primary" size="sm" icon="check" @click="saveRename((selected as any).acc.uuid)" />
+            <NbButton variant="ghost" size="sm" icon="x" @click="editingName = false" />
+          </div>
           <div class="detail-type">{{ categoryInfo((selected as any).acc.category).label }}</div>
         </div>
         <NbButton variant="ghost" size="sm" icon="x" @click="inspector.close()" />
@@ -466,6 +537,27 @@ function maxKwh(buckets: Array<{ kwh: number | null }>) {
   font-size: 0.95rem;
   color: #111827;
   margin: 0;
+}
+
+.rename-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.rename-input {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #111827;
+  border: 1px solid #c4b5fd;
+  border-radius: 6px;
+  padding: 0.2rem 0.4rem;
+  outline: none;
+  flex: 1;
+  min-width: 0;
+  &:focus {
+    border-color: #7c3aed;
+    box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.1);
+  }
 }
 
 .detail-type {

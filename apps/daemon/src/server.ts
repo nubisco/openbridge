@@ -496,15 +496,76 @@ export async function createServer(
 
   // Returns all devices across all plugins with their descriptors and latest telemetry
   app.get('/api/devices', async () => {
+    // Load custom names
+    const namesPath = join(OPENBRIDGE_HOME, 'device-names.json')
+    let customNames: Record<string, string> = {}
+    try {
+      customNames = JSON.parse(readFileSync(namesPath, 'utf8'))
+    } catch {
+      /* no custom names */
+    }
+
     const devices: Array<DeviceDescriptor & { telemetry: Record<string, unknown>; pluginStatus: string }> = []
     for (const instance of registry.getAll()) {
       if (!instance.devices) continue
       for (const device of Object.values(instance.devices)) {
         const telemetry = instance.telemetry?.[device.id] ?? {}
-        devices.push({ ...device, telemetry, pluginStatus: instance.status })
+        const name = customNames[device.id] ?? device.name
+        devices.push({ ...device, name, telemetry, pluginStatus: instance.status })
       }
     }
     return { devices }
+  })
+
+  // ─── Device rename ──────────────────────────────────────────────────────
+  app.post('/api/devices/:deviceId/rename', async (req) => {
+    const { deviceId } = req.params as { deviceId: string }
+    const { name } = req.body as { name: string }
+    if (!name?.trim()) throw { statusCode: 400, message: 'name is required' }
+
+    // Update in registry (native devices)
+    for (const instance of registry.getAll()) {
+      if (instance.devices?.[deviceId]) {
+        instance.devices[deviceId].name = name.trim()
+        break
+      }
+    }
+
+    // Update HAP accessory name if it exists
+    if (hapAPI) {
+      const raw = hapAPI.getRawAccessories?.() ?? []
+      const acc = raw.find((a: any) => a.UUID === deviceId)
+      if (acc) {
+        // Find AccessoryInformation service and set Name characteristic
+        for (const svc of acc.services ?? []) {
+          for (const ch of svc.characteristics ?? []) {
+            if (ch.displayName === 'Name' || ch.constructor?.name === 'Name') {
+              try {
+                ch.setValue(name.trim())
+              } catch {
+                /* ignore — some characteristics may not accept setValue */
+              }
+            }
+          }
+        }
+        // Also update the displayName
+        acc.displayName = name.trim()
+      }
+    }
+
+    // Persist custom names to file
+    const namesPath = join(OPENBRIDGE_HOME, 'device-names.json')
+    let customNames: Record<string, string> = {}
+    try {
+      customNames = JSON.parse(readFileSync(namesPath, 'utf8'))
+    } catch {
+      /* start fresh */
+    }
+    customNames[deviceId] = name.trim()
+    writeFileSync(namesPath, JSON.stringify(customNames, null, 2))
+
+    log.info(`Device ${deviceId} renamed to "${name.trim()}"`)
+    return { ok: true, deviceId, name: name.trim() }
   })
 
   app.post('/api/devices/:deviceId/control', async (req) => {

@@ -7,15 +7,13 @@
 
 # [0.13.0](https://github.com/nubisco/openbridge/compare/v0.12.0...v0.13.0) (2026-04-19)
 
-
 ### Bug Fixes
 
-* use host networking for device discovery and WebSocket ([b8309fe](https://github.com/nubisco/openbridge/commit/b8309fe01997fa9703b08ba437731b0aa42d7507))
-
+- use host networking for device discovery and WebSocket ([b8309fe](https://github.com/nubisco/openbridge/commit/b8309fe01997fa9703b08ba437731b0aa42d7507))
 
 ### Features
 
-* standardized device cards — two tiers with HAP controls ([4eeb2f2](https://github.com/nubisco/openbridge/commit/4eeb2f295eb4f5d03adf84b880dd99af4c6cf493))
+- standardized device cards — two tiers with HAP controls ([4eeb2f2](https://github.com/nubisco/openbridge/commit/4eeb2f295eb4f5d03adf84b880dd99af4c6cf493))
 
 # [0.12.0](https://github.com/nubisco/openbridge/compare/v0.11.1...v0.12.0) (2026-04-19)
 
