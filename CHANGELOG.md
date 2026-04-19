@@ -1,3 +1,10 @@
+## [0.15.1](https://github.com/nubisco/openbridge/compare/v0.15.0...v0.15.1) (2026-04-19)
+
+
+### Bug Fixes
+
+* use NbSparkline from @nubisco/ui 1.11.0 for dashboard charts ([5f4a53e](https://github.com/nubisco/openbridge/commit/5f4a53e487f2cafb48c8a2ac4babfd525c4aba81))
+
 # [0.15.0](https://github.com/nubisco/openbridge/compare/v0.14.0...v0.15.0) (2026-04-19)
 
 
