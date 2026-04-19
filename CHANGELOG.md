@@ -1,3 +1,10 @@
+## [0.15.2](https://github.com/nubisco/openbridge/compare/v0.15.1...v0.15.2) (2026-04-19)
+
+
+### Bug Fixes
+
+* self-update logging and restart mechanism ([83874e0](https://github.com/nubisco/openbridge/commit/83874e056547c197d538390a63023371a846031d))
+
 ## [0.15.1](https://github.com/nubisco/openbridge/compare/v0.15.0...v0.15.1) (2026-04-19)
 
 
