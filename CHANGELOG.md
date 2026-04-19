@@ -1,3 +1,10 @@
+# [0.12.0](https://github.com/nubisco/openbridge/compare/v0.11.1...v0.12.0) (2026-04-19)
+
+
+### Features
+
+* auto-detect HB platform names, import/export plugin config ([8129d1e](https://github.com/nubisco/openbridge/commit/8129d1ef3fd4c693a161e39e85cc9d2dfe7425cd))
+
 ## [0.11.1](https://github.com/nubisco/openbridge/compare/v0.11.0...v0.11.1) (2026-04-19)
 
 
