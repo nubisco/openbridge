@@ -82,6 +82,18 @@ function isWritable(ch: { perms: string[] }) {
   return ch.perms.includes('pw')
 }
 
+async function setHapCharacteristic(accUuid: string, svcUuid: string, chUuid: string, value: unknown) {
+  try {
+    await api.setCharacteristic(accUuid, svcUuid, chUuid, value)
+    // Refresh accessories to get updated values
+    const { useDaemonStore } = await import('@/stores/daemon')
+    const daemon = useDaemonStore()
+    await daemon.fetchAccessories()
+  } catch (e) {
+    console.error('Failed to set characteristic:', e)
+  }
+}
+
 // ─── Native device helpers ───────────────────────────────────────────────────
 const WIDGET_ICON: Record<string, string> = {
   switch: 'plugs',
@@ -392,9 +404,16 @@ function maxKwh(buckets: Array<{ kwh: number | null }>) {
         <div class="char-list">
           <div v-for="ch in svc.characteristics" :key="ch.uuid" class="char-row">
             <span class="char-name">{{ ch.name }}</span>
-            <span v-if="isWritable(ch)" class="char-writable" title="Writable">
-              <NbIcon name="pencil" :size="11" />
-            </span>
+            <!-- Writable bool → inline toggle -->
+            <template v-if="isWritable(ch) && ch.format === 'bool'">
+              <NbSwitch
+                :model-value="!!ch.value"
+                @update:model-value="
+                  setHapCharacteristic((selected as any).acc.uuid, svc.uuid, ch.uuid, $event ? 1 : 0)
+                "
+              />
+            </template>
+            <!-- Read-only or non-bool writable → display value -->
             <span v-else class="char-value" :class="{ on: ch.format === 'bool' && ch.value }">
               {{ formatValue(ch) }}
             </span>

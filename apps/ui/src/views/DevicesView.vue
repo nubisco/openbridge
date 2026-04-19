@@ -97,6 +97,57 @@ function widgetLabel(widgetType: string): string {
   return WIDGET_LABEL[widgetType] ?? widgetType
 }
 
+// ─── HAP accessory helpers ────────────────────────────────────────────────────
+const SKIP_SERVICES = new Set([
+  'AccessoryInformation',
+  '0000003E-0000-1000-8000-0026BB765291',
+  'ProtocolInformation',
+  '000000A2-0000-1000-8000-0026BB765291',
+])
+
+const ON_CHARACTERISTIC_NAMES = new Set(['On', 'Active', 'LockTargetState', 'TargetDoorState'])
+
+function hapPrimaryService(acc: Accessory) {
+  return acc.services.find((s) => !SKIP_SERVICES.has(s.name) && !SKIP_SERVICES.has(s.uuid))
+}
+
+function hapOnCharacteristic(acc: Accessory) {
+  const svc = hapPrimaryService(acc)
+  if (!svc) return null
+  return svc.characteristics.find((ch) => ON_CHARACTERISTIC_NAMES.has(ch.name) && ch.perms.includes('pw')) ?? null
+}
+
+function hapPrimaryValue(acc: Accessory): string | null {
+  const svc = hapPrimaryService(acc)
+  if (!svc) return null
+
+  // Look for temperature, humidity, or other numeric readings
+  for (const ch of svc.characteristics) {
+    if (ch.name === 'CurrentTemperature' && ch.value != null) return `${Number(ch.value).toFixed(1)}°C`
+    if (ch.name === 'CurrentRelativeHumidity' && ch.value != null) return `${Math.round(Number(ch.value))}%`
+    if (ch.name === 'CurrentPosition' && ch.value != null) return `${Math.round(Number(ch.value))}%`
+    if (ch.name === 'Brightness' && ch.value != null) return `${Math.round(Number(ch.value))}%`
+  }
+
+  // For switches, show On/Off
+  const onCh = svc.characteristics.find((ch) => ch.name === 'On')
+  if (onCh) return onCh.value ? 'On' : 'Off'
+
+  return null
+}
+
+async function toggleHapCharacteristic(acc: Accessory, value: boolean) {
+  const svc = hapPrimaryService(acc)
+  const ch = hapOnCharacteristic(acc)
+  if (!svc || !ch) return
+  try {
+    await api.setCharacteristic(acc.uuid, svc.uuid, ch.uuid, value ? 1 : 0)
+    await daemon.fetchAccessories()
+  } catch (e) {
+    console.error('HAP control failed', e)
+  }
+}
+
 function fmtNum(val: unknown, decimals = 1): string {
   if (val === null || val === undefined) return '—'
   const n = Number(val)
@@ -310,19 +361,29 @@ onUnmounted(() => {
         <div
           v-for="acc in daemon.accessories"
           :key="acc.uuid"
-          class="device-card"
+          class="device-card hap-card"
           :class="{
             selected: selectedDeviceId === acc.uuid,
             unreachable: !acc.reachable,
           }"
           @click="selectHap(acc)"
         >
-          <div class="device-icon" :class="{ unreachable: !acc.reachable }">
+          <div class="device-icon hap-icon" :class="{ unreachable: !acc.reachable }">
             <NbIcon :name="categoryInfo(acc.category).icon" :size="22" />
           </div>
           <div class="device-info">
             <div class="device-name">{{ acc.displayName }}</div>
             <div class="device-type">{{ categoryInfo(acc.category).label }}</div>
+            <div v-if="hapPrimaryValue(acc)" class="device-summary">
+              <span class="summary-primary">{{ hapPrimaryValue(acc) }}</span>
+            </div>
+            <!-- On/Off toggle for controllable accessories -->
+            <div v-if="hapOnCharacteristic(acc)" class="card-controls" @click.stop>
+              <NbSwitch
+                :model-value="!!hapOnCharacteristic(acc)?.value"
+                @update:model-value="toggleHapCharacteristic(acc, $event)"
+              />
+            </div>
           </div>
           <div class="device-reachability" :class="acc.reachable ? 'online' : 'offline'" />
         </div>
@@ -439,6 +500,12 @@ onUnmounted(() => {
     flex-direction: column;
     align-items: flex-start;
     gap: 0.5rem;
+    border-left: 3px solid #c4b5fd;
+  }
+  &.hap-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
   }
 }
 
@@ -459,6 +526,10 @@ onUnmounted(() => {
   &.native-icon {
     background: #ede9fe;
     color: #7c3aed;
+  }
+  &.hap-icon {
+    background: #f3f4f6;
+    color: #6b7280;
   }
 }
 
