@@ -1,3 +1,10 @@
+## [0.15.4](https://github.com/nubisco/openbridge/compare/v0.15.3...v0.15.4) (2026-04-20)
+
+
+### Bug Fixes
+
+* energy chart renders on load, readable X-axis labels ([bcc2482](https://github.com/nubisco/openbridge/commit/bcc248226d796bd2ce7fa49e8164aa53cdffc3f7))
+
 ## [0.15.3](https://github.com/nubisco/openbridge/compare/v0.15.2...v0.15.3) (2026-04-20)
 
 
