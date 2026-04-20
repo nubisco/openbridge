@@ -221,11 +221,13 @@ const historyChartSeries = computed(() => {
   if (!historyData.value?.buckets) return []
   return [
     {
-      name: 'Energy (kWh)',
-      data: historyData.value.buckets.map((b) => ({
-        x: b.label,
-        y: b.kwh ?? 0,
-      })),
+      name: 'kWh',
+      data: historyData.value.buckets
+        .filter((b) => b.kwh !== null && b.kwh > 0)
+        .map((b) => ({
+          x: b.label,
+          y: Math.round(b.kwh! * 100) / 100,
+        })),
     },
   ]
 })
@@ -397,15 +399,15 @@ const historyChartSeries = computed(() => {
 
         <!-- Bar chart -->
         <NbBarChart
-          v-if="historyData && historyData.buckets.length > 0"
+          v-if="historyData && historyData.totalKwh > 0"
           :series="historyChartSeries"
           :height="120"
           :show-legend="false"
-          :show-grid="false"
+          :show-tooltip="true"
         />
 
-        <div v-if="historyData && historyData.buckets.length === 0" class="no-history">
-          No data yet — history accumulates as the device runs.
+        <div v-if="historyData && historyData.totalKwh === 0" class="no-history">
+          No consumption recorded for this period. Data accumulates every 5 minutes.
         </div>
 
         <div v-if="!historyData && !historyLoading" class="no-history">No data available for this period.</div>
