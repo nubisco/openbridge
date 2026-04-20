@@ -1,3 +1,10 @@
+## [0.15.3](https://github.com/nubisco/openbridge/compare/v0.15.2...v0.15.3) (2026-04-20)
+
+
+### Bug Fixes
+
+* energy history chart — hide when no data, filter empty buckets ([ac3662c](https://github.com/nubisco/openbridge/commit/ac3662cd135460ef7cb2da6ca48f5446d4b0e3dd))
+
 ## [0.15.2](https://github.com/nubisco/openbridge/compare/v0.15.1...v0.15.2) (2026-04-19)
 
 
