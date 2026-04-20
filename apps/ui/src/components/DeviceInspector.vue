@@ -207,27 +207,47 @@ watch(historyPeriod, () => {
   }
 })
 
-watch(currentDeviceId, (newId, oldId) => {
-  if (newId === oldId) return
-  const val = selected.value
-  if (val?.kind === 'native' && (val as any).dev.widgetType === 'energy_meter') {
-    historyDate.value = new Date().toISOString().slice(0, 10)
-    historyPeriod.value = 'day'
-    fetchHistory((val as any).dev.id)
-  }
-})
+watch(
+  currentDeviceId,
+  (newId, oldId) => {
+    if (newId === oldId && historyData.value) return
+    const val = selected.value
+    if (val?.kind === 'native' && (val as any).dev.widgetType === 'energy_meter') {
+      historyDate.value = new Date().toISOString().slice(0, 10)
+      historyPeriod.value = 'day'
+      fetchHistory((val as any).dev.id)
+    }
+  },
+  { immediate: true },
+)
 
 const historyChartSeries = computed(() => {
   if (!historyData.value?.buckets) return []
+
+  // For day view, show all 24 hours but use short labels (only show every 6h)
+  // For month view, show all days but use short labels
+  // For year view, show all 12 months
+  const buckets = historyData.value.buckets
   return [
     {
       name: 'kWh',
-      data: historyData.value.buckets
-        .filter((b) => b.kwh !== null && b.kwh > 0)
-        .map((b) => ({
-          x: b.label,
-          y: Math.round(b.kwh! * 100) / 100,
-        })),
+      data: buckets.map((b) => {
+        // Shorten labels for readability
+        let label = b.label
+        if (historyPeriod.value === 'day') {
+          // Only show label at 00, 06, 12, 18
+          const hour = parseInt(b.label)
+          label = hour % 6 === 0 ? b.label : ''
+        } else if (historyPeriod.value === 'month') {
+          // Only show every 5th day
+          const day = parseInt(b.label)
+          label = day % 5 === 1 ? b.label : ''
+        }
+        return {
+          x: label,
+          y: Math.max(0, Math.round((b.kwh ?? 0) * 100) / 100),
+        }
+      }),
     },
   ]
 })
