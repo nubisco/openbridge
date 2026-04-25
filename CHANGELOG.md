@@ -1,3 +1,10 @@
+## [0.15.5](https://github.com/nubisco/openbridge/compare/v0.15.4...v0.15.5) (2026-04-25)
+
+
+### Bug Fixes
+
+* recover from device disconnections, restore missing HomeKit accessories ([3a38ba1](https://github.com/nubisco/openbridge/commit/3a38ba1290be62e9fc42a4bbfeef66bbe63f1af1))
+
 ## [0.15.4](https://github.com/nubisco/openbridge/compare/v0.15.3...v0.15.4) (2026-04-20)
 
 ### Bug Fixes
