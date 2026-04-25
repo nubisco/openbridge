@@ -42,6 +42,18 @@ export class Daemon {
     log.info('Starting OpenBridge daemon...')
     log.info(`Config: ${configPath}`)
 
+    // Prevent unhandled errors from silently killing plugin event loops
+    process.on('unhandledRejection', (reason) => {
+      log.error(`Unhandled promise rejection (plugin may need restart): ${reason}`)
+    })
+    process.on('uncaughtException', (err) => {
+      log.error(`Uncaught exception: ${err.message}\n${err.stack}`)
+      // Only exit on truly fatal errors (e.g. out of memory)
+      if (err.message?.includes('out of memory') || err.message?.includes('ENOMEM')) {
+        process.exit(1)
+      }
+    })
+
     const config = await loadConfig(configPath)
     Logger.setLevel(config.bridge.logLevel)
 
@@ -224,6 +236,37 @@ export class Daemon {
     )
     // Also sample immediately on startup (after a short delay for devices to connect)
     setTimeout(() => this.sampleEnergyHistory(), 30_000)
+
+    // ── Platform health watchdog ─────────────────────────────────────────────
+    // Monitors Homebridge-compatible platforms and restarts them if they enter
+    // error status. Checks every 60 seconds, uses exponential backoff per platform.
+    if (homebridgeAPI) {
+      const watchdogInterval = 60_000
+      const pendingRestarts = new Map<string, NodeJS.Timeout>()
+
+      setInterval(() => {
+        for (const instance of this.registry.getAll()) {
+          if (instance.source !== 'homebridge') continue
+          if (instance.disabled) continue
+          const name = instance.platformName ?? instance.id
+
+          if (instance.status === 'error' && !pendingRestarts.has(name)) {
+            const backoff = homebridgeAPI!.getRestartBackoff(name)
+            log.warn(`Platform "${name}" is in error state, scheduling restart in ${Math.round(backoff / 1000)}s`)
+
+            const timer = setTimeout(async () => {
+              pendingRestarts.delete(name)
+              const ok = await homebridgeAPI!.restartPlatform(name)
+              if (!ok) {
+                log.error(`Platform "${name}" restart failed, will retry with longer backoff`)
+              }
+            }, backoff)
+
+            pendingRestarts.set(name, timer)
+          }
+        }
+      }, watchdogInterval)
+    }
 
     log.info(`OpenBridge running at http://localhost:${port}`)
 

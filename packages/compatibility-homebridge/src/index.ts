@@ -123,6 +123,12 @@ export class HomebridgeAPI extends EventEmitter {
   private _accessories: Map<string, any> = new Map()
   private _onAccessoryAdd?: (accessory: any) => void
   private _onAccessoryRemove?: (accessory: any) => void
+  /** Stored launch configs so platforms can be restarted after failure */
+  private _platformLaunchConfigs: Map<string, { config: PlatformConfig; log: any; registry?: any }> = new Map()
+  /** Tracks consecutive restart failures per platform for exponential backoff */
+  private _platformRestartAttempts: Map<string, number> = new Map()
+  /** Tracks last error time per platform to detect recurring failures */
+  private _platformLastError: Map<string, number> = new Map()
 
   constructor(hapNodeJs: any, bridge: any) {
     super()
@@ -204,10 +210,11 @@ export class HomebridgeAPI extends EventEmitter {
     for (const acc of arr) {
       try {
         if (!acc?.UUID) {
-          hapLog.warn(`  ⚠ skipped accessory with no UUID: ${acc?.displayName}`)
+          hapLog.warn(`  skipped accessory with no UUID: ${acc?.displayName}`)
           continue
         }
         hapLog.info(`  + ${acc.displayName} (UUID: ${acc.UUID})`)
+        acc._associatedPlatform = _platformName
         this._accessories.set(acc.UUID, acc)
         if (this._bridge) {
           try {
@@ -225,19 +232,31 @@ export class HomebridgeAPI extends EventEmitter {
 
   /**
    * Called by some platform plugins to publish accessories as standalone (not bridged).
-   * We treat them the same as bridged accessories for OpenBridge purposes.
+   * In real Homebridge these get their own HAP server, but OpenBridge funnels
+   * everything through a single bridge so we add them as bridged accessories.
    */
   publishExternalAccessories(_pluginName: string, accessories: any | any[]) {
     const arr = Array.isArray(accessories) ? accessories : [accessories]
     hapLog.info(`publishExternalAccessories: adding ${arr.length} accessory(ies)`)
     for (const acc of arr) {
       try {
-        if (!acc?.UUID) continue
+        if (!acc?.UUID) {
+          hapLog.warn(`  skipped accessory with no UUID: ${acc?.displayName}`)
+          continue
+        }
         hapLog.info(`  + ${acc.displayName} (UUID: ${acc.UUID})`)
+        acc._associatedPlatform = _pluginName
         this._accessories.set(acc.UUID, acc)
+        if (this._bridge) {
+          try {
+            this._bridge.addBridgedAccessory(acc)
+          } catch (bridgeErr) {
+            hapLog.warn(`  bridge.addBridgedAccessory failed (non-fatal): ${bridgeErr}`)
+          }
+        }
         this._onAccessoryAdd?.(acc)
       } catch (err) {
-        hapLog.error(`  ✗ failed to publish ${acc?.displayName}: ${err}`)
+        hapLog.error(`  failed to publish ${acc?.displayName}: ${err}`)
       }
     }
   }
@@ -317,7 +336,30 @@ export class HomebridgeAPI extends EventEmitter {
         const instance = new reg.Constructor(platformLog, config, this)
         this._platformInstances.set(reg.platformName, instance)
         log.info(`Platform "${reg.platformName}" instantiated`)
+
+        // Dynamic platforms implement configureAccessory() to re-adopt cached accessories.
+        // Feed any existing accessories for this platform back to the new instance.
+        if (typeof instance.configureAccessory === 'function') {
+          const cached = Array.from(this._accessories.values()).filter(
+            (acc: any) => acc._associatedPlatform === reg.platformName,
+          )
+          for (const acc of cached) {
+            try {
+              instance.configureAccessory(acc)
+            } catch (err) {
+              hapLog.warn(`configureAccessory failed for ${acc.displayName}: ${err}`)
+            }
+          }
+          if (cached.length > 0) {
+            hapLog.info(`Restored ${cached.length} cached accessory(ies) for "${reg.platformName}"`)
+          }
+        }
+
         registry?.updateStatus(reg.platformName, 'running')
+
+        // Store launch config so we can restart the platform if it fails later
+        this._platformLaunchConfigs.set(reg.platformName, { config, log, registry })
+        this._platformRestartAttempts.set(reg.platformName, 0)
       } catch (err) {
         log.error(`Platform "${reg.platformName}" failed to start: ${err}`)
         registry?.updateStatus(reg.platformName, 'error', String(err))
@@ -327,6 +369,77 @@ export class HomebridgeAPI extends EventEmitter {
     // Signal that all plugins have loaded — platforms listen for this
     hapLog.info('Emitting didFinishLaunching — platforms should start device discovery')
     this.emit('didFinishLaunching')
+  }
+
+  /**
+   * Restart a platform that has failed. Removes old accessories,
+   * re-instantiates the platform, and re-emits didFinishLaunching.
+   */
+  async restartPlatform(platformName: string): Promise<boolean> {
+    const reg = this._platformRegistrations.find((r) => r.platformName === platformName)
+    const launchConfig = this._platformLaunchConfigs.get(platformName)
+    if (!reg || !launchConfig) {
+      hapLog.warn(`Cannot restart platform "${platformName}": no registration or config found`)
+      return false
+    }
+
+    const { config, registry } = launchConfig
+    const attempts = (this._platformRestartAttempts.get(platformName) ?? 0) + 1
+    this._platformRestartAttempts.set(platformName, attempts)
+
+    hapLog.info(`Restarting platform "${platformName}" (attempt ${attempts})...`)
+    registry?.updateStatus(platformName, 'loading')
+
+    // Remove old accessories registered by this platform
+    const oldInstance = this._platformInstances.get(platformName)
+    if (oldInstance) {
+      const toRemove: any[] = []
+      for (const [_uuid, acc] of this._accessories.entries()) {
+        if (acc._associatedPlatform === platformName) {
+          toRemove.push(acc)
+        }
+      }
+      for (const acc of toRemove) {
+        this._accessories.delete(acc.UUID)
+        try {
+          this._bridge?.removeBridgedAccessory(acc, false)
+        } catch {
+          /* ignore */
+        }
+      }
+      hapLog.info(`  Removed ${toRemove.length} stale accessory(ies)`)
+    }
+
+    try {
+      const platformLog = createPlatformLogger(Logger.create(reg.platformName), reg.platformName)
+      const instance = new reg.Constructor(platformLog, config, this)
+      this._platformInstances.set(platformName, instance)
+
+      // Re-emit didFinishLaunching so the new instance starts discovery
+      this.emit('didFinishLaunching')
+
+      hapLog.info(`Platform "${platformName}" restarted successfully`)
+      registry?.updateStatus(platformName, 'running')
+      this._platformRestartAttempts.set(platformName, 0)
+      return true
+    } catch (err) {
+      hapLog.error(`Platform "${platformName}" restart failed: ${err}`)
+      registry?.updateStatus(platformName, 'error', String(err))
+      return false
+    }
+  }
+
+  /**
+   * Returns the backoff delay (ms) for the next restart attempt of a platform.
+   * Exponential: 30s, 60s, 120s, 240s, capped at 5 minutes.
+   */
+  getRestartBackoff(platformName: string): number {
+    const attempts = this._platformRestartAttempts.get(platformName) ?? 0
+    return Math.min(30_000 * Math.pow(2, attempts), 5 * 60_000)
+  }
+
+  getPlatformInstances(): Map<string, any> {
+    return this._platformInstances
   }
 }
 
