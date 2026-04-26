@@ -335,9 +335,8 @@ export class Daemon {
           const daemonModules = resolve(__dirname, '../node_modules')
           if (!process.env.NODE_PATH?.includes(daemonModules)) {
             process.env.NODE_PATH = process.env.NODE_PATH ? `${process.env.NODE_PATH}:${daemonModules}` : daemonModules
-            // Re-initialize the module resolution paths
-            // eslint-disable-next-line @typescript-eslint/no-require-imports
-            require('module').Module._initPaths()
+            // Re-initialize the module resolution paths (use req since we're in ESM)
+            ;(req('module') as any).Module._initPaths()
           }
 
           const pluginDir = join(pluginsRoot, 'node_modules', pkgName)

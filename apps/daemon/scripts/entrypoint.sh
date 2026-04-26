@@ -22,9 +22,9 @@ should_bootstrap() {
     return 0
   fi
 
-  VOLUME_VERSION=$(cat "$VERSION_FILE" | grep -o '"version":"[^"]*"' | head -1 | cut -d'"' -f4)
-  VOLUME_HASH=$(cat "$VERSION_FILE" | grep -o '"buildHash":"[^"]*"' | head -1 | cut -d'"' -f4)
-  VOLUME_SOURCE=$(cat "$VERSION_FILE" | grep -o '"source":"[^"]*"' | head -1 | cut -d'"' -f4)
+  VOLUME_VERSION=$(node -e "try{const j=JSON.parse(require('fs').readFileSync('$VERSION_FILE','utf8'));process.stdout.write(j.version||'')}catch{}")
+  VOLUME_HASH=$(node -e "try{const j=JSON.parse(require('fs').readFileSync('$VERSION_FILE','utf8'));process.stdout.write(j.buildHash||'')}catch{}")
+  VOLUME_SOURCE=$(node -e "try{const j=JSON.parse(require('fs').readFileSync('$VERSION_FILE','utf8'));process.stdout.write(j.source||'')}catch{}")
 
   if [ -z "$VOLUME_VERSION" ]; then
     echo "Corrupt version file — re-initialising from Docker image"
