@@ -306,11 +306,20 @@ export class Daemon {
     }
 
     for (const pkgName of Object.keys(topLevel)) {
-      if (this.registry.get(pkgName)) continue
-      if (this.knownHbPackageNames.has(pkgName)) continue
+      if (this.registry.get(pkgName)) {
+        log.debug(`Marketplace: skipping ${pkgName} (already registered)`)
+        continue
+      }
+      if (this.knownHbPackageNames.has(pkgName)) {
+        log.debug(`Marketplace: skipping ${pkgName} (already loaded as HB platform)`)
+        continue
+      }
 
       const pkgJsonPath = join(pluginsRoot, 'node_modules', pkgName, 'package.json')
-      if (!existsSync(pkgJsonPath)) continue
+      if (!existsSync(pkgJsonPath)) {
+        log.debug(`Marketplace: skipping ${pkgName} (package.json not found)`)
+        continue
+      }
 
       try {
         const pkg = JSON.parse(readFileSync(pkgJsonPath, 'utf8'))
@@ -414,8 +423,8 @@ export class Daemon {
         if (isHb) instance.source = 'homebridge'
         this.registry.updateStatus(name, 'stopped')
         log.info(`Discovered marketplace plugin: ${name} v${pkg.version ?? '?'} (not yet configured)`)
-      } catch {
-        /* skip malformed packages */
+      } catch (err) {
+        log.warn(`Marketplace discovery: skipped ${pkgName}: ${err}`)
       }
     }
   }
