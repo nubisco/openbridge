@@ -119,7 +119,7 @@ async function rollbackUpdate() {
 const bridge = ref<BridgeConfig>({
   name: 'OpenBridge',
   port: 8582,
-  hapPort: 51826,
+  hapPort: 51829,
   pincode: '031-45-154',
   username: '',
   logLevel: 'info',
@@ -133,7 +133,7 @@ onMounted(async () => {
       bridge.value = {
         name: res.name ?? 'OpenBridge',
         port: res.port ?? 8582,
-        hapPort: res.hapPort ?? 51826,
+        hapPort: res.hapPort ?? 51829,
         pincode: res.pincode ?? '031-45-154',
         username: res.username ?? '',
         logLevel: res.logLevel ?? 'info',

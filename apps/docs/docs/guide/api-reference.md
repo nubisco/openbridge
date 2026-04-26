@@ -293,7 +293,7 @@ Returns the current `bridge` config object.
 {
   "name": "OpenBridge",
   "port": 8582,
-  "hapPort": 51826,
+  "hapPort": 51829,
   "pincode": "031-45-154",
   "username": "AA:BB:CC:DD:EE:FF",
   "logLevel": "info"

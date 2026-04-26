@@ -170,7 +170,7 @@ export class Daemon {
       }
 
       // Publish the HAP bridge
-      const hapPort = config.bridge.hapPort ?? 51826
+      const hapPort = config.bridge.hapPort ?? 51829
       const pincode = config.bridge.pincode ?? '031-45-154'
 
       const username = config.bridge.username ?? generateUsername(config.bridge.name)

@@ -13,7 +13,7 @@ You can edit this file by hand, through the UI Settings page, or via the config 
   "bridge": {
     "name": "OpenBridge",
     "port": 8582,
-    "hapPort": 51826,
+    "hapPort": 51829,
     "pincode": "031-45-154",
     "username": "AA:BB:CC:DD:EE:FF",
     "logLevel": "info"
@@ -47,7 +47,7 @@ The `bridge` object configures both the HTTP server and the HAP bridge that Home
 | ---------- | ---------------------------------------- | --------------------- | -------- | ----------------------------------------------------- |
 | `name`     | `string`                                 | `"OpenBridge"`        | No       | Bridge name shown in the Apple Home app               |
 | `port`     | `number`                                 | `8582`                | No       | HTTP API and UI port                                  |
-| `hapPort`  | `number`                                 | `51826`               | No       | Port hap-nodejs uses for HomeKit communication        |
+| `hapPort`  | `number`                                 | `51829`               | No       | Port hap-nodejs uses for HomeKit communication        |
 | `pincode`  | `string`                                 | `"031-45-154"`        | No       | 8-digit PIN for HomeKit pairing. Format: `XXX-XX-XXX` |
 | `username` | `string`                                 | `"AA:BB:CC:DD:EE:FF"` | No       | MAC address that uniquely identifies this bridge      |
 | `logLevel` | `"debug" \| "info" \| "warn" \| "error"` | `"info"`              | No       | Minimum log severity to record and display            |

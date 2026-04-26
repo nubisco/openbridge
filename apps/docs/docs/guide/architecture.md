@@ -27,7 +27,7 @@ flowchart TB
       native["Native Plugins<br/>definePlugin()"]
     end
 
-    hap["hap-nodejs HAP Bridge<br/>port: hapPort (51826)<br/>Bonjour/mDNS advertisement"]
+    hap["hap-nodejs HAP Bridge<br/>port: hapPort (51829)<br/>Bonjour/mDNS advertisement"]
     http["Fastify HTTP server (port 8582)<br/><br/>REST API: /api/*<br/>Static UI: /ui/*<br/>WebSocket streams: /ws/logs, /ws/metrics, /ws/terminal, /ws/shell"]
   end
 

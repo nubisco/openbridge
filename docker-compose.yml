@@ -1,6 +1,7 @@
 services:
   openbridge:
     image: ghcr.io/nubisco/openbridge:latest
+    pull_policy: always
     container_name: openbridge
     restart: unless-stopped
     # Host networking is required for:

@@ -45,7 +45,7 @@ onMounted(async () => {
               properties: {
                 name: { type: 'string', description: 'Bridge display name' },
                 port: { type: 'number', description: 'HTTP API port (default 8582)' },
-                hapPort: { type: 'number', description: 'HomeKit HAP port (default 51826)' },
+                hapPort: { type: 'number', description: 'HomeKit HAP port (default 51829)' },
                 pincode: { type: 'string', description: 'HomeKit pairing PIN (format: XXX-XX-XXX)' },
                 username: { type: 'string', description: 'HAP username (MAC address format)' },
                 logLevel: { type: 'string', enum: ['debug', 'info', 'warn', 'error'] },

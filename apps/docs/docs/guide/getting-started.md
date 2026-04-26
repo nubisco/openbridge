@@ -88,7 +88,7 @@ On first run, OpenBridge creates `~/.openbridge/config.json` if it does not exis
   "bridge": {
     "name": "OpenBridge",
     "port": 8582,
-    "hapPort": 51826,
+    "hapPort": 51829,
     "pincode": "031-45-154",
     "username": "AA:BB:CC:DD:EE:FF",
     "logLevel": "info"
