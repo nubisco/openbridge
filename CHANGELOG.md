@@ -1,3 +1,10 @@
+## [0.16.1](https://github.com/nubisco/openbridge/compare/v0.16.0...v0.16.1) (2026-04-26)
+
+
+### Bug Fixes
+
+* log marketplace plugin discovery errors instead of silently skipping ([ceaaef6](https://github.com/nubisco/openbridge/commit/ceaaef6a1bbef7aec4bc4e31a38f5365df92941a))
+
 # [0.16.0](https://github.com/nubisco/openbridge/compare/v0.15.6...v0.16.0) (2026-04-26)
 
 ### Features
