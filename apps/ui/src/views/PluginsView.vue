@@ -243,7 +243,16 @@ watch(
             <div v-if="plugin.source === 'homebridge' && plugin.platformName" class="plugin-platform">
               Platform: {{ plugin.platformName }}
             </div>
-            <div class="plugin-version">v{{ plugin.manifest.version }}</div>
+            <div class="plugin-version">
+              v{{ plugin.manifest.version }}
+              <span
+                v-if="plugin.availableUpdate"
+                class="update-badge"
+                :title="'Update available: v' + plugin.availableUpdate"
+              >
+                v{{ plugin.availableUpdate }} available
+              </span>
+            </div>
           </div>
           <div class="plugin-status-badge" :class="plugin.status">{{ plugin.status }}</div>
         </div>
@@ -426,6 +435,18 @@ watch(
 .plugin-version {
   font-size: 0.75rem;
   color: #9ca3af;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.update-badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
+  padding: 1px 6px;
+  border-radius: 4px;
 }
 
 .plugin-platform {

@@ -1006,6 +1006,63 @@ export async function createServer(
     return undefined
   }
 
+  // ─── Plugin update checker ─────────────────────────────────────────────────
+  // Queries npm registry for latest versions of all installed plugins and
+  // sets `availableUpdate` on each PluginInstance when a newer version exists.
+
+  async function checkPluginUpdates(): Promise<number> {
+    const plugins = registry.getAll()
+    let updatesFound = 0
+
+    for (const plugin of plugins) {
+      const name = plugin.manifest.name
+      const currentVersion = plugin.manifest.version
+      if (!currentVersion || currentVersion === '?.?.?') continue
+
+      try {
+        const res = await fetch(`https://registry.npmjs.org/${encodeURIComponent(name)}/latest`, {
+          signal: AbortSignal.timeout(5000),
+          headers: { Accept: 'application/json' },
+        })
+        if (!res.ok) continue
+        const data = (await res.json()) as { version?: string }
+        const latest = data.version
+        if (!latest) continue
+
+        if (latest !== currentVersion) {
+          plugin.availableUpdate = latest
+          updatesFound++
+        } else {
+          plugin.availableUpdate = undefined
+        }
+      } catch {
+        // npm unreachable for this package, skip
+      }
+    }
+
+    if (updatesFound > 0) {
+      log.info(`Plugin update check: ${updatesFound} update(s) available`)
+    }
+    return updatesFound
+  }
+
+  // Check for updates on startup (after a delay for plugins to register) and every 6 hours
+  setTimeout(() => checkPluginUpdates(), 60_000)
+  setInterval(() => checkPluginUpdates(), 6 * 60 * 60_000)
+
+  app.get('/api/plugins/updates', async () => {
+    const count = await checkPluginUpdates()
+    const updates = registry
+      .getAll()
+      .filter((p) => p.availableUpdate)
+      .map((p) => ({
+        name: p.manifest.name,
+        current: p.manifest.version,
+        latest: p.availableUpdate,
+      }))
+    return { count, updates }
+  })
+
   app.post('/api/marketplace/install', async (req) => {
     const { package: pkg } = req.body as { package: string }
     if (!pkg || !/^[a-z0-9@._/-]+$/i.test(pkg)) {

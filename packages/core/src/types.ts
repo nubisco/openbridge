@@ -71,4 +71,6 @@ export interface PluginInstance {
   devices?: Record<string, DeviceDescriptor>
   /** HAP bridge info if the plugin publishes its own bridge */
   hapBridge?: { setupURI: string; pincode: string; port: number; name: string }
+  /** Latest version available on npm (set by the update checker) */
+  availableUpdate?: string
 }
