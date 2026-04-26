@@ -1,3 +1,10 @@
+## [0.16.2](https://github.com/nubisco/openbridge/compare/v0.16.1...v0.16.2) (2026-04-26)
+
+
+### Bug Fixes
+
+* native marketplace plugins failing to load (require not defined in ESM) ([273f5a6](https://github.com/nubisco/openbridge/commit/273f5a666e190f7c4e23ea9d038b889027e606af))
+
 ## [0.16.1](https://github.com/nubisco/openbridge/compare/v0.16.0...v0.16.1) (2026-04-26)
 
 
