@@ -1,3 +1,10 @@
+# [0.16.0](https://github.com/nubisco/openbridge/compare/v0.15.6...v0.16.0) (2026-04-26)
+
+
+### Features
+
+* expose main HAP bridge to native plugins via ctx.getHapBridge() ([d6dc157](https://github.com/nubisco/openbridge/commit/d6dc1575149c96ea3de609ee0452004aec46c4f3))
+
 ## [0.15.6](https://github.com/nubisco/openbridge/compare/v0.15.5...v0.15.6) (2026-04-26)
 
 ### Bug Fixes
