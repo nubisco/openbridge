@@ -31,6 +31,11 @@ export interface PluginContext {
   registerHapBridge(info: { setupURI: string; pincode: string; port: number; name: string }): void
   /** Block a device control from being changed via UI or HomeKit */
   restrictControl(deviceId: string, controlId: string): void
+  /**
+   * Returns the main HAP bridge so native plugins can add accessories to it
+   * instead of creating their own bridge. Returns null if the bridge is not available.
+   */
+  getHapBridge?(): { bridge: unknown; hap: unknown } | null
 }
 
 export interface PluginLogger {

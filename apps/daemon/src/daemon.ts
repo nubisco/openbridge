@@ -36,6 +36,8 @@ export class Daemon {
   private knownHbPackageNames = new Set<string>()
   private controls = new Map<string, ControlHandler>()
   private restrictedControls = new Set<string>()
+  /** Main HAP bridge and hap-nodejs module, shared with native plugins */
+  private hapBridgeRef: { bridge: unknown; hap: unknown } | null = null
 
   async start(options: DaemonOptions = {}) {
     const configPath = options.configPath ?? defaultConfigPath()
@@ -119,6 +121,9 @@ export class Daemon {
         .setCharacteristic(hapNodeJs.Characteristic.Manufacturer, 'Nubisco')
         .setCharacteristic(hapNodeJs.Characteristic.Model, 'OpenBridge')
         .setCharacteristic(hapNodeJs.Characteristic.SoftwareRevision, '0.1.0')
+
+      // Store reference so native plugins can add accessories to the main bridge
+      this.hapBridgeRef = { bridge: hapBridge, hap: hapNodeJs }
 
       // Create the HomebridgeAPI shim
       homebridgeAPI = new HomebridgeAPI(hapNodeJs, hapBridge)
@@ -451,6 +456,7 @@ export class Daemon {
         restrictedControls.add(`${deviceId}::${controlId}`)
         log.info(`Control restricted: ${deviceId}::${controlId}`)
       },
+      getHapBridge: () => this.hapBridgeRef,
     }
   }
 
