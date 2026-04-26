@@ -1,9 +1,8 @@
 ## [0.15.6](https://github.com/nubisco/openbridge/compare/v0.15.5...v0.15.6) (2026-04-26)
 
-
 ### Bug Fixes
 
-* change default HAP port to 51829 to avoid Homebridge conflict ([509ee35](https://github.com/nubisco/openbridge/commit/509ee35d32018366c7dfa6352e4e81b49cf26532))
+- change default HAP port to 51829 to avoid Homebridge conflict ([509ee35](https://github.com/nubisco/openbridge/commit/509ee35d32018366c7dfa6352e4e81b49cf26532))
 
 ## [0.15.5](https://github.com/nubisco/openbridge/compare/v0.15.4...v0.15.5) (2026-04-25)
 
