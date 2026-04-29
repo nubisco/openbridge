@@ -136,6 +136,17 @@ export interface LocalPlugin {
   displayName?: string
 }
 
+export interface InterpolationDescriptor {
+  inputLabel: string
+  outputLabel: string
+  inputMin: number
+  inputMax: number
+  outputMin: number
+  outputMax: number
+  configField: string
+  configShape: { inputKey: string; outputKey: string }
+}
+
 export interface DeviceDescriptor {
   id: string
   name: string
@@ -143,6 +154,7 @@ export interface DeviceDescriptor {
   manufacturer?: string
   model?: string
   pluginId: string
+  interpolation?: InterpolationDescriptor
 }
 
 export const api = {
@@ -298,6 +310,11 @@ export const api = {
       }).then((r) => {
         if (!r.ok) throw new Error(`Install failed: ${r.status}`)
         return r.json()
+      }),
+    update: (name: string) =>
+      fetch(`/api/marketplace/update/${encodeURIComponent(name)}`, { method: 'POST' }).then((r) => {
+        if (!r.ok) throw new Error(`Update failed: ${r.status}`)
+        return r.json() as Promise<{ updated: string; version: string; needsRestart: boolean }>
       }),
     uninstall: (pkg: string) =>
       fetch(`/api/marketplace/uninstall/${encodeURIComponent(pkg)}`, { method: 'DELETE' }).then((r) => {

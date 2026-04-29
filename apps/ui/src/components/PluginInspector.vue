@@ -83,6 +83,24 @@ const statusLabel: Record<string, string> = {
   error: 'Error',
 }
 
+// ─── Plugin update ───────────────────────────────────────────────────────────
+const updating = ref(false)
+
+async function updatePlugin() {
+  if (!inspector.selectedPlugin || updating.value) return
+  updating.value = true
+  try {
+    await api.marketplace.update(inspector.selectedPlugin.manifest.name)
+    await daemon.fetchPlugins()
+    // Restart to load the new version
+    await restartOpenBridge()
+  } catch (err) {
+    console.error('Failed to update plugin:', err)
+  } finally {
+    updating.value = false
+  }
+}
+
 // ─── Plugin removal ──────────────────────────────────────────────────────────
 const confirmingRemove = ref(false)
 const removing = ref(false)
@@ -530,6 +548,23 @@ async function save() {
         <p class="hap-hint">Scan with the Home app or enter the PIN manually to pair this plugin's devices.</p>
       </section>
 
+      <!-- ── Update available ──────────────────────────────────────────────── -->
+      <section v-if="inspector.selectedPlugin.availableUpdate" class="inspector-section">
+        <div class="update-banner">
+          <div class="update-banner-text">
+            <NbIcon name="arrow-circle-up" :size="14" />
+            <span>
+              Version
+              <strong>{{ inspector.selectedPlugin.availableUpdate }}</strong>
+              is available (current: {{ inspector.selectedPlugin.manifest.version }})
+            </span>
+          </div>
+          <NbButton variant="primary" size="sm" :loading="updating" :disabled="updating" @click="updatePlugin">
+            {{ updating ? 'Updating...' : 'Update' }}
+          </NbButton>
+        </div>
+      </section>
+
       <!-- ── Remove plugin ─────────────────────────────────────────────────── -->
       <section class="inspector-section">
         <NbButton
@@ -866,6 +901,25 @@ async function save() {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+}
+
+.update-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  padding: 0.65rem 0.75rem;
+}
+.update-banner-text {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  color: #1e40af;
+  line-height: 1.4;
 }
 
 .remove-confirm {

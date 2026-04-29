@@ -1121,6 +1121,42 @@ export async function createServer(
     return { installed: pkg, mainFile, pluginsDir: HB_PLUGINS_DIR, isNative, needsRestart: isNative }
   })
 
+  app.post('/api/marketplace/update/:name', async (req) => {
+    const { name } = req.params as { name: string }
+    if (!name || !/^[a-z0-9@._/-]+$/i.test(name)) {
+      throw { statusCode: 400, message: 'Invalid package name' }
+    }
+
+    const entry = registry.get(name)
+    const targetVersion = entry?.instance.availableUpdate
+    const installArg = targetVersion ? `${name}@${targetVersion}` : name
+
+    mkdirSync(HB_PLUGINS_DIR, { recursive: true })
+    await new Promise<void>((ok, fail) => {
+      const child = spawn('npm', ['install', '--prefix', HB_PLUGINS_DIR, installArg], {
+        stdio: 'pipe',
+        env: { ...process.env },
+      })
+      child.on('close', (code) => (code === 0 ? ok() : fail(new Error(`npm exited with ${code}`))))
+    })
+
+    // Update the in-memory manifest version so the UI reflects the change immediately
+    if (entry) {
+      try {
+        const pkgPath = join(HB_PLUGINS_DIR, 'node_modules', name, 'package.json')
+        const p = JSON.parse(readFileSync(pkgPath, 'utf8'))
+        entry.instance.manifest.version = p.version ?? entry.instance.manifest.version
+        entry.instance.manifest.description = p.description ?? entry.instance.manifest.description
+      } catch {
+        // If we can't read the new version, the restart will pick it up
+      }
+      entry.instance.availableUpdate = undefined
+    }
+
+    log.info(`Updated plugin: ${name} to ${targetVersion ?? 'latest'}`)
+    return { updated: name, version: targetVersion ?? 'latest', needsRestart: true }
+  })
+
   app.delete('/api/marketplace/uninstall/:name', async (req) => {
     const { name } = req.params as { name: string }
     if (!name || !/^[a-z0-9@._/-]+$/i.test(name)) {

@@ -8,6 +8,26 @@ export interface PluginManifest {
   }
 }
 
+/** Describes a device's interpolation calibration capability. */
+export interface InterpolationDescriptor {
+  /** Label for the input (X) axis, e.g. "Room Temperature (C)" */
+  inputLabel: string
+  /** Label for the output (Y) axis, e.g. "Water Temperature (C)" */
+  outputLabel: string
+  /** Minimum allowed input value */
+  inputMin: number
+  /** Maximum allowed input value */
+  inputMax: number
+  /** Minimum allowed output value */
+  outputMin: number
+  /** Maximum allowed output value */
+  outputMax: number
+  /** The key in the device's platform config that holds the mapping array */
+  configField: string
+  /** Maps generic input/output keys to the config array's property names */
+  configShape: { inputKey: string; outputKey: string }
+}
+
 export interface DeviceDescriptor {
   id: string
   name: string
@@ -16,6 +36,8 @@ export interface DeviceDescriptor {
   manufacturer?: string
   model?: string
   pluginId: string
+  /** If present, this device supports interactive interpolation calibration */
+  interpolation?: InterpolationDescriptor
 }
 
 export interface PluginContext {

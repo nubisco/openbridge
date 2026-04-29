@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
 import { useInspectorStore, type NativeDevice } from '@/stores/inspector'
-import { api, type Accessory } from '@/api'
+import { api, type Accessory, type InterpolationDescriptor } from '@/api'
 
 const inspector = useInspectorStore()
 
@@ -221,6 +221,144 @@ watch(
   { immediate: true },
 )
 
+// ─── Interpolation calibration ──────────────────────────────────────────────
+interface InterpolationPoint {
+  input: number
+  output: number
+}
+
+const interpolationPoints = ref<InterpolationPoint[]>([])
+const interpolationOriginal = ref<InterpolationPoint[]>([])
+const interpolationLoading = ref(false)
+const interpolationSaving = ref(false)
+const interpolationSaved = ref(false)
+
+const interpolationDirty = computed(() => {
+  return JSON.stringify(interpolationPoints.value) !== JSON.stringify(interpolationOriginal.value)
+})
+
+const nativeDev = computed(() => {
+  if (!selected.value || selected.value.kind !== 'native') return null
+  return (selected.value as { kind: 'native'; dev: NativeDevice }).dev
+})
+
+// Resolve the plugin config for a device. Native plugins store config at
+// plugins[].config, homebridge-compat platforms store it at platforms[].
+async function resolvePluginConfig(dev: NativeDevice): Promise<{
+  pluginConfig: Record<string, unknown>
+  isNative: boolean
+  pluginName: string
+  platformName: string | undefined
+} | null> {
+  const { plugins } = await api.plugins()
+  const plugin = plugins.find((p) => p.id === dev.pluginId)
+  if (!plugin) return null
+
+  const isNative = plugin.source !== 'homebridge'
+
+  if (isNative) {
+    const { config } = await api.config.getPlugin(dev.pluginId)
+    if (!config) return null
+    return { pluginConfig: config, isNative: true, pluginName: dev.pluginId, platformName: undefined }
+  } else {
+    const platformName = plugin.platformName ?? dev.pluginId
+    const { config } = await api.config.getPlatform(platformName)
+    if (!config) return null
+    return { pluginConfig: config, isNative: false, pluginName: dev.pluginId, platformName }
+  }
+}
+
+async function loadInterpolation() {
+  const dev = nativeDev.value
+  if (!dev?.interpolation) return
+
+  interpolationLoading.value = true
+  interpolationSaved.value = false
+  try {
+    const resolved = await resolvePluginConfig(dev)
+    if (!resolved) return
+
+    const devices = (resolved.pluginConfig.devices as Array<Record<string, unknown>>) ?? []
+    const deviceConfig = devices.find((d) => d.id === dev.id)
+    if (!deviceConfig) return
+
+    const interp = dev.interpolation as InterpolationDescriptor
+    const rawMap = (deviceConfig[interp.configField] as Array<Record<string, number>>) ?? []
+
+    const points: InterpolationPoint[] = rawMap.map((entry) => ({
+      input: entry[interp.configShape.inputKey] ?? 0,
+      output: entry[interp.configShape.outputKey] ?? 0,
+    }))
+
+    interpolationPoints.value = points
+    interpolationOriginal.value = JSON.parse(JSON.stringify(points))
+  } catch (e) {
+    console.error('Failed to load interpolation config:', e)
+  } finally {
+    interpolationLoading.value = false
+  }
+}
+
+async function saveInterpolation() {
+  const dev = nativeDev.value
+  if (!dev?.interpolation) return
+
+  interpolationSaving.value = true
+  interpolationSaved.value = false
+  try {
+    const resolved = await resolvePluginConfig(dev)
+    if (!resolved) return
+
+    const interp = dev.interpolation as InterpolationDescriptor
+    const devices = (resolved.pluginConfig.devices as Array<Record<string, unknown>>) ?? []
+    const deviceIdx = devices.findIndex((d) => d.id === dev.id)
+    if (deviceIdx < 0) return
+
+    // Transform back to config shape
+    const configMap = interpolationPoints.value.map((pt) => ({
+      [interp.configShape.inputKey]: pt.input,
+      [interp.configShape.outputKey]: pt.output,
+    }))
+
+    devices[deviceIdx] = { ...devices[deviceIdx], [interp.configField]: configMap }
+    resolved.pluginConfig.devices = devices
+
+    if (resolved.isNative) {
+      await api.config.savePlugin(resolved.pluginName, resolved.pluginConfig)
+    } else {
+      await api.config.savePlatform(resolved.pluginConfig)
+    }
+
+    interpolationOriginal.value = JSON.parse(JSON.stringify(interpolationPoints.value))
+    interpolationSaved.value = true
+  } catch (e) {
+    console.error('Failed to save interpolation config:', e)
+  } finally {
+    interpolationSaving.value = false
+  }
+}
+
+function resetInterpolation() {
+  interpolationPoints.value = JSON.parse(JSON.stringify(interpolationOriginal.value))
+  interpolationSaved.value = false
+}
+
+// Load interpolation when device changes
+watch(
+  currentDeviceId,
+  (newId, oldId) => {
+    if (newId === oldId && interpolationOriginal.value.length > 0) return
+    interpolationSaved.value = false
+    if (selected.value?.kind === 'native' && (selected.value as any).dev.interpolation) {
+      loadInterpolation()
+    } else {
+      interpolationPoints.value = []
+      interpolationOriginal.value = []
+    }
+  },
+  { immediate: true },
+)
+
 const historyChartSeries = computed(() => {
   if (!historyData.value?.buckets) return []
 
@@ -433,6 +571,46 @@ const historyChartSeries = computed(() => {
         <div v-if="!historyData && !historyLoading" class="no-history">No data available for this period.</div>
 
         <div v-if="historyLoading" class="no-history">Loading history…</div>
+      </div>
+
+      <!-- Interpolation calibration -->
+      <div v-if="(selected as any).dev.interpolation && interpolationPoints.length > 0" class="detail-section">
+        <div class="section-label">Calibration</div>
+        <NbInterpolationChart
+          v-model="interpolationPoints"
+          :height="220"
+          :input-label="(selected as any).dev.interpolation.inputLabel"
+          :output-label="(selected as any).dev.interpolation.outputLabel"
+          :input-min="(selected as any).dev.interpolation.inputMin"
+          :input-max="(selected as any).dev.interpolation.inputMax"
+          :output-min="(selected as any).dev.interpolation.outputMin"
+          :output-max="(selected as any).dev.interpolation.outputMax"
+          :input-step="0.5"
+          :output-step="1"
+          :show-grid="true"
+          :show-tooltip="true"
+        />
+        <div class="calibration-hint">Drag points to adjust. Double-click to add. Right-click to remove.</div>
+        <div class="calibration-actions">
+          <NbButton
+            variant="primary"
+            size="sm"
+            :disabled="!interpolationDirty || interpolationSaving"
+            @click="saveInterpolation"
+          >
+            {{ interpolationSaving ? 'Saving...' : 'Save' }}
+          </NbButton>
+          <NbButton variant="ghost" size="sm" :disabled="!interpolationDirty" @click="resetInterpolation">
+            Reset
+          </NbButton>
+        </div>
+        <div v-if="interpolationSaved" class="calibration-restart-notice">
+          Configuration saved. Restart the plugin to apply the new mapping.
+        </div>
+      </div>
+      <div v-else-if="(selected as any).dev.interpolation && interpolationLoading" class="detail-section">
+        <div class="section-label">Calibration</div>
+        <div class="no-history">Loading calibration data...</div>
       </div>
 
       <!-- All telemetry data -->
@@ -856,5 +1034,31 @@ const historyChartSeries = computed(() => {
   font-style: italic;
   text-align: center;
   padding: 1rem 0;
+}
+
+// ─── Calibration ──────────────────────────────────────────────────────────────
+.calibration-hint {
+  font-size: 0.68rem;
+  color: #9ca3af;
+  text-align: center;
+  margin-top: 0.25rem;
+  margin-bottom: 0.5rem;
+}
+
+.calibration-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.calibration-restart-notice {
+  margin-top: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.75rem;
+  color: #92400e;
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  border-radius: 6px;
+  text-align: center;
 }
 </style>
