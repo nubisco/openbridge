@@ -1,3 +1,10 @@
+# [0.17.0](https://github.com/nubisco/openbridge/compare/v0.16.2...v0.17.0) (2026-04-29)
+
+
+### Features
+
+* plugin update endpoint, interpolation calibration UI ([f4b3cb0](https://github.com/nubisco/openbridge/commit/f4b3cb0c230c8c812bf339e9fe7e895cdf311adf))
+
 ## [0.16.2](https://github.com/nubisco/openbridge/compare/v0.16.1...v0.16.2) (2026-04-26)
 
 
