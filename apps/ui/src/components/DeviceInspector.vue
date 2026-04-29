@@ -14,28 +14,37 @@ const currentDeviceId = computed(() => {
 })
 
 // ─── HAP helpers ─────────────────────────────────────────────────────────────
+// HAP accessory categories (from hap-nodejs Categories enum)
 const CATEGORY_INFO: Record<number, { label: string; icon: string }> = {
   1: { label: 'Other', icon: 'cube' },
   2: { label: 'Bridge', icon: 'intersect' },
   3: { label: 'Fan', icon: 'fan' },
-  5: { label: 'Garage Door', icon: 'garage' },
-  6: { label: 'Lamp', icon: 'lamp' },
-  7: { label: 'Lock', icon: 'lock' },
-  8: { label: 'Outlet', icon: 'plugs' },
-  9: { label: 'Switch', icon: 'toggle-right' },
-  10: { label: 'Thermostat', icon: 'thermometer' },
-  11: { label: 'Sensor', icon: 'activity' },
-  12: { label: 'Security', icon: 'shield' },
-  13: { label: 'Door', icon: 'door' },
-  14: { label: 'Window', icon: 'app-window' },
-  15: { label: 'Window Covering', icon: 'rows' },
-  16: { label: 'Programm. Switch', icon: 'sliders' },
-  17: { label: 'Range Extender', icon: 'broadcast' },
+  4: { label: 'Garage Door', icon: 'garage' },
+  5: { label: 'Light', icon: 'lamp' },
+  6: { label: 'Lock', icon: 'lock' },
+  7: { label: 'Outlet', icon: 'plugs' },
+  8: { label: 'Switch', icon: 'toggle-right' },
+  9: { label: 'Thermostat', icon: 'thermometer' },
+  10: { label: 'Sensor', icon: 'activity' },
+  11: { label: 'Security', icon: 'shield' },
+  12: { label: 'Door', icon: 'door' },
+  13: { label: 'Window', icon: 'app-window' },
+  14: { label: 'Window Covering', icon: 'rows' },
+  15: { label: 'Programm. Switch', icon: 'sliders' },
+  16: { label: 'Range Extender', icon: 'broadcast' },
+  17: { label: 'Camera', icon: 'camera' },
+  18: { label: 'Video Doorbell', icon: 'bell' },
   19: { label: 'Air Purifier', icon: 'wind' },
   20: { label: 'Heater/Cooler', icon: 'thermometer-hot' },
   21: { label: 'Air Conditioner', icon: 'snowflake' },
-  28: { label: 'Speaker', icon: 'speaker-high' },
+  22: { label: 'Humidifier', icon: 'drop' },
+  23: { label: 'Dehumidifier', icon: 'drop' },
+  26: { label: 'Speaker', icon: 'speaker-high' },
+  28: { label: 'Sprinkler', icon: 'drop' },
+  29: { label: 'Faucet', icon: 'drop' },
+  30: { label: 'Shower', icon: 'drop' },
   32: { label: 'TV', icon: 'television' },
+  34: { label: 'Router', icon: 'broadcast' },
   36: { label: 'Target Control', icon: 'game-controller' },
   38: { label: 'Smart Speaker', icon: 'speaker-hifi' },
 }
@@ -96,9 +105,18 @@ function startRename(currentName: string) {
 async function saveRename(deviceId: string) {
   if (!renameValue.value.trim()) return
   try {
-    await api.renameDevice(deviceId, renameValue.value.trim())
+    const newName = renameValue.value.trim()
+    await api.renameDevice(deviceId, newName)
     editingName.value = false
-    // Refresh devices
+
+    // Update the inspector's selected device in-place so it reflects immediately
+    if (selected.value?.kind === 'native') {
+      ;(selected.value as any).dev.name = newName
+    } else if (selected.value?.kind === 'hap') {
+      ;(selected.value as any).acc.displayName = newName
+    }
+
+    // Refresh the devices list in the background
     const { useDaemonStore } = await import('@/stores/daemon')
     const daemon = useDaemonStore()
     await daemon.fetchAccessories()
