@@ -1,3 +1,10 @@
+## [0.17.1](https://github.com/nubisco/openbridge/compare/v0.17.0...v0.17.1) (2026-04-29)
+
+
+### Bug Fixes
+
+* correct HAP category mapping, update inspector name on rename ([5e5573a](https://github.com/nubisco/openbridge/commit/5e5573aea2bad94310b711862254d81e89e0dd1a))
+
 # [0.17.0](https://github.com/nubisco/openbridge/compare/v0.16.2...v0.17.0) (2026-04-29)
 
 
