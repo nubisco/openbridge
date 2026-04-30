@@ -62,6 +62,8 @@ export const useDaemonStore = defineStore('daemon', () => {
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
     ws = new WebSocket(`${protocol}//${location.host}/ws/logs`)
     ws.onmessage = (e) => {
+      // Skip buffered messages when tab was hidden
+      if (document.hidden) return
       try {
         const entry: LogEntry = JSON.parse(e.data as string)
         logs.value.push(entry)

@@ -22,11 +22,11 @@ async function restartOpenBridge() {
       try {
         await api.health()
         clearInterval(poll)
-        restarting.value = false
+        location.reload()
       } catch {
         /* still restarting */
       }
-      if (attempts > 30) {
+      if (attempts > 60) {
         clearInterval(poll)
         restarting.value = false
       }

@@ -26,12 +26,12 @@ async function restartOpenBridge() {
       try {
         await api.health()
         clearInterval(poll)
-        restarting.value = false
-        sysInfo.value = await api.system()
+        // Reload the page so all stores, WebSockets, and UI reset cleanly
+        location.reload()
       } catch {
         /* still restarting */
       }
-      if (attempts > 30) {
+      if (attempts > 60) {
         clearInterval(poll)
         restarting.value = false
       }
@@ -55,9 +55,16 @@ const latest = shallowRef<MetricsSnapshot | null>(null)
 let metricsWs: WebSocket | null = null
 
 function connectMetrics() {
+  if (metricsWs) {
+    metricsWs.onclose = null
+    metricsWs.close()
+    metricsWs = null
+  }
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
   metricsWs = new WebSocket(`${protocol}//${location.host}/ws/metrics`)
   metricsWs.onmessage = (e) => {
+    // Skip buffered messages when tab was hidden to avoid catch-up animation
+    if (document.hidden) return
     try {
       const msg = JSON.parse(e.data as string)
       if (msg.type === 'history') {
@@ -82,6 +89,14 @@ function connectMetrics() {
   metricsWs.onclose = () => {
     metricsWs = null
     setTimeout(connectMetrics, 3000)
+  }
+}
+
+// When the tab becomes visible again, reconnect to get fresh history
+// instead of processing the buffered snapshots that accumulated while hidden.
+function onVisibilityChange() {
+  if (!document.hidden) {
+    connectMetrics()
   }
 }
 
@@ -168,11 +183,13 @@ onMounted(async () => {
   }
 
   connectMetrics()
+  document.addEventListener('visibilitychange', onVisibilityChange)
 })
 
 onUnmounted(() => {
   metricsWs?.close()
   metricsWs = null
+  document.removeEventListener('visibilitychange', onVisibilityChange)
 })
 </script>
 
