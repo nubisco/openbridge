@@ -1,3 +1,10 @@
+## [0.17.4](https://github.com/nubisco/openbridge/compare/v0.17.3...v0.17.4) (2026-04-30)
+
+
+### Bug Fixes
+
+* use lightbulb icon for light devices instead of lamp ([1150226](https://github.com/nubisco/openbridge/commit/115022623d0aaf1e0682aebc2d52d4913a6c569b))
+
 ## [0.17.3](https://github.com/nubisco/openbridge/compare/v0.17.2...v0.17.3) (2026-04-30)
 
 
