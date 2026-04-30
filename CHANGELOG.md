@@ -1,3 +1,10 @@
+## [0.17.2](https://github.com/nubisco/openbridge/compare/v0.17.1...v0.17.2) (2026-04-30)
+
+
+### Bug Fixes
+
+* skip buffered WS messages on tab refocus, reload page after restart ([b00daf9](https://github.com/nubisco/openbridge/commit/b00daf9b32618fd00a71597f5d329ee2baa1ed46))
+
 ## [0.17.1](https://github.com/nubisco/openbridge/compare/v0.17.0...v0.17.1) (2026-04-29)
 
 
