@@ -46,7 +46,7 @@ const CATEGORY_INFO: Record<number, { label: string; icon: string }> = {
   2: { label: 'Bridge', icon: 'intersect' },
   3: { label: 'Fan', icon: 'fan' },
   4: { label: 'Garage Door', icon: 'garage' },
-  5: { label: 'Light', icon: 'lamp' },
+  5: { label: 'Light', icon: 'lightbulb' },
   6: { label: 'Lock', icon: 'lock' },
   7: { label: 'Outlet', icon: 'plugs' },
   8: { label: 'Switch', icon: 'toggle-right' },
@@ -82,7 +82,7 @@ function categoryInfo(cat: number) {
 // ─── Native device helpers ────────────────────────────────────────────────────
 const WIDGET_ICON: Record<string, string> = {
   switch: 'plugs',
-  light: 'lamp',
+  light: 'lightbulb',
   thermostat: 'thermometer',
   dehumidifier: 'drop',
   energy_meter: 'lightning',
