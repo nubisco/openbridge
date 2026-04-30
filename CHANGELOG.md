@@ -1,3 +1,10 @@
+## [0.17.3](https://github.com/nubisco/openbridge/compare/v0.17.2...v0.17.3) (2026-04-30)
+
+
+### Bug Fixes
+
+* infer HAP accessory category from services when not explicitly set ([ef88184](https://github.com/nubisco/openbridge/commit/ef881842fd9c2504c7cdd363c27514a6459ddd48))
+
 ## [0.17.2](https://github.com/nubisco/openbridge/compare/v0.17.1...v0.17.2) (2026-04-30)
 
 
