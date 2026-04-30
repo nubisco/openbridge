@@ -489,6 +489,46 @@ export interface SerializedAccessory {
   reachable: boolean
 }
 
+// Map HAP service UUIDs to accessory categories. Used to infer the category
+// when a plugin doesn't explicitly set one (many Homebridge plugins don't).
+const SERVICE_UUID_TO_CATEGORY: Record<string, number> = {
+  '00000043-0000-1000-8000-0026BB765291': 5, // Lightbulb
+  '00000040-0000-1000-8000-0026BB765291': 3, // Fan / Fanv2
+  '000000B7-0000-1000-8000-0026BB765291': 3, // Fanv2
+  '00000041-0000-1000-8000-0026BB765291': 4, // GarageDoorOpener
+  '00000045-0000-1000-8000-0026BB765291': 6, // LockMechanism
+  '00000047-0000-1000-8000-0026BB765291': 7, // Outlet
+  '00000049-0000-1000-8000-0026BB765291': 8, // Switch
+  '0000004A-0000-1000-8000-0026BB765291': 9, // Thermostat
+  '00000080-0000-1000-8000-0026BB765291': 10, // ContactSensor
+  '00000082-0000-1000-8000-0026BB765291': 10, // HumiditySensor
+  '00000083-0000-1000-8000-0026BB765291': 10, // LeakSensor
+  '00000084-0000-1000-8000-0026BB765291': 10, // LightSensor
+  '00000085-0000-1000-8000-0026BB765291': 10, // MotionSensor
+  '00000086-0000-1000-8000-0026BB765291': 10, // OccupancySensor
+  '0000008A-0000-1000-8000-0026BB765291': 10, // TemperatureSensor
+  '0000007E-0000-1000-8000-0026BB765291': 11, // SecuritySystem
+  '00000081-0000-1000-8000-0026BB765291': 12, // Door
+  '0000008B-0000-1000-8000-0026BB765291': 13, // Window
+  '0000008C-0000-1000-8000-0026BB765291': 14, // WindowCovering
+  '000000BB-0000-1000-8000-0026BB765291': 19, // AirPurifier
+  '000000BC-0000-1000-8000-0026BB765291': 20, // HeaterCooler
+  '000000BD-0000-1000-8000-0026BB765291': 22, // HumidifierDehumidifier
+  '000000D0-0000-1000-8000-0026BB765291': 32, // Television
+}
+
+function inferCategoryFromServices(acc: any): number {
+  try {
+    for (const svc of acc.services ?? []) {
+      const cat = SERVICE_UUID_TO_CATEGORY[svc.UUID]
+      if (cat !== undefined) return cat
+    }
+  } catch {
+    /* ignore */
+  }
+  return 1 // OTHER
+}
+
 function serializeAccessory(acc: any): SerializedAccessory {
   const services: SerializedService[] = []
 
@@ -519,10 +559,14 @@ function serializeAccessory(acc: any): SerializedAccessory {
     /* skip bad service */
   }
 
+  // Use the explicit category if set and not OTHER (1), otherwise infer from services
+  const explicitCategory = acc.category ?? 1
+  const category = explicitCategory !== 1 ? explicitCategory : inferCategoryFromServices(acc)
+
   return {
     uuid: acc.UUID,
     displayName: acc.displayName,
-    category: acc.category ?? 1,
+    category,
     services,
     reachable: acc.reachable !== false,
   }
