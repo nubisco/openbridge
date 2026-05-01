@@ -1,3 +1,10 @@
+## [0.17.6](https://github.com/nubisco/openbridge/compare/v0.17.5...v0.17.6) (2026-05-01)
+
+
+### Bug Fixes
+
+* update check falsely shows "up to date" when GitHub API fails ([e9304a1](https://github.com/nubisco/openbridge/commit/e9304a1421e583db6f2e3801f17e40499f069caf))
+
 ## [0.17.5](https://github.com/nubisco/openbridge/compare/v0.17.4...v0.17.5) (2026-05-01)
 
 
