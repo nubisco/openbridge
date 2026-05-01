@@ -340,6 +340,10 @@ function generatePin() {
               Available:
               <strong>v{{ updateStatus.latest }}</strong>
             </span>
+            <span v-else-if="updateStatus.latest === null" class="version-chip version-chip--muted">
+              <NbIcon name="warning" :size="11" />
+              Unable to check
+            </span>
             <span v-else class="version-chip version-chip--ok">
               <NbIcon name="check-circle" :size="11" />
               Up to date

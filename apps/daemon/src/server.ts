@@ -97,39 +97,51 @@ export async function createServer(
   })
 
   // ─── Update check ─────────────────────────────────────────────────────────
+  // Cache the last successful check so rate-limited or failed requests
+  // can still report a known latest version instead of "up to date".
+  let lastKnownLatest: { version: string; url: string; notes: string } | null = null
+
   app.get('/api/updates/check', async () => {
     try {
       const res = await fetch('https://api.github.com/repos/nubisco/openbridge/releases/latest', {
         signal: AbortSignal.timeout(8000),
         headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'openbridge-daemon' },
       })
-      if (!res.ok) return { current: OPENBRIDGE_VERSION, latest: null, updateAvailable: false, updateMethod: 'manual' }
-      const data = (await res.json()) as { tag_name: string; html_url: string; body: string }
-      const latest = data.tag_name.replace(/^v/, '')
-      const updateAvailable = latest !== OPENBRIDGE_VERSION
-
-      // Detect if self-update is possible (volume is writable)
-      let updateMethod: 'self' | 'manual' = 'manual'
-      try {
-        const testFile = join(APP_VOLUME, '.write-test')
-        writeFileSync(testFile, 'ok')
-        const { unlinkSync } = await import('fs')
-        unlinkSync(testFile)
-        updateMethod = 'self'
-      } catch {
-        /* volume not writable — manual update only */
+      if (res.ok) {
+        const data = (await res.json()) as { tag_name: string; html_url: string; body: string }
+        lastKnownLatest = {
+          version: data.tag_name.replace(/^v/, ''),
+          url: data.html_url,
+          notes: data.body,
+        }
       }
-
-      return {
-        current: OPENBRIDGE_VERSION,
-        latest,
-        updateAvailable,
-        updateMethod,
-        releaseUrl: data.html_url,
-        releaseNotes: data.body,
-      }
+      // On non-OK (rate limit, etc.) fall through to use lastKnownLatest
     } catch {
-      return { current: OPENBRIDGE_VERSION, latest: null, updateAvailable: false, updateMethod: 'manual' }
+      // Network error, timeout, etc. — fall through to use lastKnownLatest
+    }
+
+    const latest = lastKnownLatest?.version ?? null
+    const updateAvailable = latest !== null && latest !== OPENBRIDGE_VERSION
+
+    // Detect if self-update is possible (volume is writable)
+    let updateMethod: 'self' | 'manual' = 'manual'
+    try {
+      const testFile = join(APP_VOLUME, '.write-test')
+      writeFileSync(testFile, 'ok')
+      const { unlinkSync } = await import('fs')
+      unlinkSync(testFile)
+      updateMethod = 'self'
+    } catch {
+      /* volume not writable — manual update only */
+    }
+
+    return {
+      current: OPENBRIDGE_VERSION,
+      latest,
+      updateAvailable,
+      updateMethod,
+      releaseUrl: lastKnownLatest?.url ?? null,
+      releaseNotes: lastKnownLatest?.notes ?? null,
     }
   })
 
