@@ -1,3 +1,10 @@
+## [0.17.5](https://github.com/nubisco/openbridge/compare/v0.17.4...v0.17.5) (2026-05-01)
+
+
+### Bug Fixes
+
+* persist HAP accessory cache to disk across container restarts ([26d7c21](https://github.com/nubisco/openbridge/commit/26d7c214bedcc7d99fe850f3b24716c66003419c))
+
 ## [0.17.4](https://github.com/nubisco/openbridge/compare/v0.17.3...v0.17.4) (2026-04-30)
 
 
