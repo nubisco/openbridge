@@ -9,6 +9,7 @@ import { EventEmitter } from 'events'
 import { createRequire } from 'module'
 import { fileURLToPath } from 'url'
 import { dirname, resolve } from 'path'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import os from 'os'
 import { Logger } from '@nubisco/openbridge-logger'
 
@@ -213,8 +214,17 @@ export class HomebridgeAPI extends EventEmitter {
           hapLog.warn(`  skipped accessory with no UUID: ${acc?.displayName}`)
           continue
         }
-        hapLog.info(`  + ${acc.displayName} (UUID: ${acc.UUID})`)
         acc._associatedPlatform = _platformName
+        // If a cached version is already on the bridge, remove it first
+        const existing = this._accessories.get(acc.UUID)
+        if (existing && this._bridge) {
+          try {
+            this._bridge.removeBridgedAccessory(existing, false)
+          } catch {
+            /* not on bridge yet */
+          }
+        }
+        hapLog.info(`  + ${acc.displayName} (UUID: ${acc.UUID})`)
         this._accessories.set(acc.UUID, acc)
         if (this._bridge) {
           try {
@@ -228,6 +238,7 @@ export class HomebridgeAPI extends EventEmitter {
         hapLog.error(`  ✗ failed to register ${acc?.displayName}: ${err}`)
       }
     }
+    this.saveCachedAccessories()
   }
 
   /**
@@ -244,8 +255,16 @@ export class HomebridgeAPI extends EventEmitter {
           hapLog.warn(`  skipped accessory with no UUID: ${acc?.displayName}`)
           continue
         }
-        hapLog.info(`  + ${acc.displayName} (UUID: ${acc.UUID})`)
         acc._associatedPlatform = _pluginName
+        const existing = this._accessories.get(acc.UUID)
+        if (existing && this._bridge) {
+          try {
+            this._bridge.removeBridgedAccessory(existing, false)
+          } catch {
+            /* not on bridge yet */
+          }
+        }
+        hapLog.info(`  + ${acc.displayName} (UUID: ${acc.UUID})`)
         this._accessories.set(acc.UUID, acc)
         if (this._bridge) {
           try {
@@ -259,6 +278,7 @@ export class HomebridgeAPI extends EventEmitter {
         hapLog.error(`  failed to publish ${acc?.displayName}: ${err}`)
       }
     }
+    this.saveCachedAccessories()
   }
 
   /**
@@ -292,6 +312,7 @@ export class HomebridgeAPI extends EventEmitter {
       }
       this._onAccessoryRemove?.(acc)
     }
+    this.saveCachedAccessories()
   }
 
   getPlatformRegistrations(): PlatformRegistration[] {
@@ -441,11 +462,100 @@ export class HomebridgeAPI extends EventEmitter {
   getPlatformInstances(): Map<string, any> {
     return this._platformInstances
   }
+
+  // ── Accessory cache persistence ──────────────────────────────────────────
+
+  /**
+   * Load previously cached accessories from disk and pre-populate
+   * the in-memory map + bridge so that platforms can re-adopt them
+   * via configureAccessory() before starting device discovery.
+   *
+   * Must be called after the bridge is set up but before launchPlatforms().
+   */
+  loadCachedAccessories(): void {
+    const cachePath = resolve(this.user.cachedAccessoryPath(), 'cachedAccessories.json')
+    if (!existsSync(cachePath)) {
+      hapLog.debug('No cached accessories file found, starting fresh')
+      return
+    }
+
+    let entries: CachedAccessoryEntry[]
+    try {
+      entries = JSON.parse(readFileSync(cachePath, 'utf8'))
+    } catch (err) {
+      hapLog.warn(`Failed to read cached accessories (will start fresh): ${err}`)
+      return
+    }
+
+    if (!Array.isArray(entries) || entries.length === 0) return
+
+    hapLog.info(`Restoring ${entries.length} cached accessory(ies) from disk`)
+    const PlatformAccessory = this.platformAccessory
+
+    for (const entry of entries) {
+      try {
+        const acc = new PlatformAccessory(entry.displayName, entry.UUID, entry.category)
+        acc.context = entry.context ?? {}
+        acc._associatedPlatform = entry.associatedPlatform
+
+        this._accessories.set(acc.UUID, acc)
+
+        if (this._bridge) {
+          try {
+            this._bridge.addBridgedAccessory(acc)
+          } catch (bridgeErr) {
+            hapLog.warn(`  bridge.addBridgedAccessory failed for cached "${entry.displayName}": ${bridgeErr}`)
+          }
+        }
+
+        hapLog.debug(`  restored: ${entry.displayName} (UUID: ${entry.UUID})`)
+      } catch (err) {
+        hapLog.warn(`  failed to restore cached accessory "${entry.displayName}": ${err}`)
+      }
+    }
+  }
+
+  /**
+   * Persist the current accessory map to disk so accessories survive
+   * container restarts without being re-discovered by HomeKit.
+   */
+  private saveCachedAccessories(): void {
+    const dir = this.user.cachedAccessoryPath()
+    const cachePath = resolve(dir, 'cachedAccessories.json')
+
+    const entries: CachedAccessoryEntry[] = []
+    for (const acc of this._accessories.values()) {
+      entries.push({
+        UUID: acc.UUID,
+        displayName: acc.displayName,
+        category: acc.category ?? 1,
+        context: acc.context ?? {},
+        associatedPlatform: acc._associatedPlatform ?? '',
+      })
+    }
+
+    try {
+      mkdirSync(dir, { recursive: true })
+      writeFileSync(cachePath, JSON.stringify(entries, null, 2))
+      hapLog.debug(`Saved ${entries.length} accessory(ies) to cache`)
+    } catch (err) {
+      hapLog.warn(`Failed to save accessory cache: ${err}`)
+    }
+  }
 }
 
 export interface PlatformConfig {
   platform: string
   [key: string]: unknown
+}
+
+/** Minimal representation of an accessory stored on disk between restarts. */
+export interface CachedAccessoryEntry {
+  UUID: string
+  displayName: string
+  category: number
+  context: any
+  associatedPlatform: string
 }
 
 function createPlatformLogger(baseLog: any, platformName: string) {

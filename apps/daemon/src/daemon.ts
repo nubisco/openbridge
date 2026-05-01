@@ -128,6 +128,10 @@ export class Daemon {
       // Create the HomebridgeAPI shim
       homebridgeAPI = new HomebridgeAPI(hapNodeJs, hapBridge)
 
+      // Restore cached accessories so they survive container restarts.
+      // Must happen before launchPlatforms() so configureAccessory() can re-adopt them.
+      homebridgeAPI.loadCachedAccessories()
+
       // ── Load Homebridge-compatible plugins ────────────────────────────────
       // Legacy: config.platforms[] with explicit file paths (backward compat)
       if (config.platforms && config.platforms.length > 0) {
