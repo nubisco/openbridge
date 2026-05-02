@@ -1,3 +1,10 @@
+# [0.18.0](https://github.com/nubisco/openbridge/compare/v0.17.6...v0.18.0) (2026-05-02)
+
+
+### Features
+
+* **auth:** optional Nubisco Platform sign-in ([a9864e3](https://github.com/nubisco/openbridge/commit/a9864e3ff333650d60ac174d04374f33f7c02696))
+
 ## [0.17.6](https://github.com/nubisco/openbridge/compare/v0.17.5...v0.17.6) (2026-05-01)
 
 
