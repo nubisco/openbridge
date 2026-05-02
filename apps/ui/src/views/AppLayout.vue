@@ -15,6 +15,7 @@
         :to="item.href"
         :tooltip="item.label"
         :active="route.name === item.name"
+        @click.prevent="router.push(item.href)"
       >
         <NbIcon :name="item.icon" :size="18" />
       </NbSidebarLink>
@@ -29,6 +30,13 @@
       >
         <span class="daemon-dot" />
       </div>
+      <NbSidebarLink
+        v-if="auth.config.value?.enabled"
+        :tooltip="auth.user.value ? `Sign out — ${auth.user.value.email}` : 'Sign out'"
+        @click="signOut"
+      >
+        <NbIcon name="sign-out" :size="18" />
+      </NbSidebarLink>
     </template>
 
     <!-- ═══ Topbar ═══ -->
@@ -72,18 +80,25 @@
 
 <script setup lang="ts">
 import { onMounted, onUnmounted, watch, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useDaemonStore } from '@/stores/daemon'
 import { useInspectorStore } from '@/stores/inspector'
 import { useLayoutStore } from '@/stores/layout'
+import { useAuth } from '@/composables/useAuth'
 import PluginInspector from '@/components/PluginInspector.vue'
 import MarketplacePanel from '@/components/MarketplacePanel.vue'
 import DeviceInspector from '@/components/DeviceInspector.vue'
 
 const route = useRoute()
+const router = useRouter()
 const daemon = useDaemonStore()
 const inspector = useInspectorStore()
 const layout = useLayoutStore()
+const auth = useAuth()
+
+async function signOut() {
+  await auth.logout()
+}
 
 const updateAvailable = ref<string | null>(null)
 const updateDismissed = ref(false)

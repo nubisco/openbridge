@@ -16,6 +16,7 @@ import { Logger } from '@nubisco/openbridge-logger'
 import type { LogEntry } from '@nubisco/openbridge-logger'
 import type { HomebridgeAPI } from '@nubisco/openbridge-compatibility-homebridge'
 import { startMetrics, onMetrics, getHistory } from './metrics.js'
+import { loadAuthConfig, registerAuthRoutes } from './auth.js'
 
 const log = Logger.create('system')
 
@@ -87,6 +88,13 @@ export async function createServer(
 
   await app.register(cors, { origin: true })
   await app.register(websocket)
+
+  // Optional: Nubisco Platform auth. No-op when PLATFORM_ENABLED is unset.
+  const authConfig = loadAuthConfig()
+  await registerAuthRoutes(app, authConfig)
+  if (authConfig.enabled) {
+    log.info(`Platform auth enabled, issuer=${authConfig.issuer ?? 'unset'} appId=${authConfig.appId ?? 'unset'}`)
+  }
 
   // Start live metrics collection
   startMetrics(2000)
