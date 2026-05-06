@@ -1,6 +1,6 @@
 {
   "name": "openbridge",
-  "version": "0.18.0",
+  "version": "0.18.1",
   "private": true,
   "packageManager": "pnpm@9.0.0",
   "description": "Local-first home automation bridge for developers. Plugin-based, TypeScript-first, Homebridge-compatible.",

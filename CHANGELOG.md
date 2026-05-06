@@ -1,3 +1,10 @@
+## [0.18.1](https://github.com/nubisco/openbridge/compare/v0.18.0...v0.18.1) (2026-05-06)
+
+
+### Bug Fixes
+
+* **compatibility-homebridge:** infer Camera and Doorbell categories ([d94796c](https://github.com/nubisco/openbridge/commit/d94796c411ac28b68618c1252da49aee8a210ced))
+
 # [0.18.0](https://github.com/nubisco/openbridge/compare/v0.17.6...v0.18.0) (2026-05-02)
 
 
