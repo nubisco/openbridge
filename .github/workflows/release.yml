@@ -25,7 +25,7 @@ jobs:
           token: ${{ secrets.GH_TOKEN }}
           persist-credentials: true
 
-      - uses: pnpm/action-setup@v6
+      - uses: pnpm/action-setup@v4
 
       - uses: actions/setup-node@v6
         with:
