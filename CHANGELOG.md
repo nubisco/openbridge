@@ -1,3 +1,11 @@
+## [0.18.2](https://github.com/nubisco/openbridge/compare/v0.18.1...v0.18.2) (2026-05-14)
+
+
+### Bug Fixes
+
+* **ci:** drop with.version under pnpm/action-setup v6 ([c09851b](https://github.com/nubisco/openbridge/commit/c09851bb0a10ca1e2921ca8b583911db36c048e9))
+* **ci:** revert pnpm/action-setup back to v4 for openbridge ([b092670](https://github.com/nubisco/openbridge/commit/b0926700c8fdb1bb2a4c3ce1b2440d1825e45ab4))
+
 ## [0.18.1](https://github.com/nubisco/openbridge/compare/v0.18.0...v0.18.1) (2026-05-06)
 
 
