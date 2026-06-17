@@ -1,3 +1,171 @@
+<template>
+  <div class="devices-view">
+    <div class="devices-toolbar">
+      <div v-if="totalDevices > 0" class="toolbar-count">
+        {{ totalDevices }} device{{ totalDevices !== 1 ? 's' : '' }}
+        <span v-if="nativeDevices.length > 0" class="toolbar-badge">{{ nativeDevices.length }} native</span>
+      </div>
+      <div class="toolbar-spacer" />
+      <NbButton variant="ghost" size="sm" icon="arrows-clockwise" :loading="refreshing" @click="refresh" />
+    </div>
+
+    <div v-if="totalDevices === 0" class="empty-state">
+      <NbIcon name="devices" :size="40" />
+      <p>No devices registered yet.</p>
+      <p class="empty-hint">
+        Devices appear here once a platform plugin registers accessories.
+        <br />
+        This page auto-refreshes every 3 seconds — discovery can take up to 60s.
+      </p>
+    </div>
+
+    <div v-else class="devices-layout">
+      <!-- Device grid -->
+      <div class="device-grid">
+        <!-- Native plugin devices -->
+        <div
+          v-for="dev in nativeDevices"
+          :key="'native:' + dev.id"
+          class="device-card native-card"
+          :class="{ selected: selectedDeviceId === dev.id }"
+          @click="selectNative(dev)"
+        >
+          <div class="device-icon native-icon">
+            <NbIcon :name="widgetIcon(dev.widgetType)" :size="22" />
+          </div>
+          <div class="device-info">
+            <div class="device-name">{{ dev.name }}</div>
+            <div class="device-type">{{ widgetLabel(dev.widgetType) }}</div>
+            <!-- Inline widget summary -->
+            <div class="device-summary">
+              <!-- Energy meter -->
+              <template v-if="dev.widgetType === 'energy_meter' && dev.telemetry.power !== undefined">
+                <span class="summary-primary">{{ fmtNum(dev.telemetry.power, 1) }} W</span>
+              </template>
+              <!-- Thermostat -->
+              <template v-else-if="dev.widgetType === 'thermostat' && dev.telemetry.currentTemperature !== undefined">
+                <span class="summary-primary">{{ fmtNum(dev.telemetry.currentTemperature, 1) }}°C</span>
+                <span v-if="dev.telemetry.targetTemperature !== undefined" class="summary-secondary">
+                  target {{ fmtNum(dev.telemetry.targetTemperature, 1) }}°C
+                </span>
+              </template>
+              <!-- Dehumidifier -->
+              <template v-else-if="dev.widgetType === 'dehumidifier' && dev.telemetry.currentHumidity !== undefined">
+                <span class="summary-primary">{{ fmtNum(dev.telemetry.currentHumidity, 0) }}%</span>
+              </template>
+              <!-- Active state for switch/light -->
+              <template v-else-if="dev.telemetry.active !== undefined">
+                <span class="summary-status" :class="dev.telemetry.active ? 'on' : 'off'">
+                  {{ dev.telemetry.active ? 'On' : 'Off' }}
+                </span>
+              </template>
+            </div>
+            <!-- On/off toggle for all controllable devices -->
+            <div v-if="dev.telemetry.active !== undefined" class="card-controls" @click.stop>
+              <NbSwitch
+                :model-value="!!dev.telemetry.active"
+                @update:model-value="requestControl(dev, 'active', $event)"
+              />
+            </div>
+            <!-- Thermostat stepper -->
+            <div
+              v-if="dev.widgetType === 'thermostat' && dev.telemetry.targetTemperature !== undefined"
+              class="card-controls"
+              @click.stop
+            >
+              <div class="ctrl-stepper">
+                <button
+                  @click.stop="
+                    sendControl(dev.id, 'targetTemperature', (Number(dev.telemetry.targetTemperature) || 20) - 1)
+                  "
+                >
+                  −
+                </button>
+                <span>{{ fmtNum(dev.telemetry.targetTemperature, 0) }}°</span>
+                <button
+                  @click.stop="
+                    sendControl(dev.id, 'targetTemperature', (Number(dev.telemetry.targetTemperature) || 20) + 1)
+                  "
+                >
+                  +
+                </button>
+              </div>
+            </div>
+            <!-- Dehumidifier stepper -->
+            <div
+              v-if="dev.widgetType === 'dehumidifier' && dev.telemetry.targetHumidity !== undefined"
+              class="card-controls"
+              @click.stop
+            >
+              <div class="ctrl-stepper">
+                <button
+                  @click.stop="sendControl(dev.id, 'targetHumidity', (Number(dev.telemetry.targetHumidity) || 50) - 5)"
+                >
+                  −
+                </button>
+                <span>{{ fmtNum(dev.telemetry.targetHumidity, 0) }}%</span>
+                <button
+                  @click.stop="sendControl(dev.id, 'targetHumidity', (Number(dev.telemetry.targetHumidity) || 50) + 5)"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="device-reachability" :class="dev.pluginStatus === 'running' ? 'online' : 'offline'" />
+        </div>
+
+        <!-- HAP / Homebridge accessories -->
+        <div
+          v-for="acc in daemon.accessories"
+          :key="acc.uuid"
+          class="device-card hap-card"
+          :class="{
+            selected: selectedDeviceId === acc.uuid,
+            unreachable: !acc.reachable,
+          }"
+          @click="selectHap(acc)"
+        >
+          <div class="device-icon hap-icon" :class="{ unreachable: !acc.reachable }">
+            <NbIcon :name="categoryInfo(acc.category).icon" :size="22" />
+          </div>
+          <div class="device-info">
+            <div class="device-name">{{ acc.displayName }}</div>
+            <div class="device-type">{{ categoryInfo(acc.category).label }}</div>
+            <div v-if="hapPrimaryValue(acc)" class="device-summary">
+              <span class="summary-primary">{{ hapPrimaryValue(acc) }}</span>
+            </div>
+            <!-- On/Off toggle for controllable accessories -->
+            <div v-if="hapOnCharacteristic(acc)" class="card-controls" @click.stop>
+              <NbSwitch
+                :model-value="!!hapOnCharacteristic(acc)?.value"
+                @update:model-value="toggleHapCharacteristic(acc, $event)"
+              />
+            </div>
+          </div>
+          <div class="device-reachability" :class="acc.reachable ? 'online' : 'offline'" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Confirmation dialog for safety-critical controls -->
+    <Teleport to="body">
+      <div v-if="confirmDialog.visible" class="confirm-overlay" @click.self="cancelControl">
+        <div class="confirm-dialog">
+          <div class="confirm-icon">
+            <NbIcon name="warning" :size="24" />
+          </div>
+          <p class="confirm-message">{{ confirmDialog.message }}</p>
+          <div class="confirm-actions">
+            <NbButton variant="ghost" size="sm" @click="cancelControl">Cancel</NbButton>
+            <NbButton variant="primary" size="sm" @click="confirmControl">Confirm</NbButton>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, computed } from 'vue'
 import { useDaemonStore } from '@/stores/daemon'
@@ -248,174 +416,6 @@ onUnmounted(() => {
   if (pollInterval) clearInterval(pollInterval)
 })
 </script>
-
-<template>
-  <div class="devices-view">
-    <div class="devices-toolbar">
-      <div v-if="totalDevices > 0" class="toolbar-count">
-        {{ totalDevices }} device{{ totalDevices !== 1 ? 's' : '' }}
-        <span v-if="nativeDevices.length > 0" class="toolbar-badge">{{ nativeDevices.length }} native</span>
-      </div>
-      <div class="toolbar-spacer" />
-      <NbButton variant="ghost" size="sm" icon="arrows-clockwise" :loading="refreshing" @click="refresh" />
-    </div>
-
-    <div v-if="totalDevices === 0" class="empty-state">
-      <NbIcon name="devices" :size="40" />
-      <p>No devices registered yet.</p>
-      <p class="empty-hint">
-        Devices appear here once a platform plugin registers accessories.
-        <br />
-        This page auto-refreshes every 3 seconds — discovery can take up to 60s.
-      </p>
-    </div>
-
-    <div v-else class="devices-layout">
-      <!-- Device grid -->
-      <div class="device-grid">
-        <!-- Native plugin devices -->
-        <div
-          v-for="dev in nativeDevices"
-          :key="'native:' + dev.id"
-          class="device-card native-card"
-          :class="{ selected: selectedDeviceId === dev.id }"
-          @click="selectNative(dev)"
-        >
-          <div class="device-icon native-icon">
-            <NbIcon :name="widgetIcon(dev.widgetType)" :size="22" />
-          </div>
-          <div class="device-info">
-            <div class="device-name">{{ dev.name }}</div>
-            <div class="device-type">{{ widgetLabel(dev.widgetType) }}</div>
-            <!-- Inline widget summary -->
-            <div class="device-summary">
-              <!-- Energy meter -->
-              <template v-if="dev.widgetType === 'energy_meter' && dev.telemetry.power !== undefined">
-                <span class="summary-primary">{{ fmtNum(dev.telemetry.power, 1) }} W</span>
-              </template>
-              <!-- Thermostat -->
-              <template v-else-if="dev.widgetType === 'thermostat' && dev.telemetry.currentTemperature !== undefined">
-                <span class="summary-primary">{{ fmtNum(dev.telemetry.currentTemperature, 1) }}°C</span>
-                <span v-if="dev.telemetry.targetTemperature !== undefined" class="summary-secondary">
-                  target {{ fmtNum(dev.telemetry.targetTemperature, 1) }}°C
-                </span>
-              </template>
-              <!-- Dehumidifier -->
-              <template v-else-if="dev.widgetType === 'dehumidifier' && dev.telemetry.currentHumidity !== undefined">
-                <span class="summary-primary">{{ fmtNum(dev.telemetry.currentHumidity, 0) }}%</span>
-              </template>
-              <!-- Active state for switch/light -->
-              <template v-else-if="dev.telemetry.active !== undefined">
-                <span class="summary-status" :class="dev.telemetry.active ? 'on' : 'off'">
-                  {{ dev.telemetry.active ? 'On' : 'Off' }}
-                </span>
-              </template>
-            </div>
-            <!-- On/off toggle for all controllable devices -->
-            <div v-if="dev.telemetry.active !== undefined" class="card-controls" @click.stop>
-              <NbSwitch
-                :model-value="!!dev.telemetry.active"
-                @update:model-value="requestControl(dev, 'active', $event)"
-              />
-            </div>
-            <!-- Thermostat stepper -->
-            <div
-              v-if="dev.widgetType === 'thermostat' && dev.telemetry.targetTemperature !== undefined"
-              class="card-controls"
-              @click.stop
-            >
-              <div class="ctrl-stepper">
-                <button
-                  @click.stop="
-                    sendControl(dev.id, 'targetTemperature', (Number(dev.telemetry.targetTemperature) || 20) - 1)
-                  "
-                >
-                  −
-                </button>
-                <span>{{ fmtNum(dev.telemetry.targetTemperature, 0) }}°</span>
-                <button
-                  @click.stop="
-                    sendControl(dev.id, 'targetTemperature', (Number(dev.telemetry.targetTemperature) || 20) + 1)
-                  "
-                >
-                  +
-                </button>
-              </div>
-            </div>
-            <!-- Dehumidifier stepper -->
-            <div
-              v-if="dev.widgetType === 'dehumidifier' && dev.telemetry.targetHumidity !== undefined"
-              class="card-controls"
-              @click.stop
-            >
-              <div class="ctrl-stepper">
-                <button
-                  @click.stop="sendControl(dev.id, 'targetHumidity', (Number(dev.telemetry.targetHumidity) || 50) - 5)"
-                >
-                  −
-                </button>
-                <span>{{ fmtNum(dev.telemetry.targetHumidity, 0) }}%</span>
-                <button
-                  @click.stop="sendControl(dev.id, 'targetHumidity', (Number(dev.telemetry.targetHumidity) || 50) + 5)"
-                >
-                  +
-                </button>
-              </div>
-            </div>
-          </div>
-          <div class="device-reachability" :class="dev.pluginStatus === 'running' ? 'online' : 'offline'" />
-        </div>
-
-        <!-- HAP / Homebridge accessories -->
-        <div
-          v-for="acc in daemon.accessories"
-          :key="acc.uuid"
-          class="device-card hap-card"
-          :class="{
-            selected: selectedDeviceId === acc.uuid,
-            unreachable: !acc.reachable,
-          }"
-          @click="selectHap(acc)"
-        >
-          <div class="device-icon hap-icon" :class="{ unreachable: !acc.reachable }">
-            <NbIcon :name="categoryInfo(acc.category).icon" :size="22" />
-          </div>
-          <div class="device-info">
-            <div class="device-name">{{ acc.displayName }}</div>
-            <div class="device-type">{{ categoryInfo(acc.category).label }}</div>
-            <div v-if="hapPrimaryValue(acc)" class="device-summary">
-              <span class="summary-primary">{{ hapPrimaryValue(acc) }}</span>
-            </div>
-            <!-- On/Off toggle for controllable accessories -->
-            <div v-if="hapOnCharacteristic(acc)" class="card-controls" @click.stop>
-              <NbSwitch
-                :model-value="!!hapOnCharacteristic(acc)?.value"
-                @update:model-value="toggleHapCharacteristic(acc, $event)"
-              />
-            </div>
-          </div>
-          <div class="device-reachability" :class="acc.reachable ? 'online' : 'offline'" />
-        </div>
-      </div>
-    </div>
-
-    <!-- Confirmation dialog for safety-critical controls -->
-    <Teleport to="body">
-      <div v-if="confirmDialog.visible" class="confirm-overlay" @click.self="cancelControl">
-        <div class="confirm-dialog">
-          <div class="confirm-icon">
-            <NbIcon name="warning" :size="24" />
-          </div>
-          <p class="confirm-message">{{ confirmDialog.message }}</p>
-          <div class="confirm-actions">
-            <NbButton variant="ghost" size="sm" @click="cancelControl">Cancel</NbButton>
-            <NbButton variant="primary" size="sm" @click="confirmControl">Confirm</NbButton>
-          </div>
-        </div>
-      </div>
-    </Teleport>
-  </div>
-</template>
 
 <style lang="scss" scoped>
 .devices-view {

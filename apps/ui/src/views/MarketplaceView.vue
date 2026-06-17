@@ -1,3 +1,94 @@
+<template>
+  <div class="marketplace-view">
+    <div class="marketplace-toolbar">
+      <div class="search-wrap">
+        <NbIcon name="magnifying-glass" :size="15" class="search-icon" />
+        <input v-model="query" placeholder="Search Homebridge plugins..." class="search-input" @input="onInput" />
+      </div>
+      <span v-if="total > 0" class="result-count">{{ total.toLocaleString() }} plugins</span>
+    </div>
+
+    <!-- Post-install guidance -->
+    <div v-if="justInstalled" class="install-success">
+      <div class="install-success-header">
+        <NbIcon name="check-circle" :size="16" />
+        <strong>{{ justInstalled.name }} installed</strong>
+        <button class="dismiss-btn" @click="justInstalled = null"><NbIcon name="x" :size="13" /></button>
+      </div>
+      <p>To use this plugin, add a platform entry to your config and restart the daemon:</p>
+      <pre class="config-snippet">
+{
+  "platform": "YourPlatformName",
+  "plugin": "{{ justInstalled.mainFile }}"
+}</pre
+      >
+      <button class="btn-open-config" @click="goToConfig">
+        <NbIcon name="gear" :size="13" />
+        Open Config Editor
+      </button>
+    </div>
+
+    <div v-if="error" class="error-banner">
+      <NbIcon name="warning" :size="14" />
+      {{ error }}
+    </div>
+
+    <div v-if="loading && results.length === 0" class="loading-state">
+      <NbIcon name="spinner" :size="28" />
+      <span>Searching npm registry...</span>
+    </div>
+
+    <div v-else-if="results.length === 0 && !loading" class="empty-state">
+      <NbIcon name="package" :size="36" />
+      <p>No plugins found for "{{ query }}"</p>
+    </div>
+
+    <div v-else class="plugin-list">
+      <div v-for="pkg in results" :key="pkg.name" class="plugin-row">
+        <div class="plugin-row-icon">
+          <NbIcon name="puzzle-piece" :size="18" />
+        </div>
+        <div class="plugin-row-body">
+          <div class="plugin-row-header">
+            <span class="plugin-name">{{ pkg.name }}</span>
+            <span class="plugin-version">v{{ pkg.version }}</span>
+            <span class="hb-badge">
+              <NbIcon name="intersect" :size="10" />
+              Homebridge
+            </span>
+          </div>
+          <p v-if="pkg.description" class="plugin-desc">{{ pkg.description }}</p>
+          <div class="plugin-meta">
+            <span v-if="authorName(pkg)">by {{ authorName(pkg) }}</span>
+            <span v-if="authorName(pkg)" class="sep">·</span>
+            <span>updated {{ relativeDate(pkg.date) }}</span>
+            <span v-if="pkg.links?.npm" class="sep">·</span>
+            <a v-if="pkg.links?.npm" :href="pkg.links.npm" target="_blank" class="npm-link">npm</a>
+          </div>
+        </div>
+        <div class="plugin-row-actions">
+          <button v-if="installed.has(pkg.name)" class="btn-installed" disabled>
+            <NbIcon name="check" :size="13" />
+            Installed
+          </button>
+          <!-- fallthrough to installing/install -->
+          <button v-else-if="installing === pkg.name" class="btn-installing" disabled>
+            <NbIcon name="spinner" :size="13" />
+            Installing...
+          </button>
+          <button v-else class="btn-install" :disabled="!!installing" @click="install(pkg)">Install</button>
+        </div>
+      </div>
+
+      <div v-if="results.length < total" class="load-more">
+        <button class="btn-load-more" :disabled="loading" @click="loadMore">
+          {{ loading ? 'Loading...' : `Load more (${total - results.length} remaining)` }}
+        </button>
+      </div>
+    </div>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
@@ -93,97 +184,6 @@ onMounted(async () => {
   search()
 })
 </script>
-
-<template>
-  <div class="marketplace-view">
-    <div class="marketplace-toolbar">
-      <div class="search-wrap">
-        <NbIcon name="magnifying-glass" :size="15" class="search-icon" />
-        <input v-model="query" placeholder="Search Homebridge plugins..." class="search-input" @input="onInput" />
-      </div>
-      <span v-if="total > 0" class="result-count">{{ total.toLocaleString() }} plugins</span>
-    </div>
-
-    <!-- Post-install guidance -->
-    <div v-if="justInstalled" class="install-success">
-      <div class="install-success-header">
-        <NbIcon name="check-circle" :size="16" />
-        <strong>{{ justInstalled.name }} installed</strong>
-        <button class="dismiss-btn" @click="justInstalled = null"><NbIcon name="x" :size="13" /></button>
-      </div>
-      <p>To use this plugin, add a platform entry to your config and restart the daemon:</p>
-      <pre class="config-snippet">
-{
-  "platform": "YourPlatformName",
-  "plugin": "{{ justInstalled.mainFile }}"
-}</pre
-      >
-      <button class="btn-open-config" @click="goToConfig">
-        <NbIcon name="gear" :size="13" />
-        Open Config Editor
-      </button>
-    </div>
-
-    <div v-if="error" class="error-banner">
-      <NbIcon name="warning" :size="14" />
-      {{ error }}
-    </div>
-
-    <div v-if="loading && results.length === 0" class="loading-state">
-      <NbIcon name="spinner" :size="28" />
-      <span>Searching npm registry...</span>
-    </div>
-
-    <div v-else-if="results.length === 0 && !loading" class="empty-state">
-      <NbIcon name="package" :size="36" />
-      <p>No plugins found for "{{ query }}"</p>
-    </div>
-
-    <div v-else class="plugin-list">
-      <div v-for="pkg in results" :key="pkg.name" class="plugin-row">
-        <div class="plugin-row-icon">
-          <NbIcon name="puzzle-piece" :size="18" />
-        </div>
-        <div class="plugin-row-body">
-          <div class="plugin-row-header">
-            <span class="plugin-name">{{ pkg.name }}</span>
-            <span class="plugin-version">v{{ pkg.version }}</span>
-            <span class="hb-badge">
-              <NbIcon name="intersect" :size="10" />
-              Homebridge
-            </span>
-          </div>
-          <p v-if="pkg.description" class="plugin-desc">{{ pkg.description }}</p>
-          <div class="plugin-meta">
-            <span v-if="authorName(pkg)">by {{ authorName(pkg) }}</span>
-            <span v-if="authorName(pkg)" class="sep">·</span>
-            <span>updated {{ relativeDate(pkg.date) }}</span>
-            <span v-if="pkg.links?.npm" class="sep">·</span>
-            <a v-if="pkg.links?.npm" :href="pkg.links.npm" target="_blank" class="npm-link">npm</a>
-          </div>
-        </div>
-        <div class="plugin-row-actions">
-          <button v-if="installed.has(pkg.name)" class="btn-installed" disabled>
-            <NbIcon name="check" :size="13" />
-            Installed
-          </button>
-          <!-- fallthrough to installing/install -->
-          <button v-else-if="installing === pkg.name" class="btn-installing" disabled>
-            <NbIcon name="spinner" :size="13" />
-            Installing...
-          </button>
-          <button v-else class="btn-install" :disabled="!!installing" @click="install(pkg)">Install</button>
-        </div>
-      </div>
-
-      <div v-if="results.length < total" class="load-more">
-        <button class="btn-load-more" :disabled="loading" @click="loadMore">
-          {{ loading ? 'Loading...' : `Load more (${total - results.length} remaining)` }}
-        </button>
-      </div>
-    </div>
-  </div>
-</template>
 
 <style lang="scss" scoped>
 .marketplace-view {

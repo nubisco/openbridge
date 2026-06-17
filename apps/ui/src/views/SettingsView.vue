@@ -1,216 +1,3 @@
-<script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
-import { api, type BridgeConfig, type UpdateStatus } from '@/api'
-import { useLayoutStore } from '@/stores/layout'
-
-const layout = useLayoutStore()
-const saving = ref(false)
-const saved = ref(false)
-const error = ref<string | null>(null)
-const restarting = ref(false)
-
-// ─── Updates ─────────────────────────────────────────────────────────────────
-const updateStatus = ref<UpdateStatus | null>(null)
-const checkingUpdate = ref(false)
-const applying = ref(false)
-const updateError = ref<string | null>(null)
-const updateStage = ref('')
-const updateProgressPct = ref(0)
-const updateMessage = ref('')
-let updateWs: WebSocket | null = null
-
-async function checkUpdate() {
-  checkingUpdate.value = true
-  updateError.value = null
-  try {
-    updateStatus.value = await api.updates.check()
-  } catch (e) {
-    updateError.value = String(e)
-  } finally {
-    checkingUpdate.value = false
-  }
-}
-
-function connectUpdateWs() {
-  const proto = location.protocol === 'https:' ? 'wss' : 'ws'
-  updateWs = new WebSocket(`${proto}://${location.host}/ws/updates`)
-  updateWs.onmessage = (ev) => {
-    try {
-      const msg = JSON.parse(ev.data)
-      updateStage.value = msg.stage ?? ''
-      updateProgressPct.value = Math.round((msg.progress ?? 0) * 100)
-      updateMessage.value = msg.message ?? ''
-
-      if (msg.stage === 'restarting') {
-        // Daemon will restart — poll health
-        pollAfterRestart()
-      }
-      if (msg.stage === 'error') {
-        updateError.value = msg.message
-        applying.value = false
-      }
-    } catch {
-      /* ignore */
-    }
-  }
-  updateWs.onclose = () => {
-    // If we were applying and WS closed, daemon likely restarted
-    if (applying.value) pollAfterRestart()
-  }
-}
-
-function pollAfterRestart() {
-  let attempts = 0
-  const poll = setInterval(async () => {
-    attempts++
-    try {
-      await api.health()
-      clearInterval(poll)
-      applying.value = false
-      updateStage.value = ''
-      updateMessage.value = ''
-      updateStatus.value = null
-      await checkUpdate()
-    } catch {
-      /* still restarting */
-    }
-    if (attempts > 60) {
-      clearInterval(poll)
-      applying.value = false
-      updateError.value = 'Timed out waiting for restart'
-    }
-  }, 2000)
-}
-
-async function applyUpdate() {
-  if (applying.value) return
-  applying.value = true
-  updateError.value = null
-  updateStage.value = 'downloading'
-  updateMessage.value = 'Starting update...'
-  updateProgressPct.value = 0
-
-  // Connect WebSocket for live progress
-  connectUpdateWs()
-
-  try {
-    await api.updates.apply()
-    // The async update runs in the background — WS will report progress
-  } catch (e) {
-    updateError.value = String(e)
-    applying.value = false
-  }
-}
-
-async function rollbackUpdate() {
-  if (applying.value) return
-  applying.value = true
-  updateError.value = null
-  updateMessage.value = 'Rolling back...'
-  try {
-    await api.updates.rollback()
-    pollAfterRestart()
-  } catch (e) {
-    updateError.value = String(e)
-    applying.value = false
-  }
-}
-
-const bridge = ref<BridgeConfig>({
-  name: 'OpenBridge',
-  port: 8582,
-  hapPort: 51829,
-  pincode: '031-45-154',
-  username: '',
-  logLevel: 'info',
-})
-
-onMounted(async () => {
-  layout.setPage('Settings')
-  try {
-    const res = await api.bridge()
-    if (res && typeof res === 'object') {
-      bridge.value = {
-        name: res.name ?? 'OpenBridge',
-        port: res.port ?? 8582,
-        hapPort: res.hapPort ?? 51829,
-        pincode: res.pincode ?? '031-45-154',
-        username: res.username ?? '',
-        logLevel: res.logLevel ?? 'info',
-      }
-    }
-  } catch {
-    /* use defaults */
-  }
-  checkUpdate()
-})
-
-onUnmounted(() => {
-  if (updateWs) {
-    updateWs.close()
-    updateWs = null
-  }
-})
-
-async function save() {
-  if (saving.value) return
-  saving.value = true
-  error.value = null
-  saved.value = false
-  try {
-    const payload: Partial<BridgeConfig> = {
-      name: bridge.value.name,
-      port: Number(bridge.value.port),
-      hapPort: Number(bridge.value.hapPort),
-      pincode: bridge.value.pincode,
-      logLevel: bridge.value.logLevel,
-    }
-    if (bridge.value.username) payload.username = bridge.value.username
-    await api.saveBridge(payload)
-    saved.value = true
-    setTimeout(() => {
-      saved.value = false
-    }, 3000)
-  } catch (e) {
-    error.value = String(e)
-  } finally {
-    saving.value = false
-  }
-}
-
-async function restart() {
-  if (restarting.value) return
-  restarting.value = true
-  try {
-    await api.daemon.restart()
-    let attempts = 0
-    const poll = setInterval(async () => {
-      attempts++
-      try {
-        await api.health()
-        clearInterval(poll)
-        location.reload()
-      } catch {
-        /* still restarting */
-      }
-      if (attempts > 60) {
-        clearInterval(poll)
-        restarting.value = false
-      }
-    }, 1000)
-  } catch {
-    restarting.value = false
-  }
-}
-
-function generatePin() {
-  const n = () => Math.floor(Math.random() * 9) + 1
-  const pad3 = () => `${n()}${Math.floor(Math.random() * 10)}${Math.floor(Math.random() * 10)}`
-  const pad2 = () => `${Math.floor(Math.random() * 10)}${Math.floor(Math.random() * 10)}`
-  bridge.value.pincode = `${pad3()}-${pad2()}-${pad3()}`
-}
-</script>
-
 <template>
   <div class="settings-view">
     <!-- Bridge Settings -->
@@ -450,6 +237,219 @@ function generatePin() {
     </section>
   </div>
 </template>
+
+<script setup lang="ts">
+import { ref, onMounted, onUnmounted } from 'vue'
+import { api, type BridgeConfig, type UpdateStatus } from '@/api'
+import { useLayoutStore } from '@/stores/layout'
+
+const layout = useLayoutStore()
+const saving = ref(false)
+const saved = ref(false)
+const error = ref<string | null>(null)
+const restarting = ref(false)
+
+// ─── Updates ─────────────────────────────────────────────────────────────────
+const updateStatus = ref<UpdateStatus | null>(null)
+const checkingUpdate = ref(false)
+const applying = ref(false)
+const updateError = ref<string | null>(null)
+const updateStage = ref('')
+const updateProgressPct = ref(0)
+const updateMessage = ref('')
+let updateWs: WebSocket | null = null
+
+async function checkUpdate() {
+  checkingUpdate.value = true
+  updateError.value = null
+  try {
+    updateStatus.value = await api.updates.check()
+  } catch (e) {
+    updateError.value = String(e)
+  } finally {
+    checkingUpdate.value = false
+  }
+}
+
+function connectUpdateWs() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws'
+  updateWs = new WebSocket(`${proto}://${location.host}/ws/updates`)
+  updateWs.onmessage = (ev) => {
+    try {
+      const msg = JSON.parse(ev.data)
+      updateStage.value = msg.stage ?? ''
+      updateProgressPct.value = Math.round((msg.progress ?? 0) * 100)
+      updateMessage.value = msg.message ?? ''
+
+      if (msg.stage === 'restarting') {
+        // Daemon will restart — poll health
+        pollAfterRestart()
+      }
+      if (msg.stage === 'error') {
+        updateError.value = msg.message
+        applying.value = false
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  updateWs.onclose = () => {
+    // If we were applying and WS closed, daemon likely restarted
+    if (applying.value) pollAfterRestart()
+  }
+}
+
+function pollAfterRestart() {
+  let attempts = 0
+  const poll = setInterval(async () => {
+    attempts++
+    try {
+      await api.health()
+      clearInterval(poll)
+      applying.value = false
+      updateStage.value = ''
+      updateMessage.value = ''
+      updateStatus.value = null
+      await checkUpdate()
+    } catch {
+      /* still restarting */
+    }
+    if (attempts > 60) {
+      clearInterval(poll)
+      applying.value = false
+      updateError.value = 'Timed out waiting for restart'
+    }
+  }, 2000)
+}
+
+async function applyUpdate() {
+  if (applying.value) return
+  applying.value = true
+  updateError.value = null
+  updateStage.value = 'downloading'
+  updateMessage.value = 'Starting update...'
+  updateProgressPct.value = 0
+
+  // Connect WebSocket for live progress
+  connectUpdateWs()
+
+  try {
+    await api.updates.apply()
+    // The async update runs in the background — WS will report progress
+  } catch (e) {
+    updateError.value = String(e)
+    applying.value = false
+  }
+}
+
+async function rollbackUpdate() {
+  if (applying.value) return
+  applying.value = true
+  updateError.value = null
+  updateMessage.value = 'Rolling back...'
+  try {
+    await api.updates.rollback()
+    pollAfterRestart()
+  } catch (e) {
+    updateError.value = String(e)
+    applying.value = false
+  }
+}
+
+const bridge = ref<BridgeConfig>({
+  name: 'OpenBridge',
+  port: 8582,
+  hapPort: 51829,
+  pincode: '031-45-154',
+  username: '',
+  logLevel: 'info',
+})
+
+onMounted(async () => {
+  layout.setPage('Settings')
+  try {
+    const res = await api.bridge()
+    if (res && typeof res === 'object') {
+      bridge.value = {
+        name: res.name ?? 'OpenBridge',
+        port: res.port ?? 8582,
+        hapPort: res.hapPort ?? 51829,
+        pincode: res.pincode ?? '031-45-154',
+        username: res.username ?? '',
+        logLevel: res.logLevel ?? 'info',
+      }
+    }
+  } catch {
+    /* use defaults */
+  }
+  checkUpdate()
+})
+
+onUnmounted(() => {
+  if (updateWs) {
+    updateWs.close()
+    updateWs = null
+  }
+})
+
+async function save() {
+  if (saving.value) return
+  saving.value = true
+  error.value = null
+  saved.value = false
+  try {
+    const payload: Partial<BridgeConfig> = {
+      name: bridge.value.name,
+      port: Number(bridge.value.port),
+      hapPort: Number(bridge.value.hapPort),
+      pincode: bridge.value.pincode,
+      logLevel: bridge.value.logLevel,
+    }
+    if (bridge.value.username) payload.username = bridge.value.username
+    await api.saveBridge(payload)
+    saved.value = true
+    setTimeout(() => {
+      saved.value = false
+    }, 3000)
+  } catch (e) {
+    error.value = String(e)
+  } finally {
+    saving.value = false
+  }
+}
+
+async function restart() {
+  if (restarting.value) return
+  restarting.value = true
+  try {
+    await api.daemon.restart()
+    let attempts = 0
+    const poll = setInterval(async () => {
+      attempts++
+      try {
+        await api.health()
+        clearInterval(poll)
+        location.reload()
+      } catch {
+        /* still restarting */
+      }
+      if (attempts > 60) {
+        clearInterval(poll)
+        restarting.value = false
+      }
+    }, 1000)
+  } catch {
+    restarting.value = false
+  }
+}
+
+function generatePin() {
+  const n = () => Math.floor(Math.random() * 9) + 1
+  const pad3 = () => `${n()}${Math.floor(Math.random() * 10)}${Math.floor(Math.random() * 10)}`
+  const pad2 = () => `${Math.floor(Math.random() * 10)}${Math.floor(Math.random() * 10)}`
+  bridge.value.pincode = `${pad3()}-${pad2()}-${pad3()}`
+}
+</script>
 
 <style lang="scss" scoped>
 .settings-view {

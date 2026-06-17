@@ -1,3 +1,10 @@
+<template>
+  <div :style="{ height: `${height ?? 220}px`, width: '100%', position: 'relative' }">
+    <div ref="containerEl" style="height: 100%; width: 100%" />
+    <div v-if="!ready" class="monaco-skeleton" />
+  </div>
+</template>
+
 <script setup lang="ts">
 import { ref, watch, onMounted, onBeforeUnmount, shallowRef } from 'vue'
 import loader from '@monaco-editor/loader'
@@ -63,13 +70,6 @@ watch(
   },
 )
 </script>
-
-<template>
-  <div :style="{ height: `${height ?? 220}px`, width: '100%', position: 'relative' }">
-    <div ref="containerEl" style="height: 100%; width: 100%" />
-    <div v-if="!ready" class="monaco-skeleton" />
-  </div>
-</template>
 
 <style scoped>
 .monaco-skeleton {

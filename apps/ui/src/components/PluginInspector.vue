@@ -1,3 +1,331 @@
+<template>
+  <div v-if="inspector.selectedPlugin" class="inspector">
+    <div class="inspector-header">
+      <div class="inspector-avatar" :class="inspector.selectedPlugin.status">
+        <NbIcon name="puzzle-piece" :size="24" />
+      </div>
+      <div class="inspector-title">
+        <h2 class="inspector-name">{{ inspector.selectedPlugin.manifest.name }}</h2>
+        <span class="inspector-version">v{{ inspector.selectedPlugin.manifest.version }}</span>
+      </div>
+      <NbButton variant="ghost" size="sm" icon="x" @click="inspector.close()" />
+    </div>
+
+    <div class="inspector-body">
+      <!-- Status -->
+      <section class="inspector-section">
+        <div class="field-row">
+          <span class="field-label">Status</span>
+          <span class="status-badge" :class="inspector.selectedPlugin.status">
+            {{ statusLabel[inspector.selectedPlugin.status] }}
+          </span>
+        </div>
+        <div v-if="inspector.selectedPlugin.startedAt" class="field-row">
+          <span class="field-label">Started</span>
+          <span class="field-value">{{ new Date(inspector.selectedPlugin.startedAt).toLocaleString() }}</span>
+        </div>
+        <div v-if="inspector.selectedPlugin.stoppedAt" class="field-row">
+          <span class="field-label">Stopped</span>
+          <span class="field-value">{{ new Date(inspector.selectedPlugin.stoppedAt).toLocaleString() }}</span>
+        </div>
+        <div class="field-row">
+          <span class="field-label">Disabled</span>
+          <NbSwitch
+            :model-value="inspector.selectedPlugin.disabled ?? false"
+            :disabled="togglingDisabled"
+            @update:model-value="togglePluginDisabled"
+          />
+        </div>
+      </section>
+
+      <!-- ── HAP Bridge (if plugin publishes its own bridge) ───────────────── -->
+      <section v-if="inspector.selectedPlugin.hapBridge" class="inspector-section">
+        <h3 class="section-heading">
+          <NbIcon name="qr-code" :size="12" />
+          HomeKit Pairing
+        </h3>
+        <div class="hap-bridge-info">
+          <div class="hap-qr">
+            <img v-if="pluginQrUrl" :src="pluginQrUrl" alt="HomeKit QR Code" class="hap-qr-img" />
+          </div>
+          <div class="hap-details">
+            <div class="field-row">
+              <span class="field-label">PIN</span>
+              <span class="field-value mono">{{ inspector.selectedPlugin.hapBridge.pincode }}</span>
+            </div>
+            <div class="field-row">
+              <span class="field-label">Port</span>
+              <span class="field-value">{{ inspector.selectedPlugin.hapBridge.port }}</span>
+            </div>
+            <div class="field-row">
+              <span class="field-label">Bridge</span>
+              <span class="field-value">{{ inspector.selectedPlugin.hapBridge.name }}</span>
+            </div>
+          </div>
+        </div>
+        <p class="hap-hint">Scan with the Home app or enter the PIN manually to pair this plugin's devices.</p>
+      </section>
+
+      <!-- ── Update available ──────────────────────────────────────────────── -->
+      <section v-if="inspector.selectedPlugin.availableUpdate" class="inspector-section">
+        <div class="update-banner">
+          <div class="update-banner-text">
+            <NbIcon name="arrow-circle-up" :size="14" />
+            <span>
+              Version
+              <strong>{{ inspector.selectedPlugin.availableUpdate }}</strong>
+              is available (current: {{ inspector.selectedPlugin.manifest.version }})
+            </span>
+          </div>
+          <NbButton variant="primary" size="sm" :loading="updating" :disabled="updating" @click="updatePlugin">
+            {{ updating ? 'Updating...' : 'Update' }}
+          </NbButton>
+        </div>
+      </section>
+
+      <!-- ── Remove plugin ─────────────────────────────────────────────────── -->
+      <section class="inspector-section">
+        <NbButton
+          v-if="!confirmingRemove"
+          variant="ghost"
+          size="sm"
+          icon="trash"
+          style="color: #dc2626"
+          @click="confirmingRemove = true"
+        >
+          Remove plugin
+        </NbButton>
+        <div v-else class="remove-confirm">
+          <p class="remove-warning">
+            This will uninstall
+            <strong>{{ inspector.selectedPlugin.manifest.name }}</strong>
+            and remove its configuration. A restart is required.
+          </p>
+          <div class="remove-actions">
+            <NbButton variant="ghost" size="sm" @click="confirmingRemove = false">Cancel</NbButton>
+            <NbButton
+              variant="primary"
+              size="sm"
+              :loading="removing"
+              style="background: #dc2626; border-color: #dc2626"
+              @click="removePlugin"
+            >
+              Remove
+            </NbButton>
+          </div>
+        </div>
+      </section>
+
+      <!-- ── Platform config editor for all Homebridge-source plugins ───────── -->
+      <section v-if="isHomebridge" class="inspector-section setup-section">
+        <h3 class="section-heading">
+          <NbIcon name="gear" :size="12" />
+          Platform config
+        </h3>
+
+        <div v-if="loadingInfo" class="setup-loading">
+          <NbIcon name="spinner" :size="14" />
+          Loading config…
+        </div>
+
+        <template v-else>
+          <!-- Multiple platforms discovered → tabs -->
+          <div v-if="pluginInfo && pluginInfo.platforms.length > 1" class="platform-tabs">
+            <button
+              v-for="p in pluginInfo.platforms"
+              :key="p"
+              class="platform-tab"
+              :class="{ active: selectedPlatform === p }"
+              @click="selectPlatform(p)"
+            >
+              {{ p }}
+            </button>
+          </div>
+
+          <!-- No platform detected at all -->
+          <div v-else-if="pluginInfo && pluginInfo.platforms.length === 0" class="setup-notice">
+            <NbIcon name="info" :size="13" />
+            No platform detected. Add a
+            <code>platforms[]</code>
+            entry manually in Config.
+          </div>
+
+          <!-- Visual / JSON tabs -->
+          <template v-if="!pluginInfo || pluginInfo.platforms.length > 0">
+            <!-- Tab switcher (only shown when schema is available) -->
+            <div v-if="hasVisualSchema" class="editor-tabs">
+              <button class="editor-tab" :class="{ active: editorMode === 'visual' }" @click="editorMode = 'visual'">
+                <NbIcon name="sliders" :size="11" />
+                Visual
+              </button>
+              <button class="editor-tab" :class="{ active: editorMode === 'json' }" @click="editorMode = 'json'">
+                <NbIcon name="brackets-curly" :size="11" />
+                JSON
+              </button>
+            </div>
+
+            <!-- Visual form -->
+            <div v-if="editorMode === 'visual' && hasVisualSchema" class="visual-editor-wrap">
+              <PluginConfigForm
+                :hb-schema="configSchema as any"
+                :model-value="visualConfig"
+                @update:model-value="onVisualChange"
+              />
+            </div>
+
+            <!-- JSON editor (always shown when no schema, or JSON tab active) -->
+            <div
+              v-if="editorMode === 'json' || !hasVisualSchema"
+              class="config-editor-wrap"
+              :class="{ invalid: configJson && !jsonValid }"
+            >
+              <MonacoJsonEditor :model-value="configJson" :height="220" @update:model-value="onJsonChange" />
+              <div v-if="configJson && !jsonValid" class="json-error">Invalid JSON</div>
+              <div v-else-if="jsonMissingPlatform" class="json-error">Missing "platform" field</div>
+            </div>
+
+            <div v-if="saveError" class="save-error">
+              <NbIcon name="warning" :size="13" />
+              {{ saveError }}
+            </div>
+
+            <div class="setup-actions">
+              <NbButton
+                variant="primary"
+                size="sm"
+                :loading="saving"
+                :disabled="saving || !jsonValid || jsonMissingPlatform"
+                :icon="saveSuccess ? 'check' : 'floppy-disk'"
+                @click="save"
+              >
+                {{ saveSuccess ? 'Saved!' : 'Save config' }}
+              </NbButton>
+              <NbButton
+                v-if="saveSuccess"
+                variant="secondary"
+                size="sm"
+                outlined
+                :loading="restarting"
+                :icon="restarting ? 'spinner' : 'arrows-clockwise'"
+                @click="restartOpenBridge"
+              >
+                {{ restarting ? 'Restarting…' : 'Restart OpenBridge' }}
+              </NbButton>
+            </div>
+          </template>
+        </template>
+      </section>
+
+      <!-- ── Plugin config editor for native OpenBridge plugins ───────────── -->
+      <section v-if="isOpenbridge" class="inspector-section setup-section">
+        <h3 class="section-heading">
+          <NbIcon name="gear" :size="12" />
+          Plugin config
+        </h3>
+        <div class="config-editor-wrap" :class="{ invalid: nativeConfigJson && !nativeJsonValid }">
+          <MonacoJsonEditor
+            :model-value="nativeConfigJson"
+            :height="220"
+            @update:model-value="nativeConfigJson = $event"
+          />
+          <div v-if="nativeConfigJson && !nativeJsonValid" class="json-error">Invalid JSON</div>
+        </div>
+        <div v-if="nativeSaveError" class="save-error">
+          <NbIcon name="warning" :size="13" />
+          {{ nativeSaveError }}
+        </div>
+        <div class="setup-actions">
+          <NbButton
+            variant="primary"
+            size="sm"
+            :loading="nativeSaving"
+            :disabled="nativeSaving || !nativeJsonValid"
+            :icon="nativeSaveSuccess ? 'check' : 'floppy-disk'"
+            @click="saveNativeConfig"
+          >
+            {{ nativeSaveSuccess ? 'Saved!' : 'Save config' }}
+          </NbButton>
+          <NbButton
+            v-if="nativeSaveSuccess"
+            variant="secondary"
+            size="sm"
+            outlined
+            :loading="restarting"
+            :icon="restarting ? 'spinner' : 'arrows-clockwise'"
+            @click="restartOpenBridge"
+          >
+            {{ restarting ? 'Restarting…' : 'Restart OpenBridge' }}
+          </NbButton>
+        </div>
+      </section>
+
+      <!-- ── Import / Export config ──────────────────────────────────────── -->
+      <section class="inspector-section">
+        <div class="import-export-row">
+          <NbButton variant="ghost" size="sm" icon="download" @click="exportConfig">Export config</NbButton>
+          <NbButton variant="ghost" size="sm" icon="upload" @click="triggerImport">Import config</NbButton>
+          <input ref="importInput" type="file" accept=".json" style="display: none" @change="importConfig" />
+        </div>
+      </section>
+
+      <!-- ── Devices registered by this plugin ────────────────────────────── -->
+      <section v-if="pluginDevices.length > 0" class="inspector-section">
+        <h3 class="section-heading">
+          <NbIcon name="devices" :size="12" />
+          Devices ({{ pluginDevices.length }})
+        </h3>
+        <div v-for="dev in pluginDevices" :key="dev.id" class="plugin-device-row">
+          <NbIcon :name="widgetIcon(dev.widgetType)" :size="14" />
+          <span class="plugin-device-name">{{ dev.name }}</span>
+          <span class="plugin-device-type">{{ dev.widgetType }}</span>
+        </div>
+      </section>
+
+      <!-- Manifest -->
+      <section class="inspector-section">
+        <h3 class="section-heading">Manifest</h3>
+        <div class="field-row">
+          <span class="field-label">Name</span>
+          <span class="field-value">{{ inspector.selectedPlugin.manifest.name }}</span>
+        </div>
+        <div class="field-row">
+          <span class="field-label">Version</span>
+          <span class="field-value">{{ inspector.selectedPlugin.manifest.version }}</span>
+        </div>
+        <div v-if="inspector.selectedPlugin.manifest.description" class="field-row">
+          <span class="field-label">Description</span>
+          <span class="field-value">{{ inspector.selectedPlugin.manifest.description }}</span>
+        </div>
+        <div v-if="inspector.selectedPlugin.manifest.author" class="field-row">
+          <span class="field-label">Author</span>
+          <span class="field-value">{{ inspector.selectedPlugin.manifest.author }}</span>
+        </div>
+      </section>
+
+      <!-- Error -->
+      <section v-if="inspector.selectedPlugin.error" class="inspector-section">
+        <h3 class="section-heading">Error</h3>
+        <div class="error-box">{{ inspector.selectedPlugin.error }}</div>
+      </section>
+
+      <!-- Per-plugin logs -->
+      <section v-if="pluginLogs.length > 0" class="inspector-section">
+        <h3 class="section-heading">
+          <NbIcon name="terminal" :size="12" />
+          Recent logs
+        </h3>
+        <div ref="logsEl" class="plugin-log-terminal">
+          <div v-for="(entry, i) in pluginLogs" :key="i" class="plugin-log-line">
+            <span class="plog-time">{{ new Date(entry.timestamp).toLocaleTimeString() }}</span>
+            <span class="plog-level" :style="{ color: LOG_COLORS[entry.level] }">{{ entry.level.toUpperCase() }}</span>
+            <span class="plog-msg">{{ entry.message }}</span>
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { ref, watch, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useInspectorStore } from '@/stores/inspector'
@@ -479,334 +807,6 @@ async function save() {
   }
 }
 </script>
-
-<template>
-  <div v-if="inspector.selectedPlugin" class="inspector">
-    <div class="inspector-header">
-      <div class="inspector-avatar" :class="inspector.selectedPlugin.status">
-        <NbIcon name="puzzle-piece" :size="24" />
-      </div>
-      <div class="inspector-title">
-        <h2 class="inspector-name">{{ inspector.selectedPlugin.manifest.name }}</h2>
-        <span class="inspector-version">v{{ inspector.selectedPlugin.manifest.version }}</span>
-      </div>
-      <NbButton variant="ghost" size="sm" icon="x" @click="inspector.close()" />
-    </div>
-
-    <div class="inspector-body">
-      <!-- Status -->
-      <section class="inspector-section">
-        <div class="field-row">
-          <span class="field-label">Status</span>
-          <span class="status-badge" :class="inspector.selectedPlugin.status">
-            {{ statusLabel[inspector.selectedPlugin.status] }}
-          </span>
-        </div>
-        <div v-if="inspector.selectedPlugin.startedAt" class="field-row">
-          <span class="field-label">Started</span>
-          <span class="field-value">{{ new Date(inspector.selectedPlugin.startedAt).toLocaleString() }}</span>
-        </div>
-        <div v-if="inspector.selectedPlugin.stoppedAt" class="field-row">
-          <span class="field-label">Stopped</span>
-          <span class="field-value">{{ new Date(inspector.selectedPlugin.stoppedAt).toLocaleString() }}</span>
-        </div>
-        <div class="field-row">
-          <span class="field-label">Disabled</span>
-          <NbSwitch
-            :model-value="inspector.selectedPlugin.disabled ?? false"
-            :disabled="togglingDisabled"
-            @update:model-value="togglePluginDisabled"
-          />
-        </div>
-      </section>
-
-      <!-- ── HAP Bridge (if plugin publishes its own bridge) ───────────────── -->
-      <section v-if="inspector.selectedPlugin.hapBridge" class="inspector-section">
-        <h3 class="section-heading">
-          <NbIcon name="qr-code" :size="12" />
-          HomeKit Pairing
-        </h3>
-        <div class="hap-bridge-info">
-          <div class="hap-qr">
-            <img v-if="pluginQrUrl" :src="pluginQrUrl" alt="HomeKit QR Code" class="hap-qr-img" />
-          </div>
-          <div class="hap-details">
-            <div class="field-row">
-              <span class="field-label">PIN</span>
-              <span class="field-value mono">{{ inspector.selectedPlugin.hapBridge.pincode }}</span>
-            </div>
-            <div class="field-row">
-              <span class="field-label">Port</span>
-              <span class="field-value">{{ inspector.selectedPlugin.hapBridge.port }}</span>
-            </div>
-            <div class="field-row">
-              <span class="field-label">Bridge</span>
-              <span class="field-value">{{ inspector.selectedPlugin.hapBridge.name }}</span>
-            </div>
-          </div>
-        </div>
-        <p class="hap-hint">Scan with the Home app or enter the PIN manually to pair this plugin's devices.</p>
-      </section>
-
-      <!-- ── Update available ──────────────────────────────────────────────── -->
-      <section v-if="inspector.selectedPlugin.availableUpdate" class="inspector-section">
-        <div class="update-banner">
-          <div class="update-banner-text">
-            <NbIcon name="arrow-circle-up" :size="14" />
-            <span>
-              Version
-              <strong>{{ inspector.selectedPlugin.availableUpdate }}</strong>
-              is available (current: {{ inspector.selectedPlugin.manifest.version }})
-            </span>
-          </div>
-          <NbButton variant="primary" size="sm" :loading="updating" :disabled="updating" @click="updatePlugin">
-            {{ updating ? 'Updating...' : 'Update' }}
-          </NbButton>
-        </div>
-      </section>
-
-      <!-- ── Remove plugin ─────────────────────────────────────────────────── -->
-      <section class="inspector-section">
-        <NbButton
-          v-if="!confirmingRemove"
-          variant="ghost"
-          size="sm"
-          icon="trash"
-          style="color: #dc2626"
-          @click="confirmingRemove = true"
-        >
-          Remove plugin
-        </NbButton>
-        <div v-else class="remove-confirm">
-          <p class="remove-warning">
-            This will uninstall
-            <strong>{{ inspector.selectedPlugin.manifest.name }}</strong>
-            and remove its configuration. A restart is required.
-          </p>
-          <div class="remove-actions">
-            <NbButton variant="ghost" size="sm" @click="confirmingRemove = false">Cancel</NbButton>
-            <NbButton
-              variant="primary"
-              size="sm"
-              :loading="removing"
-              style="background: #dc2626; border-color: #dc2626"
-              @click="removePlugin"
-            >
-              Remove
-            </NbButton>
-          </div>
-        </div>
-      </section>
-
-      <!-- ── Platform config editor for all Homebridge-source plugins ───────── -->
-      <section v-if="isHomebridge" class="inspector-section setup-section">
-        <h3 class="section-heading">
-          <NbIcon name="gear" :size="12" />
-          Platform config
-        </h3>
-
-        <div v-if="loadingInfo" class="setup-loading">
-          <NbIcon name="spinner" :size="14" />
-          Loading config…
-        </div>
-
-        <template v-else>
-          <!-- Multiple platforms discovered → tabs -->
-          <div v-if="pluginInfo && pluginInfo.platforms.length > 1" class="platform-tabs">
-            <button
-              v-for="p in pluginInfo.platforms"
-              :key="p"
-              class="platform-tab"
-              :class="{ active: selectedPlatform === p }"
-              @click="selectPlatform(p)"
-            >
-              {{ p }}
-            </button>
-          </div>
-
-          <!-- No platform detected at all -->
-          <div v-else-if="pluginInfo && pluginInfo.platforms.length === 0" class="setup-notice">
-            <NbIcon name="info" :size="13" />
-            No platform detected. Add a
-            <code>platforms[]</code>
-            entry manually in Config.
-          </div>
-
-          <!-- Visual / JSON tabs -->
-          <template v-if="!pluginInfo || pluginInfo.platforms.length > 0">
-            <!-- Tab switcher (only shown when schema is available) -->
-            <div v-if="hasVisualSchema" class="editor-tabs">
-              <button class="editor-tab" :class="{ active: editorMode === 'visual' }" @click="editorMode = 'visual'">
-                <NbIcon name="sliders" :size="11" />
-                Visual
-              </button>
-              <button class="editor-tab" :class="{ active: editorMode === 'json' }" @click="editorMode = 'json'">
-                <NbIcon name="brackets-curly" :size="11" />
-                JSON
-              </button>
-            </div>
-
-            <!-- Visual form -->
-            <div v-if="editorMode === 'visual' && hasVisualSchema" class="visual-editor-wrap">
-              <PluginConfigForm
-                :hb-schema="configSchema as any"
-                :model-value="visualConfig"
-                @update:model-value="onVisualChange"
-              />
-            </div>
-
-            <!-- JSON editor (always shown when no schema, or JSON tab active) -->
-            <div
-              v-if="editorMode === 'json' || !hasVisualSchema"
-              class="config-editor-wrap"
-              :class="{ invalid: configJson && !jsonValid }"
-            >
-              <MonacoJsonEditor :model-value="configJson" :height="220" @update:model-value="onJsonChange" />
-              <div v-if="configJson && !jsonValid" class="json-error">Invalid JSON</div>
-              <div v-else-if="jsonMissingPlatform" class="json-error">Missing "platform" field</div>
-            </div>
-
-            <div v-if="saveError" class="save-error">
-              <NbIcon name="warning" :size="13" />
-              {{ saveError }}
-            </div>
-
-            <div class="setup-actions">
-              <NbButton
-                variant="primary"
-                size="sm"
-                :loading="saving"
-                :disabled="saving || !jsonValid || jsonMissingPlatform"
-                :icon="saveSuccess ? 'check' : 'floppy-disk'"
-                @click="save"
-              >
-                {{ saveSuccess ? 'Saved!' : 'Save config' }}
-              </NbButton>
-              <NbButton
-                v-if="saveSuccess"
-                variant="secondary"
-                size="sm"
-                outlined
-                :loading="restarting"
-                :icon="restarting ? 'spinner' : 'arrows-clockwise'"
-                @click="restartOpenBridge"
-              >
-                {{ restarting ? 'Restarting…' : 'Restart OpenBridge' }}
-              </NbButton>
-            </div>
-          </template>
-        </template>
-      </section>
-
-      <!-- ── Plugin config editor for native OpenBridge plugins ───────────── -->
-      <section v-if="isOpenbridge" class="inspector-section setup-section">
-        <h3 class="section-heading">
-          <NbIcon name="gear" :size="12" />
-          Plugin config
-        </h3>
-        <div class="config-editor-wrap" :class="{ invalid: nativeConfigJson && !nativeJsonValid }">
-          <MonacoJsonEditor
-            :model-value="nativeConfigJson"
-            :height="220"
-            @update:model-value="nativeConfigJson = $event"
-          />
-          <div v-if="nativeConfigJson && !nativeJsonValid" class="json-error">Invalid JSON</div>
-        </div>
-        <div v-if="nativeSaveError" class="save-error">
-          <NbIcon name="warning" :size="13" />
-          {{ nativeSaveError }}
-        </div>
-        <div class="setup-actions">
-          <NbButton
-            variant="primary"
-            size="sm"
-            :loading="nativeSaving"
-            :disabled="nativeSaving || !nativeJsonValid"
-            :icon="nativeSaveSuccess ? 'check' : 'floppy-disk'"
-            @click="saveNativeConfig"
-          >
-            {{ nativeSaveSuccess ? 'Saved!' : 'Save config' }}
-          </NbButton>
-          <NbButton
-            v-if="nativeSaveSuccess"
-            variant="secondary"
-            size="sm"
-            outlined
-            :loading="restarting"
-            :icon="restarting ? 'spinner' : 'arrows-clockwise'"
-            @click="restartOpenBridge"
-          >
-            {{ restarting ? 'Restarting…' : 'Restart OpenBridge' }}
-          </NbButton>
-        </div>
-      </section>
-
-      <!-- ── Import / Export config ──────────────────────────────────────── -->
-      <section class="inspector-section">
-        <div class="import-export-row">
-          <NbButton variant="ghost" size="sm" icon="download" @click="exportConfig">Export config</NbButton>
-          <NbButton variant="ghost" size="sm" icon="upload" @click="triggerImport">Import config</NbButton>
-          <input ref="importInput" type="file" accept=".json" style="display: none" @change="importConfig" />
-        </div>
-      </section>
-
-      <!-- ── Devices registered by this plugin ────────────────────────────── -->
-      <section v-if="pluginDevices.length > 0" class="inspector-section">
-        <h3 class="section-heading">
-          <NbIcon name="devices" :size="12" />
-          Devices ({{ pluginDevices.length }})
-        </h3>
-        <div v-for="dev in pluginDevices" :key="dev.id" class="plugin-device-row">
-          <NbIcon :name="widgetIcon(dev.widgetType)" :size="14" />
-          <span class="plugin-device-name">{{ dev.name }}</span>
-          <span class="plugin-device-type">{{ dev.widgetType }}</span>
-        </div>
-      </section>
-
-      <!-- Manifest -->
-      <section class="inspector-section">
-        <h3 class="section-heading">Manifest</h3>
-        <div class="field-row">
-          <span class="field-label">Name</span>
-          <span class="field-value">{{ inspector.selectedPlugin.manifest.name }}</span>
-        </div>
-        <div class="field-row">
-          <span class="field-label">Version</span>
-          <span class="field-value">{{ inspector.selectedPlugin.manifest.version }}</span>
-        </div>
-        <div v-if="inspector.selectedPlugin.manifest.description" class="field-row">
-          <span class="field-label">Description</span>
-          <span class="field-value">{{ inspector.selectedPlugin.manifest.description }}</span>
-        </div>
-        <div v-if="inspector.selectedPlugin.manifest.author" class="field-row">
-          <span class="field-label">Author</span>
-          <span class="field-value">{{ inspector.selectedPlugin.manifest.author }}</span>
-        </div>
-      </section>
-
-      <!-- Error -->
-      <section v-if="inspector.selectedPlugin.error" class="inspector-section">
-        <h3 class="section-heading">Error</h3>
-        <div class="error-box">{{ inspector.selectedPlugin.error }}</div>
-      </section>
-
-      <!-- Per-plugin logs -->
-      <section v-if="pluginLogs.length > 0" class="inspector-section">
-        <h3 class="section-heading">
-          <NbIcon name="terminal" :size="12" />
-          Recent logs
-        </h3>
-        <div ref="logsEl" class="plugin-log-terminal">
-          <div v-for="(entry, i) in pluginLogs" :key="i" class="plugin-log-line">
-            <span class="plog-time">{{ new Date(entry.timestamp).toLocaleTimeString() }}</span>
-            <span class="plog-level" :style="{ color: LOG_COLORS[entry.level] }">{{ entry.level.toUpperCase() }}</span>
-            <span class="plog-msg">{{ entry.message }}</span>
-          </div>
-        </div>
-      </section>
-    </div>
-  </div>
-</template>
 
 <style lang="scss" scoped>
 .inspector {

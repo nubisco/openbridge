@@ -1,3 +1,191 @@
+<template>
+  <div class="mp-panel">
+    <!-- Header -->
+    <div class="mp-header">
+      <span class="mp-title">Browse Plugins</span>
+      <NbButton variant="ghost" size="sm" icon="x" @click="inspector.close()" />
+    </div>
+
+    <!-- Search -->
+    <div class="mp-search-wrap">
+      <NbTextInput v-model="query" placeholder="Search plugins" size="sm" @update:model-value="onInput" />
+    </div>
+
+    <div v-if="total > 0" class="mp-count">{{ total.toLocaleString() }} plugins found</div>
+
+    <!-- Just-installed banner -->
+    <div v-if="justInstalled" class="mp-installed-banner">
+      <NbIcon name="check-circle" :size="14" />
+      <div class="mp-installed-body">
+        <strong>{{ justInstalled.name }}</strong>
+        installed. Click it in your plugins list to configure it.
+      </div>
+      <button class="mp-dismiss" @click="justInstalled = null"><NbIcon name="x" :size="12" /></button>
+    </div>
+
+    <div v-if="error" class="mp-error">
+      <NbIcon name="warning" :size="13" />
+      {{ error }}
+    </div>
+
+    <!-- Local plugins (from configured sources) -->
+    <div v-if="localPlugins.length > 0" class="mp-local-section">
+      <div class="mp-local-heading">
+        <NbIcon name="diamond" :size="11" />
+        Local plugins
+      </div>
+      <div v-for="local in localPlugins" :key="local.name" class="mp-row mp-row--ob mp-row--local">
+        <div class="mp-avatar mp-avatar--ob">
+          <NbIcon name="diamond" :size="16" />
+        </div>
+        <div class="mp-info">
+          <div class="mp-name-row">
+            <span class="mp-name">{{ local.name }}</span>
+            <span class="badge badge--native">
+              <NbIcon name="diamond" :size="9" />
+              Native
+            </span>
+            <span class="badge badge--local">
+              <NbIcon name="folder" :size="9" />
+              Local
+            </span>
+            <span class="mp-ver">v{{ local.version }}</span>
+          </div>
+          <p v-if="local.description" class="mp-desc">{{ local.description }}</p>
+          <div class="mp-meta">
+            <span v-if="local.author">{{ local.author }}</span>
+          </div>
+        </div>
+        <div class="mp-action">
+          <NbButton v-if="installed.has(local.name)" variant="ghost" size="sm" disabled icon="check">Active</NbButton>
+          <NbButton
+            v-else
+            variant="primary"
+            size="sm"
+            :loading="installing === local.name"
+            :disabled="!!installing || !local.platform"
+            :title="!local.platform ? 'No platform declared in package.json openbridge.platform' : ''"
+            @click="activateLocal(local)"
+          >
+            Activate
+          </NbButton>
+        </div>
+      </div>
+    </div>
+
+    <!-- Results -->
+    <div class="mp-list">
+      <div v-if="loading && results.length === 0" class="mp-loading">
+        <NbIcon name="spinner" :size="22" />
+        <span>Searching npm…</span>
+      </div>
+
+      <div v-for="pkg in results" :key="pkg.name" class="mp-row" :class="{ 'mp-row--ob': isOpenBridge(pkg) }">
+        <!-- Avatar -->
+        <div class="mp-avatar" :class="{ 'mp-avatar--ob': isOpenBridge(pkg) }">
+          <img
+            v-if="githubAvatarUrl(pkg)"
+            :src="githubAvatarUrl(pkg)!"
+            :alt="pkg.name"
+            class="mp-avatar-img"
+            @error="($event.target as HTMLImageElement).style.display = 'none'"
+          />
+          <!-- fallback icon -->
+          <NbIcon v-if="isOpenBridge(pkg)" name="diamond" :size="16" />
+          <NbIcon v-else name="puzzle-piece" :size="16" />
+        </div>
+
+        <!-- Info -->
+        <div class="mp-info">
+          <div class="mp-name-row">
+            <span class="mp-name">{{ pkg.name }}</span>
+            <span class="mp-ver">v{{ pkg.version }}</span>
+          </div>
+          <p v-if="pkg.description" class="mp-desc">{{ pkg.description }}</p>
+          <div class="mp-meta">
+            <span v-if="authorName(pkg)">{{ authorName(pkg) }}</span>
+            <span v-if="authorName(pkg)" class="mp-sep">·</span>
+            <span>{{ relativeDate(pkg.date) }}</span>
+          </div>
+          <!-- Enriched metadata row -->
+          <div class="mp-enriched">
+            <span v-if="pkg.weeklyDownloads" class="mp-stat">
+              <NbIcon name="cloud-arrow-down" :size="11" />
+              {{ formatDownloads(pkg.weeklyDownloads) }}
+            </span>
+            <span v-if="pkg.githubStars" class="mp-stat">
+              <NbIcon name="star" weight="fill" :size="11" />
+              {{ formatDownloads(pkg.githubStars) }}
+            </span>
+            <a
+              v-if="pkg.githubSponsorsUrl"
+              :href="pkg.githubSponsorsUrl"
+              target="_blank"
+              rel="noopener"
+              class="mp-stat mp-stat--link"
+            >
+              <NbIcon name="heart" weight="fill" :size="11" />
+              Sponsor
+            </a>
+            <a
+              v-if="pkg.documentationUrl"
+              :href="pkg.documentationUrl"
+              target="_blank"
+              rel="noopener"
+              class="mp-stat mp-stat--link"
+            >
+              <NbIcon name="book-open" :size="11" />
+              Docs
+            </a>
+            <a
+              :href="`https://marketplace.openbridge.nubisco.io/plugins/${pkg.name}`"
+              target="_blank"
+              rel="noopener"
+              class="mp-stat mp-stat--link mp-stat--marketplace"
+            >
+              <NbIcon name="arrow-square-out" :size="11" />
+              Marketplace
+            </a>
+          </div>
+        </div>
+
+        <!-- Action -->
+        <div class="mp-action">
+          <template v-if="installed.has(pkg.name)">
+            <NbButton
+              variant="danger"
+              size="sm"
+              outlined
+              :loading="uninstalling === pkg.name"
+              :disabled="!!uninstalling"
+              @click="uninstall(pkg.name)"
+            >
+              Remove
+            </NbButton>
+          </template>
+          <NbButton
+            v-else
+            variant="primary"
+            size="sm"
+            :loading="installing === pkg.name"
+            :disabled="!!installing"
+            @click="install(pkg)"
+          >
+            Install
+          </NbButton>
+        </div>
+      </div>
+
+      <!-- Load more -->
+      <div v-if="results.length > 0 && results.length < total" class="mp-load-more-wrap">
+        <NbButton variant="ghost" size="sm" :loading="loading" :disabled="loading" @click="loadMore">
+          {{ loading ? 'Loading…' : `Load more (${total - results.length} remaining)` }}
+        </NbButton>
+      </div>
+    </div>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useInspectorStore } from '@/stores/inspector'
@@ -202,194 +390,6 @@ onMounted(async () => {
   search()
 })
 </script>
-
-<template>
-  <div class="mp-panel">
-    <!-- Header -->
-    <div class="mp-header">
-      <span class="mp-title">Browse Plugins</span>
-      <NbButton variant="ghost" size="sm" icon="x" @click="inspector.close()" />
-    </div>
-
-    <!-- Search -->
-    <div class="mp-search-wrap">
-      <NbTextInput v-model="query" placeholder="Search plugins" size="sm" @update:model-value="onInput" />
-    </div>
-
-    <div v-if="total > 0" class="mp-count">{{ total.toLocaleString() }} plugins found</div>
-
-    <!-- Just-installed banner -->
-    <div v-if="justInstalled" class="mp-installed-banner">
-      <NbIcon name="check-circle" :size="14" />
-      <div class="mp-installed-body">
-        <strong>{{ justInstalled.name }}</strong>
-        installed. Click it in your plugins list to configure it.
-      </div>
-      <button class="mp-dismiss" @click="justInstalled = null"><NbIcon name="x" :size="12" /></button>
-    </div>
-
-    <div v-if="error" class="mp-error">
-      <NbIcon name="warning" :size="13" />
-      {{ error }}
-    </div>
-
-    <!-- Local plugins (from configured sources) -->
-    <div v-if="localPlugins.length > 0" class="mp-local-section">
-      <div class="mp-local-heading">
-        <NbIcon name="diamond" :size="11" />
-        Local plugins
-      </div>
-      <div v-for="local in localPlugins" :key="local.name" class="mp-row mp-row--ob mp-row--local">
-        <div class="mp-avatar mp-avatar--ob">
-          <NbIcon name="diamond" :size="16" />
-        </div>
-        <div class="mp-info">
-          <div class="mp-name-row">
-            <span class="mp-name">{{ local.name }}</span>
-            <span class="badge badge--native">
-              <NbIcon name="diamond" :size="9" />
-              Native
-            </span>
-            <span class="badge badge--local">
-              <NbIcon name="folder" :size="9" />
-              Local
-            </span>
-            <span class="mp-ver">v{{ local.version }}</span>
-          </div>
-          <p v-if="local.description" class="mp-desc">{{ local.description }}</p>
-          <div class="mp-meta">
-            <span v-if="local.author">{{ local.author }}</span>
-          </div>
-        </div>
-        <div class="mp-action">
-          <NbButton v-if="installed.has(local.name)" variant="ghost" size="sm" disabled icon="check">Active</NbButton>
-          <NbButton
-            v-else
-            variant="primary"
-            size="sm"
-            :loading="installing === local.name"
-            :disabled="!!installing || !local.platform"
-            :title="!local.platform ? 'No platform declared in package.json openbridge.platform' : ''"
-            @click="activateLocal(local)"
-          >
-            Activate
-          </NbButton>
-        </div>
-      </div>
-    </div>
-
-    <!-- Results -->
-    <div class="mp-list">
-      <div v-if="loading && results.length === 0" class="mp-loading">
-        <NbIcon name="spinner" :size="22" />
-        <span>Searching npm…</span>
-      </div>
-
-      <div v-for="pkg in results" :key="pkg.name" class="mp-row" :class="{ 'mp-row--ob': isOpenBridge(pkg) }">
-        <!-- Avatar -->
-        <div class="mp-avatar" :class="{ 'mp-avatar--ob': isOpenBridge(pkg) }">
-          <img
-            v-if="githubAvatarUrl(pkg)"
-            :src="githubAvatarUrl(pkg)!"
-            :alt="pkg.name"
-            class="mp-avatar-img"
-            @error="($event.target as HTMLImageElement).style.display = 'none'"
-          />
-          <!-- fallback icon -->
-          <NbIcon v-if="isOpenBridge(pkg)" name="diamond" :size="16" />
-          <NbIcon v-else name="puzzle-piece" :size="16" />
-        </div>
-
-        <!-- Info -->
-        <div class="mp-info">
-          <div class="mp-name-row">
-            <span class="mp-name">{{ pkg.name }}</span>
-            <span class="mp-ver">v{{ pkg.version }}</span>
-          </div>
-          <p v-if="pkg.description" class="mp-desc">{{ pkg.description }}</p>
-          <div class="mp-meta">
-            <span v-if="authorName(pkg)">{{ authorName(pkg) }}</span>
-            <span v-if="authorName(pkg)" class="mp-sep">·</span>
-            <span>{{ relativeDate(pkg.date) }}</span>
-          </div>
-          <!-- Enriched metadata row -->
-          <div class="mp-enriched">
-            <span v-if="pkg.weeklyDownloads" class="mp-stat">
-              <NbIcon name="cloud-arrow-down" :size="11" />
-              {{ formatDownloads(pkg.weeklyDownloads) }}
-            </span>
-            <span v-if="pkg.githubStars" class="mp-stat">
-              <NbIcon name="star" weight="fill" :size="11" />
-              {{ formatDownloads(pkg.githubStars) }}
-            </span>
-            <a
-              v-if="pkg.githubSponsorsUrl"
-              :href="pkg.githubSponsorsUrl"
-              target="_blank"
-              rel="noopener"
-              class="mp-stat mp-stat--link"
-            >
-              <NbIcon name="heart" weight="fill" :size="11" />
-              Sponsor
-            </a>
-            <a
-              v-if="pkg.documentationUrl"
-              :href="pkg.documentationUrl"
-              target="_blank"
-              rel="noopener"
-              class="mp-stat mp-stat--link"
-            >
-              <NbIcon name="book-open" :size="11" />
-              Docs
-            </a>
-            <a
-              :href="`https://marketplace.openbridge.nubisco.io/plugins/${pkg.name}`"
-              target="_blank"
-              rel="noopener"
-              class="mp-stat mp-stat--link mp-stat--marketplace"
-            >
-              <NbIcon name="arrow-square-out" :size="11" />
-              Marketplace
-            </a>
-          </div>
-        </div>
-
-        <!-- Action -->
-        <div class="mp-action">
-          <template v-if="installed.has(pkg.name)">
-            <NbButton
-              variant="danger"
-              size="sm"
-              outlined
-              :loading="uninstalling === pkg.name"
-              :disabled="!!uninstalling"
-              @click="uninstall(pkg.name)"
-            >
-              Remove
-            </NbButton>
-          </template>
-          <NbButton
-            v-else
-            variant="primary"
-            size="sm"
-            :loading="installing === pkg.name"
-            :disabled="!!installing"
-            @click="install(pkg)"
-          >
-            Install
-          </NbButton>
-        </div>
-      </div>
-
-      <!-- Load more -->
-      <div v-if="results.length > 0 && results.length < total" class="mp-load-more-wrap">
-        <NbButton variant="ghost" size="sm" :loading="loading" :disabled="loading" @click="loadMore">
-          {{ loading ? 'Loading…' : `Load more (${total - results.length} remaining)` }}
-        </NbButton>
-      </div>
-    </div>
-  </div>
-</template>
 
 <style lang="scss" scoped>
 .mp-panel {

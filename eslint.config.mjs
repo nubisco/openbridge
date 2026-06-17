@@ -83,6 +83,7 @@ export default defineConfig(
       ],
       semi: 'off',
       '@typescript-eslint/semi': 'off',
+      'vue/block-order': ['error', { order: ['template', 'script', 'style'] }],
     },
   },
 )

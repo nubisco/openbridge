@@ -1,3 +1,13 @@
+<template>
+  <div class="terminal-view">
+    <div class="terminal-topbar">
+      <div class="conn-dot" :class="connected ? 'live' : 'dead'" />
+      <span class="conn-label">{{ connected ? 'Connected' : 'Disconnected' }}</span>
+    </div>
+    <div ref="containerEl" class="terminal-container" />
+  </div>
+</template>
+
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref, shallowRef } from 'vue'
 import { useLayoutStore } from '@/stores/layout'
@@ -112,16 +122,6 @@ onBeforeUnmount(() => {
   terminal.value?.dispose()
 })
 </script>
-
-<template>
-  <div class="terminal-view">
-    <div class="terminal-topbar">
-      <div class="conn-dot" :class="connected ? 'live' : 'dead'" />
-      <span class="conn-label">{{ connected ? 'Connected' : 'Disconnected' }}</span>
-    </div>
-    <div ref="containerEl" class="terminal-container" />
-  </div>
-</template>
 
 <style lang="scss" scoped>
 @use '@xterm/xterm/css/xterm.css';

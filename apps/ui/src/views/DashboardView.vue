@@ -1,198 +1,3 @@
-<script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, shallowRef } from 'vue'
-import QRCode from 'qrcode'
-import { api, type SystemInfo, type MetricsSnapshot } from '@/api'
-import { useDaemonStore } from '@/stores/daemon'
-import { useLayoutStore } from '@/stores/layout'
-// NbSparkline replaced by NbSparkline from @nubisco/ui (globally registered)
-
-const daemon = useDaemonStore()
-const layout = useLayoutStore()
-
-// ─── Restart OpenBridge ───────────────────────────────────────────────────────
-const restarting = ref(false)
-const restartDone = ref(false)
-
-async function restartOpenBridge() {
-  if (restarting.value) return
-  restarting.value = true
-  restartDone.value = false
-  try {
-    await api.daemon.restart()
-    restartDone.value = true
-    let attempts = 0
-    const poll = setInterval(async () => {
-      attempts++
-      try {
-        await api.health()
-        clearInterval(poll)
-        // Reload the page so all stores, WebSockets, and UI reset cleanly
-        location.reload()
-      } catch {
-        /* still restarting */
-      }
-      if (attempts > 60) {
-        clearInterval(poll)
-        restarting.value = false
-      }
-    }, 1000)
-  } catch {
-    restarting.value = false
-  }
-}
-
-// ─── Static info ──────────────────────────────────────────────────────────────
-const sysInfo = ref<SystemInfo | null>(null)
-const qrDataUrl = ref('')
-const pincode = ref('')
-
-// ─── Live metrics ─────────────────────────────────────────────────────────────
-const cpuHistory = ref<number[]>([])
-const memHistory = ref<number[]>([])
-const netRxHistory = ref<number[]>([])
-const netTxHistory = ref<number[]>([])
-const latest = shallowRef<MetricsSnapshot | null>(null)
-let metricsWs: WebSocket | null = null
-
-function connectMetrics() {
-  if (metricsWs) {
-    metricsWs.onclose = null
-    metricsWs.close()
-    metricsWs = null
-  }
-  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
-  metricsWs = new WebSocket(`${protocol}//${location.host}/ws/metrics`)
-  metricsWs.onmessage = (e) => {
-    // Skip buffered messages when tab was hidden to avoid catch-up animation
-    if (document.hidden) return
-    try {
-      const msg = JSON.parse(e.data as string)
-      if (msg.type === 'history') {
-        const snaps: MetricsSnapshot[] = msg.data
-        cpuHistory.value = snaps.map((s) => s.cpu)
-        memHistory.value = snaps.map((s) => memPercent(s))
-        netRxHistory.value = snaps.map((s) => s.netRxSec)
-        netTxHistory.value = snaps.map((s) => s.netTxSec)
-        if (snaps.length) latest.value = snaps[snaps.length - 1]
-      } else if (msg.type === 'snapshot') {
-        const s: MetricsSnapshot = msg.data
-        latest.value = s
-        push(cpuHistory, s.cpu)
-        push(memHistory, memPercent(s))
-        push(netRxHistory, s.netRxSec)
-        push(netTxHistory, s.netTxSec)
-      }
-    } catch {
-      /* ignore */
-    }
-  }
-  metricsWs.onclose = () => {
-    metricsWs = null
-    setTimeout(connectMetrics, 3000)
-  }
-}
-
-// When the tab becomes visible again, reconnect to get fresh history
-// instead of processing the buffered snapshots that accumulated while hidden.
-function onVisibilityChange() {
-  if (!document.hidden) {
-    connectMetrics()
-  }
-}
-
-function push(arr: typeof cpuHistory, val: number) {
-  arr.value = [...arr.value.slice(-59), val]
-}
-
-function memPercent(s: MetricsSnapshot): number {
-  return s.memTotal ? Math.round(((s.memTotal - s.memFree) / s.memTotal) * 100) : 0
-}
-
-// ─── Formatters ───────────────────────────────────────────────────────────────
-function fmtBytes(b: number): string {
-  if (b < 1024) return `${b} B`
-  if (b < 1024 ** 2) return `${(b / 1024).toFixed(1)} KB`
-  if (b < 1024 ** 3) return `${(b / 1024 ** 2).toFixed(1)} MB`
-  return `${(b / 1024 ** 3).toFixed(1)} GB`
-}
-
-function fmtUptime(secs: number): string {
-  const d = Math.floor(secs / 86400)
-  const h = Math.floor((secs % 86400) / 3600)
-  const m = Math.floor((secs % 3600) / 60)
-  if (d > 0) return `${d}d ${h}h`
-  if (h > 0) return `${h}h ${m}m`
-  return `${m}m`
-}
-
-const memUsed = computed(() => (latest.value ? fmtBytes(latest.value.memTotal - latest.value.memFree) : '—'))
-const memTotal = computed(() => (latest.value ? fmtBytes(latest.value.memTotal) : '—'))
-const memPct = computed(() => (latest.value ? memPercent(latest.value) : 0))
-
-// ─── Log section ─────────────────────────────────────────────────────────────
-const logFilter = ref<string[]>([]) // empty = show all
-const logsEl = ref<HTMLElement | null>(null)
-const logsExpanded = ref(false)
-
-const pluginFilterOptions = computed(() => [
-  { value: 'system', label: 'system' },
-  ...daemon.plugins.map((p) => ({ value: p.manifest.name, label: p.manifest.name })),
-])
-
-const filteredLogs = computed(() => {
-  if (logFilter.value.length === 0) return daemon.logs
-  return daemon.logs.filter((e) => logFilter.value.includes(e.plugin))
-})
-
-const LOG_COLORS: Record<string, string> = {
-  debug: '#6b7280',
-  info: '#06b6d4',
-  warn: '#f59e0b',
-  error: '#ef4444',
-}
-
-function clearLogs() {
-  daemon.logs.length = 0
-}
-
-onMounted(async () => {
-  layout.setPage('Dashboard')
-  daemon.fetchPlugins()
-
-  // Pre-load recent log history (WebSocket only delivers new entries)
-  daemon.fetchLogs()
-
-  try {
-    sysInfo.value = await api.system()
-  } catch {
-    /* daemon may not be up */
-  }
-
-  try {
-    const qrRes = await api.qr()
-    if (qrRes.setupURI) {
-      pincode.value = qrRes.pincode ?? ''
-      qrDataUrl.value = await QRCode.toDataURL(qrRes.setupURI, {
-        width: 148,
-        margin: 1,
-        color: { dark: '#1a1a2e', light: '#ffffff' },
-      })
-    }
-  } catch {
-    /* ignore */
-  }
-
-  connectMetrics()
-  document.addEventListener('visibilitychange', onVisibilityChange)
-})
-
-onUnmounted(() => {
-  metricsWs?.close()
-  metricsWs = null
-  document.removeEventListener('visibilitychange', onVisibilityChange)
-})
-</script>
-
 <template>
   <div class="dashboard">
     <!-- ─── Row 1: HomeKit + System Info + Plugins ────────────────────────── -->
@@ -397,6 +202,201 @@ onUnmounted(() => {
     </div>
   </div>
 </template>
+
+<script setup lang="ts">
+import { ref, computed, onMounted, onUnmounted, shallowRef } from 'vue'
+import QRCode from 'qrcode'
+import { api, type SystemInfo, type MetricsSnapshot } from '@/api'
+import { useDaemonStore } from '@/stores/daemon'
+import { useLayoutStore } from '@/stores/layout'
+// NbSparkline replaced by NbSparkline from @nubisco/ui (globally registered)
+
+const daemon = useDaemonStore()
+const layout = useLayoutStore()
+
+// ─── Restart OpenBridge ───────────────────────────────────────────────────────
+const restarting = ref(false)
+const restartDone = ref(false)
+
+async function restartOpenBridge() {
+  if (restarting.value) return
+  restarting.value = true
+  restartDone.value = false
+  try {
+    await api.daemon.restart()
+    restartDone.value = true
+    let attempts = 0
+    const poll = setInterval(async () => {
+      attempts++
+      try {
+        await api.health()
+        clearInterval(poll)
+        // Reload the page so all stores, WebSockets, and UI reset cleanly
+        location.reload()
+      } catch {
+        /* still restarting */
+      }
+      if (attempts > 60) {
+        clearInterval(poll)
+        restarting.value = false
+      }
+    }, 1000)
+  } catch {
+    restarting.value = false
+  }
+}
+
+// ─── Static info ──────────────────────────────────────────────────────────────
+const sysInfo = ref<SystemInfo | null>(null)
+const qrDataUrl = ref('')
+const pincode = ref('')
+
+// ─── Live metrics ─────────────────────────────────────────────────────────────
+const cpuHistory = ref<number[]>([])
+const memHistory = ref<number[]>([])
+const netRxHistory = ref<number[]>([])
+const netTxHistory = ref<number[]>([])
+const latest = shallowRef<MetricsSnapshot | null>(null)
+let metricsWs: WebSocket | null = null
+
+function connectMetrics() {
+  if (metricsWs) {
+    metricsWs.onclose = null
+    metricsWs.close()
+    metricsWs = null
+  }
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
+  metricsWs = new WebSocket(`${protocol}//${location.host}/ws/metrics`)
+  metricsWs.onmessage = (e) => {
+    // Skip buffered messages when tab was hidden to avoid catch-up animation
+    if (document.hidden) return
+    try {
+      const msg = JSON.parse(e.data as string)
+      if (msg.type === 'history') {
+        const snaps: MetricsSnapshot[] = msg.data
+        cpuHistory.value = snaps.map((s) => s.cpu)
+        memHistory.value = snaps.map((s) => memPercent(s))
+        netRxHistory.value = snaps.map((s) => s.netRxSec)
+        netTxHistory.value = snaps.map((s) => s.netTxSec)
+        if (snaps.length) latest.value = snaps[snaps.length - 1]
+      } else if (msg.type === 'snapshot') {
+        const s: MetricsSnapshot = msg.data
+        latest.value = s
+        push(cpuHistory, s.cpu)
+        push(memHistory, memPercent(s))
+        push(netRxHistory, s.netRxSec)
+        push(netTxHistory, s.netTxSec)
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  metricsWs.onclose = () => {
+    metricsWs = null
+    setTimeout(connectMetrics, 3000)
+  }
+}
+
+// When the tab becomes visible again, reconnect to get fresh history
+// instead of processing the buffered snapshots that accumulated while hidden.
+function onVisibilityChange() {
+  if (!document.hidden) {
+    connectMetrics()
+  }
+}
+
+function push(arr: typeof cpuHistory, val: number) {
+  arr.value = [...arr.value.slice(-59), val]
+}
+
+function memPercent(s: MetricsSnapshot): number {
+  return s.memTotal ? Math.round(((s.memTotal - s.memFree) / s.memTotal) * 100) : 0
+}
+
+// ─── Formatters ───────────────────────────────────────────────────────────────
+function fmtBytes(b: number): string {
+  if (b < 1024) return `${b} B`
+  if (b < 1024 ** 2) return `${(b / 1024).toFixed(1)} KB`
+  if (b < 1024 ** 3) return `${(b / 1024 ** 2).toFixed(1)} MB`
+  return `${(b / 1024 ** 3).toFixed(1)} GB`
+}
+
+function fmtUptime(secs: number): string {
+  const d = Math.floor(secs / 86400)
+  const h = Math.floor((secs % 86400) / 3600)
+  const m = Math.floor((secs % 3600) / 60)
+  if (d > 0) return `${d}d ${h}h`
+  if (h > 0) return `${h}h ${m}m`
+  return `${m}m`
+}
+
+const memUsed = computed(() => (latest.value ? fmtBytes(latest.value.memTotal - latest.value.memFree) : '—'))
+const memTotal = computed(() => (latest.value ? fmtBytes(latest.value.memTotal) : '—'))
+const memPct = computed(() => (latest.value ? memPercent(latest.value) : 0))
+
+// ─── Log section ─────────────────────────────────────────────────────────────
+const logFilter = ref<string[]>([]) // empty = show all
+const logsEl = ref<HTMLElement | null>(null)
+const logsExpanded = ref(false)
+
+const pluginFilterOptions = computed(() => [
+  { value: 'system', label: 'system' },
+  ...daemon.plugins.map((p) => ({ value: p.manifest.name, label: p.manifest.name })),
+])
+
+const filteredLogs = computed(() => {
+  if (logFilter.value.length === 0) return daemon.logs
+  return daemon.logs.filter((e) => logFilter.value.includes(e.plugin))
+})
+
+const LOG_COLORS: Record<string, string> = {
+  debug: '#6b7280',
+  info: '#06b6d4',
+  warn: '#f59e0b',
+  error: '#ef4444',
+}
+
+function clearLogs() {
+  daemon.logs.length = 0
+}
+
+onMounted(async () => {
+  layout.setPage('Dashboard')
+  daemon.fetchPlugins()
+
+  // Pre-load recent log history (WebSocket only delivers new entries)
+  daemon.fetchLogs()
+
+  try {
+    sysInfo.value = await api.system()
+  } catch {
+    /* daemon may not be up */
+  }
+
+  try {
+    const qrRes = await api.qr()
+    if (qrRes.setupURI) {
+      pincode.value = qrRes.pincode ?? ''
+      qrDataUrl.value = await QRCode.toDataURL(qrRes.setupURI, {
+        width: 148,
+        margin: 1,
+        color: { dark: '#1a1a2e', light: '#ffffff' },
+      })
+    }
+  } catch {
+    /* ignore */
+  }
+
+  connectMetrics()
+  document.addEventListener('visibilitychange', onVisibilityChange)
+})
+
+onUnmounted(() => {
+  metricsWs?.close()
+  metricsWs = null
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+})
+</script>
 
 <style lang="scss" scoped>
 .dashboard {

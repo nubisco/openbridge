@@ -1,3 +1,309 @@
+<template>
+  <div v-if="selected" class="inspector-content">
+    <!-- Native device detail -->
+    <template v-if="selected.kind === 'native'">
+      <div class="detail-header">
+        <div class="detail-icon native-icon">
+          <NbIcon :name="widgetIcon((selected as any).dev.widgetType)" :size="26" />
+        </div>
+        <div style="flex: 1; min-width: 0">
+          <h2
+            v-if="!editingName"
+            class="detail-name"
+            :title="'Click to rename'"
+            style="cursor: pointer"
+            @click="startRename((selected as any).dev.name)"
+          >
+            {{ (selected as any).dev.name }}
+            <NbIcon name="pencil" :size="10" style="opacity: 0.4; margin-left: 4px" />
+          </h2>
+          <div v-else class="rename-row">
+            <input
+              ref="renameInput"
+              v-model="renameValue"
+              class="rename-input"
+              @keyup.enter="saveRename((selected as any).dev.id)"
+              @keyup.escape="editingName = false"
+            />
+            <NbButton variant="primary" size="sm" icon="check" @click="saveRename((selected as any).dev.id)" />
+            <NbButton variant="ghost" size="sm" icon="x" @click="editingName = false" />
+          </div>
+          <div class="detail-type">{{ widgetLabel((selected as any).dev.widgetType) }}</div>
+        </div>
+        <NbButton variant="ghost" size="sm" icon="x" @click="inspector.close()" />
+      </div>
+
+      <!-- Device info -->
+      <div class="detail-section">
+        <div class="section-label">Device info</div>
+        <div class="info-grid">
+          <span class="info-key">Plugin</span>
+          <span class="info-val">{{ (selected as any).dev.pluginId }}</span>
+          <template v-if="(selected as any).dev.manufacturer">
+            <span class="info-key">Manufacturer</span>
+            <span class="info-val">{{ (selected as any).dev.manufacturer }}</span>
+          </template>
+          <template v-if="(selected as any).dev.model">
+            <span class="info-key">Model</span>
+            <span class="info-val">{{ (selected as any).dev.model }}</span>
+          </template>
+          <span class="info-key">Status</span>
+          <span class="info-val">{{ (selected as any).dev.pluginStatus }}</span>
+          <span class="info-key">ID</span>
+          <span class="info-val mono">{{ (selected as any).dev.id }}</span>
+        </div>
+      </div>
+
+      <!-- Widget view -->
+      <div class="detail-section">
+        <div class="section-label">State</div>
+
+        <!-- Energy meter widget -->
+        <div v-if="(selected as any).dev.widgetType === 'energy_meter'" class="widget-energy">
+          <div class="energy-primary">
+            <span class="energy-value">{{ fmtNum((selected as any).dev.telemetry.power, 1) }}</span>
+            <span class="energy-unit">W</span>
+          </div>
+          <div class="energy-secondary">
+            <template v-if="(selected as any).dev.telemetry.voltage !== undefined">
+              <span class="energy-item">
+                <span class="energy-label">Voltage</span>
+                <span class="energy-item-val">{{ fmtNum((selected as any).dev.telemetry.voltage, 1) }} V</span>
+              </span>
+            </template>
+            <template v-if="(selected as any).dev.telemetry.current !== undefined">
+              <span class="energy-item">
+                <span class="energy-label">Current</span>
+                <span class="energy-item-val">{{ fmtNum((selected as any).dev.telemetry.current, 3) }} A</span>
+              </span>
+            </template>
+          </div>
+        </div>
+
+        <!-- Thermostat widget -->
+        <div v-else-if="(selected as any).dev.widgetType === 'thermostat'" class="widget-thermo">
+          <div class="thermo-row">
+            <span class="thermo-label">Current</span>
+            <span class="thermo-value">{{ fmtNum((selected as any).dev.telemetry.currentTemperature, 1) }}°C</span>
+          </div>
+          <div class="thermo-row">
+            <span class="thermo-label">Target</span>
+            <span class="thermo-value accent">
+              {{ fmtNum((selected as any).dev.telemetry.targetTemperature, 1) }}°C
+            </span>
+          </div>
+          <div class="thermo-row">
+            <span class="thermo-label">Active</span>
+            <span class="thermo-value" :class="(selected as any).dev.telemetry.active ? 'on' : 'off'">
+              {{ (selected as any).dev.telemetry.active ? 'On' : 'Off' }}
+            </span>
+          </div>
+        </div>
+
+        <!-- Dehumidifier widget -->
+        <div v-else-if="(selected as any).dev.widgetType === 'dehumidifier'" class="widget-thermo">
+          <div class="thermo-row">
+            <span class="thermo-label">Humidity</span>
+            <span class="thermo-value">{{ fmtNum((selected as any).dev.telemetry.currentHumidity, 0) }}%</span>
+          </div>
+          <div class="thermo-row">
+            <span class="thermo-label">Target</span>
+            <span class="thermo-value accent">{{ fmtNum((selected as any).dev.telemetry.targetHumidity, 0) }}%</span>
+          </div>
+          <div class="thermo-row">
+            <span class="thermo-label">Active</span>
+            <span class="thermo-value" :class="(selected as any).dev.telemetry.active ? 'on' : 'off'">
+              {{ (selected as any).dev.telemetry.active ? 'On' : 'Off' }}
+            </span>
+          </div>
+        </div>
+
+        <!-- Generic sensor / switch / light -->
+        <div v-else class="widget-generic">
+          <template
+            v-if="Object.keys((selected as any).dev.telemetry).filter((k: string) => !k.startsWith('_')).length === 0"
+          >
+            <span class="no-telemetry">No telemetry yet</span>
+          </template>
+          <div v-for="[k, v] in telemetryEntries((selected as any).dev)" :key="k" class="char-row">
+            <span class="char-name">{{ k }}</span>
+            <span class="char-value">{{ String(v) }}</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Energy history chart (energy_meter devices only) -->
+      <div v-if="(selected as any).dev.widgetType === 'energy_meter'" class="detail-section energy-history">
+        <div class="section-label">Energy history</div>
+
+        <!-- Period tabs -->
+        <div class="history-tabs">
+          <button
+            v-for="p in ['day', 'month', 'year']"
+            :key="p"
+            class="history-tab"
+            :class="{ active: historyPeriod === p }"
+            @click="historyPeriod = p as any"
+          >
+            {{ p }}
+          </button>
+        </div>
+
+        <!-- Total + navigation -->
+        <div v-if="historyData" class="history-nav">
+          <button class="history-nav-btn" @click="navigateHistory(-1)">&#8249;</button>
+          <div class="history-nav-center">
+            <span class="history-total">
+              {{ historyData.totalKwh.toFixed(2) }}
+              <span class="history-unit">kWh</span>
+            </span>
+            <span class="history-date">{{ historyData.date }}</span>
+          </div>
+          <button class="history-nav-btn" @click="navigateHistory(1)">&#8250;</button>
+        </div>
+
+        <!-- Bar chart -->
+        <NbBarChart
+          v-if="historyData && historyData.totalKwh > 0"
+          :series="historyChartSeries"
+          :height="120"
+          :show-legend="false"
+          :show-tooltip="true"
+        />
+
+        <div v-if="historyData && historyData.totalKwh === 0" class="no-history">
+          No consumption recorded for this period. Data accumulates every 5 minutes.
+        </div>
+
+        <div v-if="!historyData && !historyLoading" class="no-history">No data available for this period.</div>
+
+        <div v-if="historyLoading" class="no-history">Loading history…</div>
+      </div>
+
+      <!-- Interpolation calibration -->
+      <div v-if="(selected as any).dev.interpolation && interpolationPoints.length > 0" class="detail-section">
+        <div class="section-label">Calibration</div>
+        <NbInterpolationChart
+          v-model="interpolationPoints"
+          :height="220"
+          :input-label="(selected as any).dev.interpolation.inputLabel"
+          :output-label="(selected as any).dev.interpolation.outputLabel"
+          :input-min="(selected as any).dev.interpolation.inputMin"
+          :input-max="(selected as any).dev.interpolation.inputMax"
+          :output-min="(selected as any).dev.interpolation.outputMin"
+          :output-max="(selected as any).dev.interpolation.outputMax"
+          :input-step="0.5"
+          :output-step="1"
+          :show-grid="true"
+          :show-tooltip="true"
+        />
+        <div class="calibration-hint">Drag points to adjust. Double-click to add. Right-click to remove.</div>
+        <div class="calibration-actions">
+          <NbButton
+            variant="primary"
+            size="sm"
+            :disabled="!interpolationDirty || interpolationSaving"
+            @click="saveInterpolation"
+          >
+            {{ interpolationSaving ? 'Saving...' : 'Save' }}
+          </NbButton>
+          <NbButton variant="ghost" size="sm" :disabled="!interpolationDirty" @click="resetInterpolation">
+            Reset
+          </NbButton>
+        </div>
+        <div v-if="interpolationSaved" class="calibration-restart-notice">
+          Configuration saved. Restart the plugin to apply the new mapping.
+        </div>
+      </div>
+      <div v-else-if="(selected as any).dev.interpolation && interpolationLoading" class="detail-section">
+        <div class="section-label">Calibration</div>
+        <div class="no-history">Loading calibration data...</div>
+      </div>
+
+      <!-- All telemetry data -->
+      <div v-if="telemetryEntries((selected as any).dev).length > 0" class="detail-section">
+        <div class="section-label">All telemetry</div>
+        <div class="char-list">
+          <div v-for="[k, v] in telemetryEntries((selected as any).dev)" :key="k" class="char-row">
+            <span class="char-name">{{ k }}</span>
+            <span class="char-value">{{ String(v) }}</span>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- HAP accessory detail (original) -->
+    <template v-else-if="selected.kind === 'hap'">
+      <div class="detail-header">
+        <div class="detail-icon">
+          <NbIcon :name="categoryInfo((selected as any).acc.category).icon" :size="26" />
+        </div>
+        <div style="flex: 1; min-width: 0">
+          <h2
+            v-if="!editingName"
+            class="detail-name"
+            :title="'Click to rename'"
+            style="cursor: pointer"
+            @click="startRename((selected as any).acc.displayName)"
+          >
+            {{ (selected as any).acc.displayName }}
+            <NbIcon name="pencil" :size="10" style="opacity: 0.4; margin-left: 4px" />
+          </h2>
+          <div v-else class="rename-row">
+            <input
+              ref="renameInput"
+              v-model="renameValue"
+              class="rename-input"
+              @keyup.enter="saveRename((selected as any).acc.uuid)"
+              @keyup.escape="editingName = false"
+            />
+            <NbButton variant="primary" size="sm" icon="check" @click="saveRename((selected as any).acc.uuid)" />
+            <NbButton variant="ghost" size="sm" icon="x" @click="editingName = false" />
+          </div>
+          <div class="detail-type">{{ categoryInfo((selected as any).acc.category).label }}</div>
+        </div>
+        <NbButton variant="ghost" size="sm" icon="x" @click="inspector.close()" />
+      </div>
+
+      <!-- Manufacturer info -->
+      <div v-if="manufacturerInfo((selected as any).acc)" class="detail-section">
+        <div class="section-label">Device info</div>
+        <div class="info-grid">
+          <template v-for="[k, v] in Object.entries(manufacturerInfo((selected as any).acc)!)" :key="k">
+            <span v-if="v" class="info-key">{{ k }}</span>
+            <span v-if="v" class="info-val">{{ v }}</span>
+          </template>
+        </div>
+      </div>
+
+      <!-- Services & characteristics -->
+      <div v-for="svc in mainServices((selected as any).acc)" :key="svc.uuid" class="detail-section">
+        <div class="section-label">{{ svc.displayName || svc.name }}</div>
+        <div class="char-list">
+          <div v-for="ch in svc.characteristics" :key="ch.uuid" class="char-row">
+            <span class="char-name">{{ ch.name }}</span>
+            <!-- Writable bool → inline toggle -->
+            <template v-if="isWritable(ch) && ch.format === 'bool'">
+              <NbSwitch
+                :model-value="!!ch.value"
+                @update:model-value="
+                  setHapCharacteristic((selected as any).acc.uuid, svc.uuid, ch.uuid, $event ? 1 : 0)
+                "
+              />
+            </template>
+            <!-- Read-only or non-bool writable → display value -->
+            <span v-else class="char-value" :class="{ on: ch.format === 'bool' && ch.value }">
+              {{ formatValue(ch) }}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div class="detail-uuid">UUID: {{ (selected as any).acc.uuid }}</div>
+    </template>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
 import { useInspectorStore, type NativeDevice } from '@/stores/inspector'
@@ -408,312 +714,6 @@ const historyChartSeries = computed(() => {
   ]
 })
 </script>
-
-<template>
-  <div v-if="selected" class="inspector-content">
-    <!-- Native device detail -->
-    <template v-if="selected.kind === 'native'">
-      <div class="detail-header">
-        <div class="detail-icon native-icon">
-          <NbIcon :name="widgetIcon((selected as any).dev.widgetType)" :size="26" />
-        </div>
-        <div style="flex: 1; min-width: 0">
-          <h2
-            v-if="!editingName"
-            class="detail-name"
-            :title="'Click to rename'"
-            style="cursor: pointer"
-            @click="startRename((selected as any).dev.name)"
-          >
-            {{ (selected as any).dev.name }}
-            <NbIcon name="pencil" :size="10" style="opacity: 0.4; margin-left: 4px" />
-          </h2>
-          <div v-else class="rename-row">
-            <input
-              ref="renameInput"
-              v-model="renameValue"
-              class="rename-input"
-              @keyup.enter="saveRename((selected as any).dev.id)"
-              @keyup.escape="editingName = false"
-            />
-            <NbButton variant="primary" size="sm" icon="check" @click="saveRename((selected as any).dev.id)" />
-            <NbButton variant="ghost" size="sm" icon="x" @click="editingName = false" />
-          </div>
-          <div class="detail-type">{{ widgetLabel((selected as any).dev.widgetType) }}</div>
-        </div>
-        <NbButton variant="ghost" size="sm" icon="x" @click="inspector.close()" />
-      </div>
-
-      <!-- Device info -->
-      <div class="detail-section">
-        <div class="section-label">Device info</div>
-        <div class="info-grid">
-          <span class="info-key">Plugin</span>
-          <span class="info-val">{{ (selected as any).dev.pluginId }}</span>
-          <template v-if="(selected as any).dev.manufacturer">
-            <span class="info-key">Manufacturer</span>
-            <span class="info-val">{{ (selected as any).dev.manufacturer }}</span>
-          </template>
-          <template v-if="(selected as any).dev.model">
-            <span class="info-key">Model</span>
-            <span class="info-val">{{ (selected as any).dev.model }}</span>
-          </template>
-          <span class="info-key">Status</span>
-          <span class="info-val">{{ (selected as any).dev.pluginStatus }}</span>
-          <span class="info-key">ID</span>
-          <span class="info-val mono">{{ (selected as any).dev.id }}</span>
-        </div>
-      </div>
-
-      <!-- Widget view -->
-      <div class="detail-section">
-        <div class="section-label">State</div>
-
-        <!-- Energy meter widget -->
-        <div v-if="(selected as any).dev.widgetType === 'energy_meter'" class="widget-energy">
-          <div class="energy-primary">
-            <span class="energy-value">{{ fmtNum((selected as any).dev.telemetry.power, 1) }}</span>
-            <span class="energy-unit">W</span>
-          </div>
-          <div class="energy-secondary">
-            <template v-if="(selected as any).dev.telemetry.voltage !== undefined">
-              <span class="energy-item">
-                <span class="energy-label">Voltage</span>
-                <span class="energy-item-val">{{ fmtNum((selected as any).dev.telemetry.voltage, 1) }} V</span>
-              </span>
-            </template>
-            <template v-if="(selected as any).dev.telemetry.current !== undefined">
-              <span class="energy-item">
-                <span class="energy-label">Current</span>
-                <span class="energy-item-val">{{ fmtNum((selected as any).dev.telemetry.current, 3) }} A</span>
-              </span>
-            </template>
-          </div>
-        </div>
-
-        <!-- Thermostat widget -->
-        <div v-else-if="(selected as any).dev.widgetType === 'thermostat'" class="widget-thermo">
-          <div class="thermo-row">
-            <span class="thermo-label">Current</span>
-            <span class="thermo-value">{{ fmtNum((selected as any).dev.telemetry.currentTemperature, 1) }}°C</span>
-          </div>
-          <div class="thermo-row">
-            <span class="thermo-label">Target</span>
-            <span class="thermo-value accent">
-              {{ fmtNum((selected as any).dev.telemetry.targetTemperature, 1) }}°C
-            </span>
-          </div>
-          <div class="thermo-row">
-            <span class="thermo-label">Active</span>
-            <span class="thermo-value" :class="(selected as any).dev.telemetry.active ? 'on' : 'off'">
-              {{ (selected as any).dev.telemetry.active ? 'On' : 'Off' }}
-            </span>
-          </div>
-        </div>
-
-        <!-- Dehumidifier widget -->
-        <div v-else-if="(selected as any).dev.widgetType === 'dehumidifier'" class="widget-thermo">
-          <div class="thermo-row">
-            <span class="thermo-label">Humidity</span>
-            <span class="thermo-value">{{ fmtNum((selected as any).dev.telemetry.currentHumidity, 0) }}%</span>
-          </div>
-          <div class="thermo-row">
-            <span class="thermo-label">Target</span>
-            <span class="thermo-value accent">{{ fmtNum((selected as any).dev.telemetry.targetHumidity, 0) }}%</span>
-          </div>
-          <div class="thermo-row">
-            <span class="thermo-label">Active</span>
-            <span class="thermo-value" :class="(selected as any).dev.telemetry.active ? 'on' : 'off'">
-              {{ (selected as any).dev.telemetry.active ? 'On' : 'Off' }}
-            </span>
-          </div>
-        </div>
-
-        <!-- Generic sensor / switch / light -->
-        <div v-else class="widget-generic">
-          <template
-            v-if="Object.keys((selected as any).dev.telemetry).filter((k: string) => !k.startsWith('_')).length === 0"
-          >
-            <span class="no-telemetry">No telemetry yet</span>
-          </template>
-          <div v-for="[k, v] in telemetryEntries((selected as any).dev)" :key="k" class="char-row">
-            <span class="char-name">{{ k }}</span>
-            <span class="char-value">{{ String(v) }}</span>
-          </div>
-        </div>
-      </div>
-
-      <!-- Energy history chart (energy_meter devices only) -->
-      <div v-if="(selected as any).dev.widgetType === 'energy_meter'" class="detail-section energy-history">
-        <div class="section-label">Energy history</div>
-
-        <!-- Period tabs -->
-        <div class="history-tabs">
-          <button
-            v-for="p in ['day', 'month', 'year']"
-            :key="p"
-            class="history-tab"
-            :class="{ active: historyPeriod === p }"
-            @click="historyPeriod = p as any"
-          >
-            {{ p }}
-          </button>
-        </div>
-
-        <!-- Total + navigation -->
-        <div v-if="historyData" class="history-nav">
-          <button class="history-nav-btn" @click="navigateHistory(-1)">&#8249;</button>
-          <div class="history-nav-center">
-            <span class="history-total">
-              {{ historyData.totalKwh.toFixed(2) }}
-              <span class="history-unit">kWh</span>
-            </span>
-            <span class="history-date">{{ historyData.date }}</span>
-          </div>
-          <button class="history-nav-btn" @click="navigateHistory(1)">&#8250;</button>
-        </div>
-
-        <!-- Bar chart -->
-        <NbBarChart
-          v-if="historyData && historyData.totalKwh > 0"
-          :series="historyChartSeries"
-          :height="120"
-          :show-legend="false"
-          :show-tooltip="true"
-        />
-
-        <div v-if="historyData && historyData.totalKwh === 0" class="no-history">
-          No consumption recorded for this period. Data accumulates every 5 minutes.
-        </div>
-
-        <div v-if="!historyData && !historyLoading" class="no-history">No data available for this period.</div>
-
-        <div v-if="historyLoading" class="no-history">Loading history…</div>
-      </div>
-
-      <!-- Interpolation calibration -->
-      <div v-if="(selected as any).dev.interpolation && interpolationPoints.length > 0" class="detail-section">
-        <div class="section-label">Calibration</div>
-        <NbInterpolationChart
-          v-model="interpolationPoints"
-          :height="220"
-          :input-label="(selected as any).dev.interpolation.inputLabel"
-          :output-label="(selected as any).dev.interpolation.outputLabel"
-          :input-min="(selected as any).dev.interpolation.inputMin"
-          :input-max="(selected as any).dev.interpolation.inputMax"
-          :output-min="(selected as any).dev.interpolation.outputMin"
-          :output-max="(selected as any).dev.interpolation.outputMax"
-          :input-step="0.5"
-          :output-step="1"
-          :show-grid="true"
-          :show-tooltip="true"
-        />
-        <div class="calibration-hint">Drag points to adjust. Double-click to add. Right-click to remove.</div>
-        <div class="calibration-actions">
-          <NbButton
-            variant="primary"
-            size="sm"
-            :disabled="!interpolationDirty || interpolationSaving"
-            @click="saveInterpolation"
-          >
-            {{ interpolationSaving ? 'Saving...' : 'Save' }}
-          </NbButton>
-          <NbButton variant="ghost" size="sm" :disabled="!interpolationDirty" @click="resetInterpolation">
-            Reset
-          </NbButton>
-        </div>
-        <div v-if="interpolationSaved" class="calibration-restart-notice">
-          Configuration saved. Restart the plugin to apply the new mapping.
-        </div>
-      </div>
-      <div v-else-if="(selected as any).dev.interpolation && interpolationLoading" class="detail-section">
-        <div class="section-label">Calibration</div>
-        <div class="no-history">Loading calibration data...</div>
-      </div>
-
-      <!-- All telemetry data -->
-      <div v-if="telemetryEntries((selected as any).dev).length > 0" class="detail-section">
-        <div class="section-label">All telemetry</div>
-        <div class="char-list">
-          <div v-for="[k, v] in telemetryEntries((selected as any).dev)" :key="k" class="char-row">
-            <span class="char-name">{{ k }}</span>
-            <span class="char-value">{{ String(v) }}</span>
-          </div>
-        </div>
-      </div>
-    </template>
-
-    <!-- HAP accessory detail (original) -->
-    <template v-else-if="selected.kind === 'hap'">
-      <div class="detail-header">
-        <div class="detail-icon">
-          <NbIcon :name="categoryInfo((selected as any).acc.category).icon" :size="26" />
-        </div>
-        <div style="flex: 1; min-width: 0">
-          <h2
-            v-if="!editingName"
-            class="detail-name"
-            :title="'Click to rename'"
-            style="cursor: pointer"
-            @click="startRename((selected as any).acc.displayName)"
-          >
-            {{ (selected as any).acc.displayName }}
-            <NbIcon name="pencil" :size="10" style="opacity: 0.4; margin-left: 4px" />
-          </h2>
-          <div v-else class="rename-row">
-            <input
-              ref="renameInput"
-              v-model="renameValue"
-              class="rename-input"
-              @keyup.enter="saveRename((selected as any).acc.uuid)"
-              @keyup.escape="editingName = false"
-            />
-            <NbButton variant="primary" size="sm" icon="check" @click="saveRename((selected as any).acc.uuid)" />
-            <NbButton variant="ghost" size="sm" icon="x" @click="editingName = false" />
-          </div>
-          <div class="detail-type">{{ categoryInfo((selected as any).acc.category).label }}</div>
-        </div>
-        <NbButton variant="ghost" size="sm" icon="x" @click="inspector.close()" />
-      </div>
-
-      <!-- Manufacturer info -->
-      <div v-if="manufacturerInfo((selected as any).acc)" class="detail-section">
-        <div class="section-label">Device info</div>
-        <div class="info-grid">
-          <template v-for="[k, v] in Object.entries(manufacturerInfo((selected as any).acc)!)" :key="k">
-            <span v-if="v" class="info-key">{{ k }}</span>
-            <span v-if="v" class="info-val">{{ v }}</span>
-          </template>
-        </div>
-      </div>
-
-      <!-- Services & characteristics -->
-      <div v-for="svc in mainServices((selected as any).acc)" :key="svc.uuid" class="detail-section">
-        <div class="section-label">{{ svc.displayName || svc.name }}</div>
-        <div class="char-list">
-          <div v-for="ch in svc.characteristics" :key="ch.uuid" class="char-row">
-            <span class="char-name">{{ ch.name }}</span>
-            <!-- Writable bool → inline toggle -->
-            <template v-if="isWritable(ch) && ch.format === 'bool'">
-              <NbSwitch
-                :model-value="!!ch.value"
-                @update:model-value="
-                  setHapCharacteristic((selected as any).acc.uuid, svc.uuid, ch.uuid, $event ? 1 : 0)
-                "
-              />
-            </template>
-            <!-- Read-only or non-bool writable → display value -->
-            <span v-else class="char-value" :class="{ on: ch.format === 'bool' && ch.value }">
-              {{ formatValue(ch) }}
-            </span>
-          </div>
-        </div>
-      </div>
-
-      <div class="detail-uuid">UUID: {{ (selected as any).acc.uuid }}</div>
-    </template>
-  </div>
-</template>
 
 <style lang="scss" scoped>
 .inspector-content {

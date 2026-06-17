@@ -2,75 +2,6 @@
   Renders a single field from a Homebridge config.schema.json schema entry.
   Recursive — nested objects call back into this component.
 -->
-<script setup lang="ts">
-interface SchemaField {
-  type?: string | string[]
-  title?: string
-  description?: string
-  default?: unknown
-  enum?: unknown[]
-  enumNames?: string[]
-  minimum?: number
-  maximum?: number
-  properties?: Record<string, SchemaField>
-  required?: string[]
-  items?: SchemaField
-  oneOf?: SchemaField[]
-  anyOf?: SchemaField[]
-}
-
-const props = defineProps<{
-  fieldKey: string
-  field: SchemaField
-  path: string[]
-  required: boolean
-  value: unknown
-}>()
-
-const emit = defineEmits<{
-  change: [value: unknown]
-  addArray: [path: string[], items: SchemaField]
-  removeArray: [path: string[], index: number]
-  updateArray: [path: string[], index: number, value: unknown]
-}>()
-
-function resolveType(): string {
-  const t = Array.isArray(props.field.type) ? props.field.type[0] : (props.field.type ?? 'string')
-  return t
-}
-
-function label(): string {
-  return props.field.title ?? props.fieldKey.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase())
-}
-
-function selectOptions() {
-  return (props.field.enum ?? []).map((v, i) => ({
-    value: v as string,
-    label: props.field.enumNames?.[i] ?? String(v),
-  }))
-}
-
-function selectValue(): string {
-  return (props.value ?? props.field.default ?? '') as string
-}
-
-function nestedValue(key: string): unknown {
-  const v = props.value as Record<string, unknown> | undefined
-  return v?.[key]
-}
-
-function nestedChange(key: string, val: unknown) {
-  const copy =
-    typeof props.value === 'object' && props.value !== null ? { ...(props.value as Record<string, unknown>) } : {}
-  copy[key] = val
-  emit('change', copy)
-}
-
-function arrayItems(): unknown[] {
-  return Array.isArray(props.value) ? (props.value as unknown[]) : []
-}
-</script>
-
 <template>
   <!-- Nested object → section with children -->
   <div v-if="resolveType() === 'object' && field.properties" class="pcf-section">
@@ -194,6 +125,75 @@ function arrayItems(): unknown[] {
     </div>
   </div>
 </template>
+
+<script setup lang="ts">
+interface SchemaField {
+  type?: string | string[]
+  title?: string
+  description?: string
+  default?: unknown
+  enum?: unknown[]
+  enumNames?: string[]
+  minimum?: number
+  maximum?: number
+  properties?: Record<string, SchemaField>
+  required?: string[]
+  items?: SchemaField
+  oneOf?: SchemaField[]
+  anyOf?: SchemaField[]
+}
+
+const props = defineProps<{
+  fieldKey: string
+  field: SchemaField
+  path: string[]
+  required: boolean
+  value: unknown
+}>()
+
+const emit = defineEmits<{
+  change: [value: unknown]
+  addArray: [path: string[], items: SchemaField]
+  removeArray: [path: string[], index: number]
+  updateArray: [path: string[], index: number, value: unknown]
+}>()
+
+function resolveType(): string {
+  const t = Array.isArray(props.field.type) ? props.field.type[0] : (props.field.type ?? 'string')
+  return t
+}
+
+function label(): string {
+  return props.field.title ?? props.fieldKey.replace(/([A-Z])/g, ' $1').replace(/^./, (s) => s.toUpperCase())
+}
+
+function selectOptions() {
+  return (props.field.enum ?? []).map((v, i) => ({
+    value: v as string,
+    label: props.field.enumNames?.[i] ?? String(v),
+  }))
+}
+
+function selectValue(): string {
+  return (props.value ?? props.field.default ?? '') as string
+}
+
+function nestedValue(key: string): unknown {
+  const v = props.value as Record<string, unknown> | undefined
+  return v?.[key]
+}
+
+function nestedChange(key: string, val: unknown) {
+  const copy =
+    typeof props.value === 'object' && props.value !== null ? { ...(props.value as Record<string, unknown>) } : {}
+  copy[key] = val
+  emit('change', copy)
+}
+
+function arrayItems(): unknown[] {
+  return Array.isArray(props.value) ? (props.value as unknown[]) : []
+}
+</script>
 
 <style lang="scss" scoped>
 .pcf-section {

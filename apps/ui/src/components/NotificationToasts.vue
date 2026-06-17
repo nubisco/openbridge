@@ -1,3 +1,17 @@
+<template>
+  <div class="toast-layer" aria-live="polite" aria-atomic="true">
+    <div v-for="n in notifications.visible" :key="n.id" class="toast" :class="`toast--${n.variant}`">
+      <div class="toast-body">
+        <div v-if="n.title" class="toast-title">{{ n.title }}</div>
+        <div class="toast-message">{{ n.message }}</div>
+      </div>
+      <button class="toast-close" @click="dismiss(n.id)">
+        <NbIcon name="x" :size="12" />
+      </button>
+    </div>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { watch } from 'vue'
 import { useNotificationsStore } from '@/stores/notifications'
@@ -29,20 +43,6 @@ function dismiss(id: string) {
   notifications.remove(id)
 }
 </script>
-
-<template>
-  <div class="toast-layer" aria-live="polite" aria-atomic="true">
-    <div v-for="n in notifications.visible" :key="n.id" class="toast" :class="`toast--${n.variant}`">
-      <div class="toast-body">
-        <div v-if="n.title" class="toast-title">{{ n.title }}</div>
-        <div class="toast-message">{{ n.message }}</div>
-      </div>
-      <button class="toast-close" @click="dismiss(n.id)">
-        <NbIcon name="x" :size="12" />
-      </button>
-    </div>
-  </div>
-</template>
 
 <style scoped lang="scss">
 .toast-layer {

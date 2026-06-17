@@ -1,3 +1,40 @@
+<template>
+  <div class="config-view">
+    <div class="config-toolbar">
+      <div class="toolbar-left">
+        <span class="config-path">~/.openbridge/config.json</span>
+      </div>
+      <div class="toolbar-right">
+        <button class="btn-format" title="Format JSON" @click="format">
+          <NbIcon name="magic-wand" :size="14" />
+          Format
+        </button>
+        <button class="btn-save" :class="{ saving, saved }" :disabled="saving" @click="save">
+          <NbIcon :name="saved ? 'check' : saving ? 'spinner' : 'floppy-disk'" :size="14" />
+          {{ saved ? 'Saved!' : saving ? 'Saving…' : 'Save' }}
+        </button>
+      </div>
+    </div>
+
+    <div v-if="error" class="error-banner">
+      <NbIcon name="warning" :size="14" />
+      {{ error }}
+    </div>
+
+    <div v-if="loading" class="loading-state">
+      <NbIcon name="spinner" :size="28" />
+      <span>Loading config...</span>
+    </div>
+
+    <div v-else ref="editorContainer" class="editor-container" />
+
+    <div class="config-footer">
+      <NbIcon name="info" :size="12" />
+      Changes take effect after restarting the daemon
+    </div>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, shallowRef } from 'vue'
 import loader from '@monaco-editor/loader'
@@ -135,43 +172,6 @@ function format() {
   editor.value?.getAction('editor.action.formatDocument')?.run()
 }
 </script>
-
-<template>
-  <div class="config-view">
-    <div class="config-toolbar">
-      <div class="toolbar-left">
-        <span class="config-path">~/.openbridge/config.json</span>
-      </div>
-      <div class="toolbar-right">
-        <button class="btn-format" title="Format JSON" @click="format">
-          <NbIcon name="magic-wand" :size="14" />
-          Format
-        </button>
-        <button class="btn-save" :class="{ saving, saved }" :disabled="saving" @click="save">
-          <NbIcon :name="saved ? 'check' : saving ? 'spinner' : 'floppy-disk'" :size="14" />
-          {{ saved ? 'Saved!' : saving ? 'Saving…' : 'Save' }}
-        </button>
-      </div>
-    </div>
-
-    <div v-if="error" class="error-banner">
-      <NbIcon name="warning" :size="14" />
-      {{ error }}
-    </div>
-
-    <div v-if="loading" class="loading-state">
-      <NbIcon name="spinner" :size="28" />
-      <span>Loading config...</span>
-    </div>
-
-    <div v-else ref="editorContainer" class="editor-container" />
-
-    <div class="config-footer">
-      <NbIcon name="info" :size="12" />
-      Changes take effect after restarting the daemon
-    </div>
-  </div>
-</template>
 
 <style lang="scss" scoped>
 .config-view {

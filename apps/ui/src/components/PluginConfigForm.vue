@@ -2,6 +2,27 @@
   Visual form editor generated from a plugin's config.schema.json.
   Handles: string, number, integer, boolean, enum, nested object, array of strings.
 -->
+<template>
+  <div class="pcf-root">
+    <template v-if="rootSchema.properties">
+      <PluginConfigField
+        v-for="(field, key) in rootSchema.properties"
+        :key="key"
+        :field-key="String(key)"
+        :field="field"
+        :path="[String(key)]"
+        :required="rootSchema.required?.includes(String(key)) ?? false"
+        :value="get([String(key)])"
+        @change="(v: unknown) => set([String(key)], v)"
+        @add-array="(p: string[], items: SchemaField) => addArrayItem(p, items)"
+        @remove-array="(p: string[], i: number) => removeArrayItem(p, i)"
+        @update-array="(p: string[], i: number, v: unknown) => updateArrayItem(p, i, v)"
+      />
+    </template>
+    <div v-else class="pcf-no-schema">No configurable fields found in schema.</div>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { computed } from 'vue'
 
@@ -85,27 +106,6 @@ function updateArrayItem(path: string[], index: number, value: unknown) {
 
 const rootSchema = computed(() => props.hbSchema.schema ?? { type: 'object', properties: {} })
 </script>
-
-<template>
-  <div class="pcf-root">
-    <template v-if="rootSchema.properties">
-      <PluginConfigField
-        v-for="(field, key) in rootSchema.properties"
-        :key="key"
-        :field-key="String(key)"
-        :field="field"
-        :path="[String(key)]"
-        :required="rootSchema.required?.includes(String(key)) ?? false"
-        :value="get([String(key)])"
-        @change="(v: unknown) => set([String(key)], v)"
-        @add-array="(p: string[], items: SchemaField) => addArrayItem(p, items)"
-        @remove-array="(p: string[], i: number) => removeArrayItem(p, i)"
-        @update-array="(p: string[], i: number, v: unknown) => updateArrayItem(p, i, v)"
-      />
-    </template>
-    <div v-else class="pcf-no-schema">No configurable fields found in schema.</div>
-  </div>
-</template>
 
 <style lang="scss" scoped>
 .pcf-root {

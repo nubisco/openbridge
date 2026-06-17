@@ -1,3 +1,111 @@
+<template>
+  <div class="plugins-view">
+    <div class="plugins-toolbar">
+      <NbTextInput v-model="search" placeholder="Search plugins..." size="sm" style="width: 240px" />
+      <NbButton
+        variant="ghost"
+        size="sm"
+        icon="arrow-clockwise"
+        :loading="refreshingMetadata"
+        :disabled="refreshingMetadata"
+        @click="refreshPluginMetadata(true)"
+      >
+        Refresh metadata
+      </NbButton>
+      <div class="toolbar-spacer" />
+      <NbButton variant="primary" size="sm" icon="magnifying-glass" @click="inspector.openMarketplace()">
+        Browse plugins
+      </NbButton>
+    </div>
+
+    <div v-if="filtered().length === 0" class="empty-state">
+      <NbIcon name="puzzle-piece" :size="40" />
+      <p v-if="search">No plugins matching "{{ search }}"</p>
+      <template v-else>
+        <p>No plugins loaded yet.</p>
+        <NbButton variant="primary" size="sm" icon="magnifying-glass" @click="inspector.openMarketplace()">
+          Browse &amp; install plugins
+        </NbButton>
+      </template>
+    </div>
+
+    <div v-else class="plugin-cards">
+      <div
+        v-for="plugin in filtered()"
+        :key="plugin.id"
+        class="plugin-card"
+        :class="[
+          `plugin-card--${plugin.status}`,
+          {
+            selected: inspector.selectedPlugin?.id === plugin.id && inspector.visible && inspector.mode === 'plugin',
+            'plugin-card--ob': isOpenBridge(plugin),
+          },
+        ]"
+        @click="selectPlugin(plugin)"
+      >
+        <div class="plugin-card-header">
+          <div class="plugin-avatar" :class="`plugin-avatar--${plugin.status}`">
+            <img
+              v-if="avatarUrl(plugin)"
+              :src="avatarUrl(plugin)!"
+              :alt="plugin.manifest.name"
+              class="plugin-avatar-img"
+              @error="($event.target as HTMLImageElement).style.display = 'none'"
+            />
+            <NbIcon v-if="!avatarUrl(plugin) && isOpenBridge(plugin)" name="diamond" :size="20" />
+            <NbIcon v-else-if="!avatarUrl(plugin)" name="puzzle-piece" :size="20" />
+          </div>
+          <div class="plugin-meta">
+            <div class="plugin-name">{{ plugin.manifest.name }}</div>
+            <div v-if="plugin.source === 'homebridge' && plugin.platformName" class="plugin-platform">
+              Platform: {{ plugin.platformName }}
+            </div>
+            <div class="plugin-version">
+              v{{ plugin.manifest.version }}
+              <span
+                v-if="plugin.availableUpdate"
+                class="update-badge"
+                :title="'Update available: v' + plugin.availableUpdate"
+              >
+                v{{ plugin.availableUpdate }} available
+              </span>
+            </div>
+          </div>
+          <div class="plugin-status-badge" :class="plugin.status">{{ plugin.status }}</div>
+        </div>
+
+        <p v-if="plugin.manifest.description" class="plugin-desc">{{ plugin.manifest.description }}</p>
+        <p v-if="plugin.manifest.author" class="plugin-author">by {{ plugin.manifest.author }}</p>
+        <div v-if="pluginEnriched(plugin)" class="plugin-enriched">
+          <a
+            v-if="pluginEnriched(plugin)?.githubSponsorsUrl"
+            :href="pluginEnriched(plugin)?.githubSponsorsUrl"
+            class="plugin-stat plugin-stat--link"
+            target="_blank"
+            rel="noopener"
+            @click.stop
+          >
+            <NbIcon name="heart" weight="fill" :size="11" />
+            Sponsor
+          </a>
+          <a
+            v-if="pluginEnriched(plugin)?.documentationUrl"
+            :href="pluginEnriched(plugin)?.documentationUrl"
+            class="plugin-stat plugin-stat--link"
+            target="_blank"
+            rel="noopener"
+            @click.stop
+          >
+            <NbIcon name="book-open" :size="11" />
+            Docs
+          </a>
+        </div>
+        <div v-if="plugin.error" class="plugin-error">{{ plugin.error }}</div>
+      </div>
+    </div>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
 import { useDaemonStore } from '@/stores/daemon'
@@ -180,114 +288,6 @@ watch(
   { immediate: true },
 )
 </script>
-
-<template>
-  <div class="plugins-view">
-    <div class="plugins-toolbar">
-      <NbTextInput v-model="search" placeholder="Search plugins..." size="sm" style="width: 240px" />
-      <NbButton
-        variant="ghost"
-        size="sm"
-        icon="arrow-clockwise"
-        :loading="refreshingMetadata"
-        :disabled="refreshingMetadata"
-        @click="refreshPluginMetadata(true)"
-      >
-        Refresh metadata
-      </NbButton>
-      <div class="toolbar-spacer" />
-      <NbButton variant="primary" size="sm" icon="magnifying-glass" @click="inspector.openMarketplace()">
-        Browse plugins
-      </NbButton>
-    </div>
-
-    <div v-if="filtered().length === 0" class="empty-state">
-      <NbIcon name="puzzle-piece" :size="40" />
-      <p v-if="search">No plugins matching "{{ search }}"</p>
-      <template v-else>
-        <p>No plugins loaded yet.</p>
-        <NbButton variant="primary" size="sm" icon="magnifying-glass" @click="inspector.openMarketplace()">
-          Browse &amp; install plugins
-        </NbButton>
-      </template>
-    </div>
-
-    <div v-else class="plugin-cards">
-      <div
-        v-for="plugin in filtered()"
-        :key="plugin.id"
-        class="plugin-card"
-        :class="[
-          `plugin-card--${plugin.status}`,
-          {
-            selected: inspector.selectedPlugin?.id === plugin.id && inspector.visible && inspector.mode === 'plugin',
-            'plugin-card--ob': isOpenBridge(plugin),
-          },
-        ]"
-        @click="selectPlugin(plugin)"
-      >
-        <div class="plugin-card-header">
-          <div class="plugin-avatar" :class="`plugin-avatar--${plugin.status}`">
-            <img
-              v-if="avatarUrl(plugin)"
-              :src="avatarUrl(plugin)!"
-              :alt="plugin.manifest.name"
-              class="plugin-avatar-img"
-              @error="($event.target as HTMLImageElement).style.display = 'none'"
-            />
-            <NbIcon v-if="!avatarUrl(plugin) && isOpenBridge(plugin)" name="diamond" :size="20" />
-            <NbIcon v-else-if="!avatarUrl(plugin)" name="puzzle-piece" :size="20" />
-          </div>
-          <div class="plugin-meta">
-            <div class="plugin-name">{{ plugin.manifest.name }}</div>
-            <div v-if="plugin.source === 'homebridge' && plugin.platformName" class="plugin-platform">
-              Platform: {{ plugin.platformName }}
-            </div>
-            <div class="plugin-version">
-              v{{ plugin.manifest.version }}
-              <span
-                v-if="plugin.availableUpdate"
-                class="update-badge"
-                :title="'Update available: v' + plugin.availableUpdate"
-              >
-                v{{ plugin.availableUpdate }} available
-              </span>
-            </div>
-          </div>
-          <div class="plugin-status-badge" :class="plugin.status">{{ plugin.status }}</div>
-        </div>
-
-        <p v-if="plugin.manifest.description" class="plugin-desc">{{ plugin.manifest.description }}</p>
-        <p v-if="plugin.manifest.author" class="plugin-author">by {{ plugin.manifest.author }}</p>
-        <div v-if="pluginEnriched(plugin)" class="plugin-enriched">
-          <a
-            v-if="pluginEnriched(plugin)?.githubSponsorsUrl"
-            :href="pluginEnriched(plugin)?.githubSponsorsUrl"
-            class="plugin-stat plugin-stat--link"
-            target="_blank"
-            rel="noopener"
-            @click.stop
-          >
-            <NbIcon name="heart" weight="fill" :size="11" />
-            Sponsor
-          </a>
-          <a
-            v-if="pluginEnriched(plugin)?.documentationUrl"
-            :href="pluginEnriched(plugin)?.documentationUrl"
-            class="plugin-stat plugin-stat--link"
-            target="_blank"
-            rel="noopener"
-            @click.stop
-          >
-            <NbIcon name="book-open" :size="11" />
-            Docs
-          </a>
-        </div>
-        <div v-if="plugin.error" class="plugin-error">{{ plugin.error }}</div>
-      </div>
-    </div>
-  </div>
-</template>
 
 <style lang="scss" scoped>
 .plugins-view {

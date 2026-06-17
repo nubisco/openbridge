@@ -1,3 +1,29 @@
+<template>
+  <div class="logs-view">
+    <div class="logs-toolbar">
+      <div class="conn-dot" :class="connected ? 'live' : 'dead'" :title="connected ? 'Connected' : 'Disconnected'" />
+      <span class="conn-label">{{ connected ? 'Live' : 'Reconnecting…' }}</span>
+      <div class="toolbar-sep" />
+      <div class="search-wrap">
+        <NbIcon name="magnifying-glass" :size="13" class="search-icon" />
+        <input
+          v-model="searchQuery"
+          class="search-input"
+          placeholder="Search logs…"
+          @input="doSearch"
+          @keydown.enter="doSearch"
+        />
+      </div>
+      <button class="btn-clear" title="Clear terminal" @click="clearTerminal">
+        <NbIcon name="trash" :size="13" />
+        Clear
+      </button>
+    </div>
+
+    <div ref="containerEl" class="terminal-container" />
+  </div>
+</template>
+
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref, shallowRef } from 'vue'
 import { useLayoutStore } from '@/stores/layout'
@@ -115,32 +141,6 @@ onBeforeUnmount(() => {
   terminal.value?.dispose()
 })
 </script>
-
-<template>
-  <div class="logs-view">
-    <div class="logs-toolbar">
-      <div class="conn-dot" :class="connected ? 'live' : 'dead'" :title="connected ? 'Connected' : 'Disconnected'" />
-      <span class="conn-label">{{ connected ? 'Live' : 'Reconnecting…' }}</span>
-      <div class="toolbar-sep" />
-      <div class="search-wrap">
-        <NbIcon name="magnifying-glass" :size="13" class="search-icon" />
-        <input
-          v-model="searchQuery"
-          class="search-input"
-          placeholder="Search logs…"
-          @input="doSearch"
-          @keydown.enter="doSearch"
-        />
-      </div>
-      <button class="btn-clear" title="Clear terminal" @click="clearTerminal">
-        <NbIcon name="trash" :size="13" />
-        Clear
-      </button>
-    </div>
-
-    <div ref="containerEl" class="terminal-container" />
-  </div>
-</template>
 
 <style lang="scss" scoped>
 @use '@xterm/xterm/css/xterm.css';
