@@ -1,3 +1,11 @@
+## [0.18.3](https://github.com/nubisco/openbridge/compare/v0.18.2...v0.18.3) (2026-07-18)
+
+
+### Bug Fixes
+
+* **daemon:** resolve update checks via releases redirect to avoid GitHub API rate limits ([e0e64d3](https://github.com/nubisco/openbridge/commit/e0e64d383e23a4478a90b01cddb2c40017314eab))
+* **ui:** update @nubisco/ui to 1.47.0 ([eca0fdc](https://github.com/nubisco/openbridge/commit/eca0fdc9d18354e5bd05480cda341dea7b1439e0))
+
 ## [0.18.2](https://github.com/nubisco/openbridge/compare/v0.18.1...v0.18.2) (2026-05-14)
 
 
