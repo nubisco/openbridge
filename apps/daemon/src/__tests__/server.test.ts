@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest'
 import { mkdirSync, writeFileSync, readFileSync, rmSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
@@ -488,6 +488,84 @@ describe('OpenBridge Server API', () => {
         expect(platforms).toHaveLength(1)
         expect(platforms[0].platform).toBe('KeepPlatform')
       } finally {
+        await server.close()
+      }
+    })
+  })
+
+  describe('Update Check', () => {
+    beforeEach(() => {
+      writeConfig(baseConfig)
+    })
+
+    it('GET /api/updates/check resolves latest via releases redirect even when the API is rate-limited', async () => {
+      const { createServer } = await import('../server.js')
+      const { PluginRegistry } = await import('@nubisco/openbridge-core')
+      const registry = new PluginRegistry()
+
+      const server = await createServer(registry, null, null, [], new Set(), new Map())
+      await server.listen({ port: TEST_PORT, host: '127.0.0.1' })
+
+      const realFetch = globalThis.fetch
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+        const url = String(input)
+        if (url === 'https://github.com/nubisco/openbridge/releases/latest') {
+          return Promise.resolve(
+            new Response(null, {
+              status: 302,
+              headers: { location: 'https://github.com/nubisco/openbridge/releases/tag/v9.9.9' },
+            }),
+          )
+        }
+        if (url.startsWith('https://api.github.com/')) {
+          return Promise.resolve(new Response('{"message":"API rate limit exceeded"}', { status: 403 }))
+        }
+        return realFetch(input, init)
+      })
+
+      try {
+        const res = await fetch(`${BASE}/api/updates/check`)
+        const data = await res.json()
+
+        expect(res.status).toBe(200)
+        expect(data.current).toBe('0.0.0-test')
+        expect(data.latest).toBe('9.9.9')
+        expect(data.updateAvailable).toBe(true)
+        expect(data.releaseUrl).toBe('https://github.com/nubisco/openbridge/releases/tag/v9.9.9')
+        expect(data.releaseNotes).toBeNull()
+      } finally {
+        fetchSpy.mockRestore()
+        await server.close()
+      }
+    })
+
+    it('GET /api/updates/check reports latest null when GitHub is unreachable', async () => {
+      const { createServer } = await import('../server.js')
+      const { PluginRegistry } = await import('@nubisco/openbridge-core')
+      const registry = new PluginRegistry()
+
+      const server = await createServer(registry, null, null, [], new Set(), new Map())
+      await server.listen({ port: TEST_PORT, host: '127.0.0.1' })
+
+      const realFetch = globalThis.fetch
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+        const url = String(input)
+        if (url.includes('github.com')) {
+          return Promise.reject(new TypeError('fetch failed'))
+        }
+        return realFetch(input, init)
+      })
+
+      try {
+        const res = await fetch(`${BASE}/api/updates/check`)
+        const data = await res.json()
+
+        expect(res.status).toBe(200)
+        expect(data.current).toBe('0.0.0-test')
+        expect(data.latest).toBeNull()
+        expect(data.updateAvailable).toBe(false)
+      } finally {
+        fetchSpy.mockRestore()
         await server.close()
       }
     })

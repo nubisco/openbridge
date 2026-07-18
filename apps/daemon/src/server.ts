@@ -105,25 +105,42 @@ export async function createServer(
   })
 
   // ─── Update check ─────────────────────────────────────────────────────────
-  // Cache the last successful check so rate-limited or failed requests
-  // can still report a known latest version instead of "up to date".
-  let lastKnownLatest: { version: string; url: string; notes: string } | null = null
+  // The latest version is resolved from the github.com releases redirect,
+  // which is NOT subject to the API's 60 req/hour per-IP rate limit
+  // (api.github.com regularly 403s on home networks that share an IP).
+  // Release notes still come from the API, but only best-effort.
+  // Cache the last successful check so failed requests can still report a
+  // known latest version instead of "up to date".
+  let lastKnownLatest: { version: string; url: string; notes: string | null } | null = null
+
+  async function fetchLatestVersion(): Promise<{ version: string; url: string } | null> {
+    const res = await fetch('https://github.com/nubisco/openbridge/releases/latest', {
+      signal: AbortSignal.timeout(8000),
+      redirect: 'manual',
+      headers: { 'User-Agent': 'openbridge-daemon' },
+    })
+    const location = res.headers.get('location') ?? ''
+    const match = location.match(/\/releases\/tag\/v?([^/]+)$/)
+    if (!match) return null
+    return { version: decodeURIComponent(match[1]), url: location }
+  }
 
   app.get('/api/updates/check', async () => {
     try {
-      const res = await fetch('https://api.github.com/repos/nubisco/openbridge/releases/latest', {
-        signal: AbortSignal.timeout(8000),
-        headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'openbridge-daemon' },
-      })
-      if (res.ok) {
-        const data = (await res.json()) as { tag_name: string; html_url: string; body: string }
-        lastKnownLatest = {
-          version: data.tag_name.replace(/^v/, ''),
-          url: data.html_url,
-          notes: data.body,
+      const found = await fetchLatestVersion()
+      if (found && (found.version !== lastKnownLatest?.version || lastKnownLatest.notes === null)) {
+        let notes: string | null = null
+        try {
+          const res = await fetch('https://api.github.com/repos/nubisco/openbridge/releases/latest', {
+            signal: AbortSignal.timeout(8000),
+            headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'openbridge-daemon' },
+          })
+          if (res.ok) notes = ((await res.json()) as { body: string }).body
+        } catch {
+          /* notes are cosmetic — never fail the check over them */
         }
+        lastKnownLatest = { version: found.version, url: found.url, notes }
       }
-      // On non-OK (rate limit, etc.) fall through to use lastKnownLatest
     } catch {
       // Network error, timeout, etc. — fall through to use lastKnownLatest
     }
@@ -195,30 +212,24 @@ export async function createServer(
     // Run update async — respond immediately
     ;(async () => {
       try {
-        // 1. Fetch release info
+        // 1. Resolve latest version (github.com redirect — not rate-limited like the API)
         log.info('Self-update: fetching release info...')
         broadcast({ stage: 'downloading', progress: 0, message: 'Fetching release info...' })
-        const releaseRes = await fetch('https://api.github.com/repos/nubisco/openbridge/releases/latest', {
-          headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'openbridge-daemon' },
-        })
-        if (!releaseRes.ok) throw new Error(`GitHub API returned ${releaseRes.status}`)
-        const release = (await releaseRes.json()) as {
-          tag_name: string
-          assets: Array<{ name: string; browser_download_url: string; size: number }>
-        }
-        const version = release.tag_name.replace(/^v/, '')
+        const found = await fetchLatestVersion()
+        if (!found) throw new Error('Could not resolve the latest release from GitHub')
+        const version = found.version
         const assetName = `openbridge-v${version}-linux-${arch}.tar.gz`
-        const asset = release.assets.find((a) => a.name === assetName)
-        if (!asset)
-          throw new Error(`Release asset ${assetName} not found. Your architecture (${arch}) may not be supported yet.`)
+        const assetUrl = `https://github.com/nubisco/openbridge/releases/download/v${version}/${assetName}`
 
         // 2. Download tarball
-        log.info(`Self-update: downloading ${assetName} (${(asset.size / 1024 / 1024).toFixed(1)} MB)...`)
+        log.info(`Self-update: downloading ${assetName}...`)
         broadcast({ stage: 'downloading', progress: 0.1, message: `Downloading v${version}...`, version })
-        const dlRes = await fetch(asset.browser_download_url, {
+        const dlRes = await fetch(assetUrl, {
           headers: { 'User-Agent': 'openbridge-daemon' },
           redirect: 'follow',
         })
+        if (dlRes.status === 404)
+          throw new Error(`Release asset ${assetName} not found. Your architecture (${arch}) may not be supported yet.`)
         if (!dlRes.ok || !dlRes.body) throw new Error(`Download failed: ${dlRes.status}`)
 
         const tarballPath = join(APP_VOLUME, 'download.tar.gz')
@@ -226,8 +237,8 @@ export async function createServer(
         const { pipeline } = await import('stream/promises')
         const { Readable } = await import('stream')
 
-        // Stream download with progress
-        const totalSize = asset.size
+        // Stream download with progress (size from response headers; 0 → indeterminate)
+        const totalSize = Number(dlRes.headers.get('content-length') ?? 0)
         let downloaded = 0
         const progressStream = new (await import('stream')).Transform({
           transform(chunk, _encoding, callback) {
