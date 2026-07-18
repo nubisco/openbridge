@@ -66,7 +66,10 @@ jobs:
           load: true
           tags: openbridge-local:build
           cache-from: type=gha,scope=${{ matrix.platform }}
-          cache-to: type=gha,scope=${{ matrix.platform }},mode=max
+          # ignore-error: cache export is best-effort — the GHA cache service
+          # intermittently fails with "failed to reserve cache" and must not
+          # fail the deploy over a cache write.
+          cache-to: type=gha,scope=${{ matrix.platform }},mode=max,ignore-error=true
 
       - name: Extract app files and create update tarball
         run: |
