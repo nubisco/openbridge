@@ -118,7 +118,7 @@ export async function registerAuthRoutes(app: FastifyInstance, config: TAuthConf
 
   const platform = new PlatformClient({ issuer: config.issuer })
 
-  app.post<{ Body: { token?: string } }>('/auth/platform/callback', async (req, reply) => {
+  app.post<{ Body: { token?: string; expected_sub?: string } }>('/auth/platform/callback', async (req, reply) => {
     const token = req.body?.token
     if (!token) return reply.code(400).send({ error: 'token_required' })
 
@@ -127,6 +127,22 @@ export async function registerAuthRoutes(app: FastifyInstance, config: TAuthConf
       claims = await platform.verify(token)
     } catch {
       return reply.code(401).send({ error: 'invalid_token' })
+    }
+
+    // Multi-account rule 1: only trust tokens issued to THIS app. A valid
+    // platform token minted for a different relying party must not open a
+    // session here.
+    if (config.appId && claims.app && claims.app !== config.appId) {
+      return reply.code(401).send({ error: 'wrong_app' })
+    }
+
+    // Multi-account rule 3: a silent renewal must come back as the same
+    // subject. The UI passes expected_sub when it re-authenticates
+    // non-interactively; a different account may only take over through an
+    // explicit interactive switch (which sends no expectation).
+    const expectedSub = req.body?.expected_sub
+    if (expectedSub && claims.sub !== expectedSub) {
+      return reply.code(409).send({ error: 'subject_mismatch' })
     }
 
     const payload: TSessionPayload = {

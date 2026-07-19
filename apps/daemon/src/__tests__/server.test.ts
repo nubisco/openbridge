@@ -493,6 +493,113 @@ describe('OpenBridge Server API', () => {
     })
   })
 
+  describe('Platform Auth Callback (multi-account rules)', () => {
+    const ISSUER = 'https://platform.test'
+    const KID = 'test-key'
+    let keyPair: CryptoKeyPair
+    let publicJwk: JsonWebKey & { kid: string; alg: string; use: string }
+
+    beforeAll(async () => {
+      keyPair = (await crypto.subtle.generateKey(
+        { name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' },
+        true,
+        ['sign', 'verify'],
+      )) as CryptoKeyPair
+      publicJwk = { ...(await crypto.subtle.exportKey('jwk', keyPair.publicKey)), kid: KID, alg: 'RS256', use: 'sig' }
+    })
+
+    async function signJwt(claims: Record<string, unknown>): Promise<string> {
+      const enc = (obj: unknown) => Buffer.from(JSON.stringify(obj)).toString('base64url')
+      const signingInput = `${enc({ alg: 'RS256', kid: KID })}.${enc(claims)}`
+      const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', keyPair.privateKey, Buffer.from(signingInput))
+      return `${signingInput}.${Buffer.from(sig).toString('base64url')}`
+    }
+
+    function baseClaims(): Record<string, unknown> {
+      const now = Math.floor(Date.now() / 1000)
+      return {
+        sub: 'u-jose',
+        email: 'jose@nubisco.io',
+        role: 'admin',
+        app: 'openbridge',
+        iss: ISSUER,
+        iat: now,
+        exp: now + 300,
+      }
+    }
+
+    async function withAuthServer(fn: (base: string) => Promise<void>) {
+      writeConfig(baseConfig)
+      process.env.PLATFORM_ENABLED = 'true'
+      process.env.PLATFORM_ISSUER = ISSUER
+      process.env.PLATFORM_APP_ID = 'openbridge'
+
+      const realFetch = globalThis.fetch
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+        if (String(input) === `${ISSUER}/.well-known/jwks.json`) {
+          return Promise.resolve(new Response(JSON.stringify({ keys: [publicJwk] }), { status: 200 }))
+        }
+        return realFetch(input, init)
+      })
+
+      const { createServer } = await import('../server.js')
+      const { PluginRegistry } = await import('@nubisco/openbridge-core')
+      const server = await createServer(new PluginRegistry(), null, null, [], new Set(), new Map())
+      await server.listen({ port: TEST_PORT, host: '127.0.0.1' })
+
+      try {
+        await fn(BASE)
+      } finally {
+        fetchSpy.mockRestore()
+        delete process.env.PLATFORM_ENABLED
+        delete process.env.PLATFORM_ISSUER
+        delete process.env.PLATFORM_APP_ID
+        await server.close()
+      }
+    }
+
+    async function postCallback(base: string, body: Record<string, unknown>) {
+      return fetch(`${base}/auth/platform/callback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      })
+    }
+
+    it('accepts a valid token for this app and sets a session cookie', async () => {
+      await withAuthServer(async (base) => {
+        const res = await postCallback(base, { token: await signJwt(baseClaims()) })
+        expect(res.status).toBe(200)
+        expect(res.headers.get('set-cookie')).toContain('openbridge_session=')
+        const data = await res.json()
+        expect(data.user).toEqual({ id: 'u-jose', email: 'jose@nubisco.io' })
+      })
+    })
+
+    it('rejects a token issued to a different app', async () => {
+      await withAuthServer(async (base) => {
+        const res = await postCallback(base, { token: await signJwt({ ...baseClaims(), app: 'analytics' }) })
+        expect(res.status).toBe(401)
+        expect((await res.json()).error).toBe('wrong_app')
+      })
+    })
+
+    it('rejects a renewal whose subject changed (expected_sub mismatch)', async () => {
+      await withAuthServer(async (base) => {
+        const res = await postCallback(base, { token: await signJwt(baseClaims()), expected_sub: 'u-tools' })
+        expect(res.status).toBe(409)
+        expect((await res.json()).error).toBe('subject_mismatch')
+      })
+    })
+
+    it('accepts a renewal when the subject matches expected_sub', async () => {
+      await withAuthServer(async (base) => {
+        const res = await postCallback(base, { token: await signJwt(baseClaims()), expected_sub: 'u-jose' })
+        expect(res.status).toBe(200)
+      })
+    })
+  })
+
   describe('Update Check', () => {
     beforeEach(() => {
       writeConfig(baseConfig)

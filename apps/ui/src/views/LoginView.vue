@@ -13,6 +13,7 @@
         <span v-if="loading">Redirecting…</span>
         <span v-else>Sign in via Nubisco Platform</span>
       </NbButton>
+      <button class="login-alt" :disabled="loading" @click="pickAccount">Use a different account</button>
     </div>
   </div>
 </template>
@@ -22,9 +23,11 @@ import { computed, ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuth } from '@/composables/useAuth'
 
+const AUTO_RESUME_KEY = 'openbridge_auto_resume_attempted'
+
 const route = useRoute()
 const router = useRouter()
-const { loadConfig, checkAuth, startPlatformLogin } = useAuth()
+const { user, loadConfig, checkAuth, startPlatformLogin, resumeLastAccount, chooseAccount } = useAuth()
 
 const loading = ref(false)
 const error = ref<string | null>(null)
@@ -34,7 +37,19 @@ async function signIn() {
   loading.value = true
   error.value = null
   try {
-    await startPlatformLogin()
+    const hint = typeof route.query.login_hint === 'string' ? route.query.login_hint : undefined
+    await startPlatformLogin(hint ? { loginHint: hint } : {})
+  } catch (e) {
+    loading.value = false
+    error.value = e instanceof Error ? e.message : 'Unable to start sign-in.'
+  }
+}
+
+async function pickAccount() {
+  loading.value = true
+  error.value = null
+  try {
+    await chooseAccount()
   } catch (e) {
     loading.value = false
     error.value = e instanceof Error ? e.message : 'Unable to start sign-in.'
@@ -50,9 +65,43 @@ onMounted(async () => {
     return
   }
 
-  // Already signed in — go home.
-  const ok = await checkAuth()
-  if (ok) router.replace('/')
+  if (route.query.error === 'account_changed') {
+    error.value = 'Your platform account changed. Please sign in again.'
+    return
+  }
+
+  const loginHint = typeof route.query.login_hint === 'string' ? route.query.login_hint : ''
+  const signedIn = await checkAuth()
+
+  if (signedIn) {
+    // Launchpad handed us a hint for a DIFFERENT account: honor it by
+    // switching through the redirect flow instead of keeping the old user.
+    if (loginHint && user.value && user.value.email.toLowerCase() !== loginHint.toLowerCase()) {
+      loading.value = true
+      await startPlatformLogin({ loginHint })
+      return
+    }
+    router.replace('/')
+    return
+  }
+
+  // Launchpad launch: land already signed in as the account that was clicked.
+  if (loginHint) {
+    loading.value = true
+    await startPlatformLogin({ loginHint })
+    return
+  }
+
+  // Session expired: silently resume the account this app was using
+  // (login_hint + expected_sub guarantee the same subject comes back).
+  // Attempted at most once per tab so a failed resume can't loop.
+  if (!loggedOut.value && !sessionStorage.getItem(AUTO_RESUME_KEY)) {
+    sessionStorage.setItem(AUTO_RESUME_KEY, '1')
+    loading.value = true
+    const resumed = await resumeLastAccount()
+    if (resumed) return
+    loading.value = false
+  }
 })
 </script>
 
@@ -97,5 +146,21 @@ onMounted(async () => {
 
 .login-btn {
   margin-top: 0.5rem;
+}
+
+.login-alt {
+  align-self: center;
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--nb-c-text-subtle);
+  font-size: var(--nb-font-size-13, 13px);
+  text-decoration: underline;
+
+  &:disabled {
+    cursor: default;
+    opacity: 0.5;
+  }
 }
 </style>

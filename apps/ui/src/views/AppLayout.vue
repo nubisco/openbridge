@@ -32,11 +32,32 @@
       </div>
       <NbSidebarLink
         v-if="auth.config.value?.enabled"
-        :tooltip="auth.user.value ? `Sign out — ${auth.user.value.email}` : 'Sign out'"
-        @click="signOut"
+        :tooltip="auth.user.value ? `Account — ${auth.user.value.email}` : 'Account'"
+        @click="openAccountMenu"
       >
-        <NbIcon name="sign-out" :size="18" />
+        <NbIcon name="user-circle" :size="18" />
       </NbSidebarLink>
+      <NbMenu ref="accountMenu" v-model:open="accountMenuOpen" :min-width="240">
+        <NbMenuItem disabled icon="user-circle">
+          {{ auth.user.value?.email ?? 'Signed in' }}
+        </NbMenuItem>
+        <NbMenuDivider />
+        <template v-if="otherIdentities.length">
+          <NbMenuItem
+            v-for="identity in otherIdentities"
+            :key="identity.sub"
+            icon="user-switch"
+            @select="auth.switchAccount(identity.email)"
+          >
+            {{ identity.email }}
+          </NbMenuItem>
+        </template>
+        <NbMenuItem v-else icon="user-switch" @select="auth.chooseAccount()">Switch account…</NbMenuItem>
+        <NbMenuItem icon="plus-circle" @select="auth.addAccount()">Add another account</NbMenuItem>
+        <NbMenuDivider />
+        <NbMenuItem icon="sign-out" @select="signOut">Sign out</NbMenuItem>
+        <NbMenuItem danger icon="sign-out" @select="auth.logoutEverywhere()">Sign out of all apps</NbMenuItem>
+      </NbMenu>
     </template>
 
     <!-- ═══ Topbar ═══ -->
@@ -84,7 +105,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useDaemonStore } from '@/stores/daemon'
 import { useInspectorStore } from '@/stores/inspector'
 import { useLayoutStore } from '@/stores/layout'
-import { useAuth } from '@/composables/useAuth'
+import { useAuth, type PlatformIdentity } from '@/composables/useAuth'
 import PluginInspector from '@/components/PluginInspector.vue'
 import MarketplacePanel from '@/components/MarketplacePanel.vue'
 import DeviceInspector from '@/components/DeviceInspector.vue'
@@ -98,6 +119,24 @@ const auth = useAuth()
 
 async function signOut() {
   await auth.logout()
+}
+
+// ─── Account switcher ───────────────────────────────────────────────────────
+// Lists the other platform identities on this browser when the platform
+// exposes them cross-origin; otherwise the menu falls back to the redirect
+// account chooser. The current account is matched by our own session's sub,
+// never by the platform's active flag.
+const accountMenu = ref<{ setPositionXY: (x: number, y: number) => void } | null>(null)
+const accountMenuOpen = ref(false)
+const otherIdentities = ref<PlatformIdentity[]>([])
+
+async function openAccountMenu(event: MouseEvent) {
+  const target = event.currentTarget as HTMLElement | null
+  const rect = target?.getBoundingClientRect()
+  accountMenuOpen.value = true
+  if (rect) accountMenu.value?.setPositionXY(rect.right + 8, rect.top)
+  const identities = await auth.listIdentities()
+  otherIdentities.value = identities.filter((i) => i.sub !== auth.user.value?.id)
 }
 
 const updateAvailable = ref<string | null>(null)

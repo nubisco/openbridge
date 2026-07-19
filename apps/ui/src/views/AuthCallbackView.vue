@@ -12,7 +12,7 @@ import { useAuth } from '@/composables/useAuth'
 
 const route = useRoute()
 const router = useRouter()
-const { checkAuth } = useAuth()
+const { checkAuth, clearLastAccount } = useAuth()
 
 const error = ref<string | null>(null)
 
@@ -22,6 +22,10 @@ onMounted(async () => {
   const platformError = typeof route.query.error === 'string' ? route.query.error : ''
   const stored = sessionStorage.getItem('openbridge_platform_state')
   sessionStorage.removeItem('openbridge_platform_state')
+  // Set only for non-interactive renewals: the daemon must reject a token
+  // whose subject differs from the session being renewed.
+  const expectedSub = sessionStorage.getItem('openbridge_platform_expected_sub')
+  sessionStorage.removeItem('openbridge_platform_expected_sub')
 
   if (platformError) {
     error.value =
@@ -48,18 +52,29 @@ onMounted(async () => {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ token }),
+    body: JSON.stringify({ token, ...(expectedSub ? { expected_sub: expectedSub } : {}) }),
   })
   if (!res.ok) {
     const data = (await res.json().catch(() => null)) as { error?: string } | null
+    if (data?.error === 'subject_mismatch') {
+      // The renewal came back as a different account. Never adopt it —
+      // forget the expectation and restart an interactive login.
+      clearLastAccount()
+      router.replace({ path: '/login', query: { error: 'account_changed' } })
+      return
+    }
     error.value =
       data?.error === 'invalid_token'
         ? 'Your platform sign-in is no longer valid. Please try again.'
-        : 'Sign-in failed. Please try again.'
+        : data?.error === 'wrong_app'
+          ? 'The sign-in was issued for a different application. Please try again.'
+          : 'Sign-in failed. Please try again.'
     return
   }
 
   await checkAuth()
+  // Successful sign-in re-arms the login page's one-shot silent resume.
+  sessionStorage.removeItem('openbridge_auto_resume_attempted')
   router.replace('/')
 })
 </script>
