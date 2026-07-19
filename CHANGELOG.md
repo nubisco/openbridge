@@ -1,3 +1,10 @@
+## [0.19.1](https://github.com/nubisco/openbridge/compare/v0.19.0...v0.19.1) (2026-07-19)
+
+
+### Bug Fixes
+
+* **ui:** pass account menu labels via NbMenuItem label prop ([2e87542](https://github.com/nubisco/openbridge/commit/2e87542307bbe03967b68cdb28337d89d0055ff3))
+
 # [0.19.0](https://github.com/nubisco/openbridge/compare/v0.18.3...v0.19.0) (2026-07-19)
 
 
