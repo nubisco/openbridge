@@ -59,6 +59,7 @@ export default defineConfig({
     port: 5174,
     proxy: {
       '/api': 'http://localhost:8582',
+      '/auth': 'http://localhost:8582',
       '/ws': { target: 'ws://localhost:8582', ws: true },
     },
   },
