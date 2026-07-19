@@ -38,25 +38,22 @@
         <NbIcon name="user-circle" :size="18" />
       </NbSidebarLink>
       <NbMenu ref="accountMenu" v-model:open="accountMenuOpen" :min-width="240">
-        <NbMenuItem disabled icon="user-circle">
-          {{ auth.user.value?.email ?? 'Signed in' }}
-        </NbMenuItem>
+        <NbMenuItem disabled icon="user-circle" :label="auth.user.value?.email ?? 'Signed in'" />
         <NbMenuDivider />
         <template v-if="otherIdentities.length">
           <NbMenuItem
             v-for="identity in otherIdentities"
             :key="identity.sub"
             icon="user-switch"
+            :label="identity.email"
             @select="auth.switchAccount(identity.email)"
-          >
-            {{ identity.email }}
-          </NbMenuItem>
+          />
         </template>
-        <NbMenuItem v-else icon="user-switch" @select="auth.chooseAccount()">Switch account…</NbMenuItem>
-        <NbMenuItem icon="plus-circle" @select="auth.addAccount()">Add another account</NbMenuItem>
+        <NbMenuItem v-else icon="user-switch" label="Switch account…" @select="auth.chooseAccount()" />
+        <NbMenuItem icon="plus-circle" label="Add another account" @select="auth.addAccount()" />
         <NbMenuDivider />
-        <NbMenuItem icon="sign-out" @select="signOut">Sign out</NbMenuItem>
-        <NbMenuItem danger icon="sign-out" @select="auth.logoutEverywhere()">Sign out of all apps</NbMenuItem>
+        <NbMenuItem icon="sign-out" label="Sign out" @select="signOut" />
+        <NbMenuItem danger icon="sign-out" label="Sign out of all apps" @select="auth.logoutEverywhere()" />
       </NbMenu>
     </template>
 
