@@ -1,3 +1,10 @@
+# [0.19.0](https://github.com/nubisco/openbridge/compare/v0.18.3...v0.19.0) (2026-07-19)
+
+
+### Features
+
+* **auth:** multi-account platform sessions ([c636f9d](https://github.com/nubisco/openbridge/commit/c636f9df76c6fe2152cbb36f6386dd02dc2b537d))
+
 ## [0.18.3](https://github.com/nubisco/openbridge/compare/v0.18.2...v0.18.3) (2026-07-18)
 
 
