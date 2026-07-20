@@ -1,3 +1,10 @@
+# [0.21.0](https://github.com/nubisco/openbridge/compare/v0.20.0...v0.21.0) (2026-07-20)
+
+
+### Features
+
+* **ui:** migrate account menu to standardized NbUserMenu ([a402c59](https://github.com/nubisco/openbridge/commit/a402c59a5387305180717d45b423a60cc25495f5))
+
 # [0.20.0](https://github.com/nubisco/openbridge/compare/v0.19.1...v0.20.0) (2026-07-20)
 
 
