@@ -1,3 +1,10 @@
+# [0.20.0](https://github.com/nubisco/openbridge/compare/v0.19.1...v0.20.0) (2026-07-20)
+
+
+### Features
+
+* **ui:** new OpenBridge logo and favicons ([384beaf](https://github.com/nubisco/openbridge/commit/384beaf11d470766e3d42a8bed647bd48b67f81f))
+
 ## [0.19.1](https://github.com/nubisco/openbridge/compare/v0.19.0...v0.19.1) (2026-07-19)
 
 
