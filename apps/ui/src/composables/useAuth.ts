@@ -188,6 +188,28 @@ export function useAuth() {
    * signed-in products) is left untouched — in the multi-account model an
    * app-level sign-out must not destroy other apps' identities.
    */
+  /**
+   * Sign one identity out of the platform browser session without touching
+   * the others. Any app pinned to it falls back to the account chooser on
+   * its next authorize round-trip. Needs the same cross-origin cookie
+   * access as listIdentities; best-effort otherwise.
+   */
+  async function removeIdentity(userId: string): Promise<boolean> {
+    const cfg = await loadConfig()
+    if (!cfg.enabled || !cfg.issuer) return false
+    try {
+      const res = await fetch(`${cfg.issuer}/api/auth/identities/remove`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ user_id: userId }),
+      })
+      return res.ok
+    } catch {
+      return false
+    }
+  }
+
   async function logout(): Promise<void> {
     await fetch('/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => null)
     user.value = null
@@ -229,6 +251,7 @@ export function useAuth() {
     addAccount,
     chooseAccount,
     listIdentities,
+    removeIdentity,
     getLastAccount,
     clearLastAccount,
     logout,

@@ -30,31 +30,31 @@
       >
         <span class="daemon-dot" />
       </div>
-      <NbSidebarLink
-        v-if="auth.config.value?.enabled"
-        :tooltip="auth.user.value ? `Account — ${auth.user.value.email}` : 'Account'"
-        @click="openAccountMenu"
+      <NbUserMenu
+        v-if="auth.config.value?.enabled && auth.user.value"
+        :user="{ email: auth.user.value.email }"
+        :accounts="menuAccounts"
+        :accounts-unknown="accountsUnknown"
+        :show-profile="false"
+        @open="loadIdentities"
+        @switch="onSwitchAccount"
+        @switch-account="auth.chooseAccount()"
+        @add-account="auth.addAccount()"
+        @remove="removeAccount"
+        @sign-out="signOut"
       >
-        <NbIcon name="user-circle" :size="18" />
-      </NbSidebarLink>
-      <NbMenu ref="accountMenu" v-model:open="accountMenuOpen" :min-width="240">
-        <NbMenuItem disabled icon="user-circle" :label="auth.user.value?.email ?? 'Signed in'" />
-        <NbMenuDivider />
-        <template v-if="otherIdentities.length">
-          <NbMenuItem
-            v-for="identity in otherIdentities"
-            :key="identity.sub"
-            icon="user-switch"
-            :label="identity.email"
-            @select="auth.switchAccount(identity.email)"
-          />
+        <template #default="{ close }">
+          <button
+            type="button"
+            role="menuitem"
+            class="nb-user-menu__action nb-user-menu__action--danger"
+            @click="((close as () => void)(), auth.logoutEverywhere())"
+          >
+            <NbIcon name="sign-out" :size="15" />
+            Sign out of all apps
+          </button>
         </template>
-        <NbMenuItem v-else icon="user-switch" label="Switch account…" @select="auth.chooseAccount()" />
-        <NbMenuItem icon="plus-circle" label="Add another account" @select="auth.addAccount()" />
-        <NbMenuDivider />
-        <NbMenuItem icon="sign-out" label="Sign out" @select="signOut" />
-        <NbMenuItem danger icon="sign-out" label="Sign out of all apps" @select="auth.logoutEverywhere()" />
-      </NbMenu>
+      </NbUserMenu>
     </template>
 
     <!-- ═══ Topbar ═══ -->
@@ -97,7 +97,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, watch, ref } from 'vue'
+import { computed, onMounted, onUnmounted, watch, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useDaemonStore } from '@/stores/daemon'
 import { useInspectorStore } from '@/stores/inspector'
@@ -118,22 +118,36 @@ async function signOut() {
   await auth.logout()
 }
 
-// ─── Account switcher ───────────────────────────────────────────────────────
-// Lists the other platform identities on this browser when the platform
-// exposes them cross-origin; otherwise the menu falls back to the redirect
-// account chooser. The current account is matched by our own session's sub,
-// never by the platform's active flag.
-const accountMenu = ref<{ setPositionXY: (x: number, y: number) => void } | null>(null)
-const accountMenuOpen = ref(false)
-const otherIdentities = ref<PlatformIdentity[]>([])
+// ─── Account menu (NbUserMenu) ──────────────────────────────────────────────
+// Identities load when the menu opens; when the platform can't expose them
+// cross-origin the menu falls back to the redirect account chooser
+// (accountsUnknown). The current account is matched by our own session's
+// sub, never by the platform's active flag.
+const identities = ref<PlatformIdentity[]>([])
+const accountsUnknown = ref(true)
 
-async function openAccountMenu(event: MouseEvent) {
-  const target = event.currentTarget as HTMLElement | null
-  const rect = target?.getBoundingClientRect()
-  accountMenuOpen.value = true
-  if (rect) accountMenu.value?.setPositionXY(rect.right + 8, rect.top)
-  const identities = await auth.listIdentities()
-  otherIdentities.value = identities.filter((i) => i.sub !== auth.user.value?.id)
+const menuAccounts = computed(() =>
+  identities.value.map((identity) => ({
+    id: identity.sub,
+    email: identity.email,
+    name: identity.name,
+    current: identity.sub === auth.user.value?.id,
+  })),
+)
+
+async function loadIdentities() {
+  const list = await auth.listIdentities()
+  identities.value = list
+  accountsUnknown.value = list.length === 0
+}
+
+function onSwitchAccount(account: { email: string }) {
+  auth.switchAccount(account.email)
+}
+
+async function removeAccount(account: { id: string }) {
+  await auth.removeIdentity(account.id)
+  await loadIdentities()
 }
 
 const updateAvailable = ref<string | null>(null)
