@@ -1,11 +1,34 @@
+import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 import { fileURLToPath, URL } from 'node:url'
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import Unfonts from 'unplugin-fonts/vite'
+
+/**
+ * Appends a content-hash query param (?v=<hash>) to favicon links in index.html
+ * so browsers (Safari in particular) refetch the icon whenever the file changes.
+ */
+function faviconCacheBust(): Plugin {
+  const hashFor = (publicPath: string) => {
+    const file = fileURLToPath(new URL(`./public${publicPath}`, import.meta.url))
+    return createHash('sha256').update(readFileSync(file)).digest('hex').slice(0, 8)
+  }
+  return {
+    name: 'favicon-cache-bust',
+    transformIndexHtml(html) {
+      return html.replace(
+        /(<link[^>]*rel="(?:icon|apple-touch-icon)"[^>]*href=")([^"?]+)(")/g,
+        (_match, before, href, after) => `${before}${href}?v=${hashFor(href)}${after}`,
+      )
+    },
+  }
+}
 
 export default defineConfig({
   plugins: [
     vue(),
+    faviconCacheBust(),
     Unfonts({
       custom: {
         families: [
