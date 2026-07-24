@@ -1,3 +1,10 @@
+## [0.21.1](https://github.com/nubisco/openbridge/compare/v0.21.0...v0.21.1) (2026-07-24)
+
+
+### Bug Fixes
+
+* **ui:** cache-bust favicons via content hash and add full icon set ([1c402a4](https://github.com/nubisco/openbridge/commit/1c402a47d847b4a9b2c2c962fa27a24cc005a1dc))
+
 # [0.21.0](https://github.com/nubisco/openbridge/compare/v0.20.0...v0.21.0) (2026-07-20)
 
 
