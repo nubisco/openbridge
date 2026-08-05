@@ -242,6 +242,32 @@ export class HomebridgeAPI extends EventEmitter {
   }
 
   /**
+   * Called by platform instances after mutating an accessory they already own,
+   * to persist the change. api.updatePlatformAccessories([accessory, ...])
+   *
+   * Homebridge only re-writes its accessory cache here, so we do the same: the
+   * accessory object is already live on the bridge, nothing needs re-adding.
+   * Plugins call this from discovery callbacks (often outside any try/catch),
+   * so it must never throw.
+   */
+  updatePlatformAccessories(accessories: any | any[]) {
+    const arr = Array.isArray(accessories) ? accessories : [accessories]
+    for (const acc of arr) {
+      if (!acc?.UUID) {
+        hapLog.warn(`updatePlatformAccessories: skipped accessory with no UUID: ${acc?.displayName}`)
+        continue
+      }
+      if (!this._accessories.has(acc.UUID)) {
+        hapLog.warn(`updatePlatformAccessories: unknown accessory ${acc.displayName} (UUID: ${acc.UUID}), ignoring`)
+        continue
+      }
+      // Keep the map pointing at whatever object the plugin considers current
+      this._accessories.set(acc.UUID, acc)
+    }
+    this.saveCachedAccessories()
+  }
+
+  /**
    * Called by some platform plugins to publish accessories as standalone (not bridged).
    * In real Homebridge these get their own HAP server, but OpenBridge funnels
    * everything through a single bridge so we add them as bridged accessories.

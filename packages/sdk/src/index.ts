@@ -42,6 +42,7 @@ export interface API {
   emit(event: string, ...args: unknown[]): void
   registerPlatformAccessories(pluginName: string, platformName: string, accessories: unknown[]): void
   unregisterPlatformAccessories(pluginName: string, platformName: string, accessories: unknown[]): void
+  updatePlatformAccessories(accessories: unknown[]): void
   platformAccessory: unknown
   user: {
     storagePath(): string
