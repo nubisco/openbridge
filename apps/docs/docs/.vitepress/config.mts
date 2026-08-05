@@ -50,6 +50,7 @@ export default withMermaid(
           items: [
             { text: 'Creating a Plugin', link: '/guide/creating-a-plugin' },
             { text: 'Plugin API Reference', link: '/guide/plugin-api' },
+            { text: 'HomeKit Exposure', link: '/guide/homekit-exposure' },
           ],
         },
         {

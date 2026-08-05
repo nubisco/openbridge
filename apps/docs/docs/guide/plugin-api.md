@@ -67,15 +67,32 @@ interface PluginManifest {
 interface PluginContext {
   config: Record<string, unknown>
   log: PluginLogger
+  registerDevice(device: Omit<DeviceDescriptor, 'pluginId'>): void
+  reportTelemetry(deviceId: string, data: Record<string, unknown>): void
+  registerControl(deviceId: string, controlId: string, handler: (value: unknown) => void | Promise<void>): void
+  restrictControl(deviceId: string, controlId: string): void
+  registerHapBridge(info: { setupURI: string; pincode: string; port: number; name: string }): void
+  getHapBridge?(): { bridge: unknown; hap: unknown } | null
 }
 ```
 
 The same `ctx` instance is passed to `setup`, `start`, and `stop`. You can attach additional state to it between calls (e.g. store a timer handle in `start` and read it in `stop`).
 
-| Property | Type                      | Description                                                                                                    |
-| -------- | ------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `config` | `Record<string, unknown>` | The `config` object from the plugin's `plugins[]` entry in `config.json`. Empty object if no entry is present. |
-| `log`    | `PluginLogger`            | Scoped logger. All output is prefixed with the plugin name.                                                    |
+| Property            | Type                      | Description                                                                                                                                                 |
+| ------------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `config`            | `Record<string, unknown>` | The `config` object from the plugin's `plugins[]` entry in `config.json`. Empty object if no entry is present.                                              |
+| `log`               | `PluginLogger`            | Scoped logger. All output is prefixed with the plugin name.                                                                                                 |
+| `registerDevice`    | function                  | Registers a device so it appears in the OpenBridge devices view. `widgetType` selects the UI widget (`switch`, `light`, `thermostat`, `energy_meter`, ...). |
+| `reportTelemetry`   | function                  | Publishes live values for a registered device. Keys are free-form; the widget for the device's `widgetType` decides which ones it renders.                  |
+| `registerControl`   | function                  | Registers a handler so the UI can control the device.                                                                                                       |
+| `restrictControl`   | function                  | Blocks a control from being changed via the UI or HomeKit.                                                                                                  |
+| `registerHapBridge` | function                  | Registers a HAP bridge the plugin publishes itself, so its QR code and PIN appear in the UI.                                                                |
+| `getHapBridge`      | function                  | Returns the main OpenBridge HAP bridge so the plugin can add accessories to it instead of publishing its own. Returns `null` when no bridge is available.   |
+
+These are what separate a native plugin from a Homebridge-compat one. A Homebridge plugin can
+only produce HAP accessories; a native plugin reports real values with real units straight to
+OpenBridge, and can choose per device whether HomeKit sees it at all. See
+[HomeKit Exposure](/guide/homekit-exposure).
 
 ---
 
