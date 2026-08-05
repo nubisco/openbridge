@@ -315,7 +315,11 @@ export class DeviceSeries {
         for (const point of points) {
           const bucket = Math.floor(point.t / target.interval) * target.interval
           if (bucket >= lastCompleteWindow) continue
-          if (!windows.has(bucket)) windows.set(bucket, this.metrics.map(() => []))
+          if (!windows.has(bucket))
+            windows.set(
+              bucket,
+              this.metrics.map(() => []),
+            )
           windows.get(bucket)![metricIndex].push(point)
         }
       })

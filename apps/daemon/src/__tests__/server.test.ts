@@ -678,6 +678,114 @@ describe('OpenBridge Server API', () => {
     })
   })
 
+  describe('Device Metrics', () => {
+    beforeEach(() => {
+      writeConfig(baseConfig)
+    })
+
+    async function serverWithMetricDevice() {
+      const { createServer } = await import('../server.js')
+      const { PluginRegistry } = await import('@nubisco/openbridge-core')
+      const registry = new PluginRegistry()
+
+      registry.register({
+        manifest: { name: 'shelly-test', version: '1.0.0' },
+      } as never)
+      const entry = registry.get('shelly-test')!
+      entry.instance.devices = {
+        'shelly-abc-p1': {
+          id: 'shelly-abc-p1',
+          name: 'Home - Phase B',
+          widgetType: 'energy_meter',
+          pluginId: 'shelly-test',
+          metrics: [
+            { key: 'power', label: 'Power', unit: 'W', kind: 'instant' },
+            { key: 'totalForwardEnergy', label: 'Energy', unit: 'kWh', kind: 'cumulative' },
+          ],
+        },
+        plain: { id: 'plain', name: 'No Metrics', widgetType: 'switch', pluginId: 'shelly-test' },
+      }
+
+      const server = await createServer(registry, null, null, [], new Set(), new Map())
+      await server.listen({ port: TEST_PORT, host: '127.0.0.1' })
+      return server
+    }
+
+    it('lists a device metrics when no metric is requested', async () => {
+      const server = await serverWithMetricDevice()
+      try {
+        const res = await fetch(`${BASE}/api/devices/shelly-abc-p1/metrics`)
+        const data = await res.json()
+
+        expect(res.status).toBe(200)
+        expect(data.metrics.map((m: { key: string }) => m.key)).toEqual(['power', 'totalForwardEnergy'])
+        // No series until a metric is named, so the UI can build its selector
+        // without paying for a range read.
+        expect(data.series).toBeNull()
+      } finally {
+        await server.close()
+      }
+    })
+
+    it('returns an empty metric list for a device that declares none', async () => {
+      const server = await serverWithMetricDevice()
+      try {
+        const res = await fetch(`${BASE}/api/devices/plain/metrics`)
+        const data = await res.json()
+        expect(res.status).toBe(200)
+        expect(data.metrics).toEqual([])
+      } finally {
+        await server.close()
+      }
+    })
+
+    it('404s for an unknown device', async () => {
+      const server = await serverWithMetricDevice()
+      try {
+        const res = await fetch(`${BASE}/api/devices/nope/metrics`)
+        expect(res.status).toBe(404)
+      } finally {
+        await server.close()
+      }
+    })
+
+    it('404s for a metric the device does not report', async () => {
+      const server = await serverWithMetricDevice()
+      try {
+        const res = await fetch(`${BASE}/api/devices/shelly-abc-p1/metrics?metric=humidity`)
+        expect(res.status).toBe(404)
+      } finally {
+        await server.close()
+      }
+    })
+
+    it('rejects an inverted range rather than returning nonsense', async () => {
+      const server = await serverWithMetricDevice()
+      try {
+        const res = await fetch(`${BASE}/api/devices/shelly-abc-p1/metrics?metric=power&from=2000&to=1000`)
+        expect(res.status).toBe(400)
+      } finally {
+        await server.close()
+      }
+    })
+
+    it('returns an empty series with resolution metadata when nothing is recorded yet', async () => {
+      const server = await serverWithMetricDevice()
+      try {
+        const res = await fetch(`${BASE}/api/devices/shelly-abc-p1/metrics?metric=power&from=1000&to=2000`)
+        const data = await res.json()
+
+        expect(res.status).toBe(200)
+        expect(data.series.metric.unit).toBe('W')
+        expect(data.series.points).toEqual([])
+        // The UI needs the resolution to label the axis even with no data.
+        expect(data.series.resolution).toBeGreaterThan(0)
+      } finally {
+        await server.close()
+      }
+    })
+  })
+
   describe('Marketplace Search', () => {
     beforeEach(() => {
       writeConfig(baseConfig)

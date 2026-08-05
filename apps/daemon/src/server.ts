@@ -59,6 +59,8 @@ const uiDist =
 const uiAvailable = !!uiDist
 
 import { OPENBRIDGE_HOME, OB_PLUGINS_DIR, HB_PLUGINS_DIR } from './daemon.js'
+import { DeviceSeries } from './timeseries.js'
+import type { HomeKitVisibility } from './homekit-visibility.js'
 
 export interface HapInfo {
   setupURI: string
@@ -75,6 +77,15 @@ export interface LocalPlugin {
   displayName?: string
 }
 
+/** Find a registered device by id across every plugin. */
+function findDevice(registry: PluginRegistry, deviceId: string): DeviceDescriptor | null {
+  for (const instance of registry.getAll()) {
+    const device = instance.devices?.[deviceId]
+    if (device) return device
+  }
+  return null
+}
+
 export async function createServer(
   registry: PluginRegistry,
   hapAPI: HomebridgeAPI | null = null,
@@ -83,6 +94,7 @@ export async function createServer(
   knownHbPackageNames: Set<string> = new Set(),
   controls: Map<string, (value: unknown) => void | Promise<void>> = new Map(),
   restrictedControls: Set<string> = new Set(),
+  homekitVisibility: HomeKitVisibility | null = null,
 ) {
   const app = Fastify({ logger: false })
 
@@ -540,6 +552,27 @@ export async function createServer(
     return { devices }
   })
 
+  // ─── HomeKit visibility ─────────────────────────────────────────────────
+  // Hiding is per accessory, not per plugin: one plugin often provides both
+  // devices worth exposing (a switch) and devices HomeKit cannot represent
+  // (an energy meter). Enforced at the bridge, so it applies to native and
+  // Homebridge-compat plugins alike.
+  app.get('/api/homekit/hidden', async () => {
+    return { hidden: homekitVisibility?.hiddenList() ?? [] }
+  })
+
+  app.post('/api/homekit/visibility/:uuid', async (req) => {
+    const { uuid } = req.params as { uuid: string }
+    const { visible } = req.body as { visible?: boolean }
+    if (typeof visible !== 'boolean') throw { statusCode: 400, message: 'visible (boolean) is required' }
+    if (!homekitVisibility) throw { statusCode: 503, message: 'HomeKit bridge is not available' }
+
+    const result = homekitVisibility.setVisible(uuid, visible)
+    // `applied: false` means the preference is stored but the running bridge
+    // could not be updated, so the Home app will not reflect it until restart.
+    return { uuid, visible, ...result }
+  })
+
   // ─── Device rename ──────────────────────────────────────────────────────
   app.post('/api/devices/:deviceId/rename', async (req) => {
     const { deviceId } = req.params as { deviceId: string }
@@ -602,6 +635,55 @@ export async function createServer(
     if (!handler) throw { statusCode: 404, message: `No control '${control}' registered for device '${deviceId}'` }
     await handler(value)
     return { ok: true }
+  })
+
+  /**
+   * Metric-aware history.
+   *
+   * The older /history route below serves cumulative energy bucketed into
+   * day/month/year kWh and is kept working unchanged, since the shipped UI
+   * depends on it. This route serves any declared metric over an arbitrary
+   * range, which is what per-phase charting needs.
+   */
+  app.get('/api/devices/:deviceId/metrics', async (req) => {
+    const { deviceId } = req.params as { deviceId: string }
+    const { metric, from, to, maxPoints } = req.query as Record<string, string>
+
+    const device = findDevice(registry, deviceId)
+    if (!device) throw { statusCode: 404, message: `Device '${deviceId}' not found` }
+    const metrics = device.metrics ?? []
+    if (metrics.length === 0) return { deviceId, metrics: [], series: null }
+
+    // Without an explicit metric, report what this device offers so the UI can
+    // populate its selector without a second round trip.
+    if (!metric) return { deviceId, metrics, series: null }
+
+    const descriptor = metrics.find((m) => m.key === metric)
+    if (!descriptor) throw { statusCode: 404, message: `Device '${deviceId}' does not report '${metric}'` }
+
+    const now = Math.floor(Date.now() / 1000)
+    const toSec = to ? Number(to) : now
+    const fromSec = from ? Number(from) : toSec - 86400
+    if (!Number.isFinite(fromSec) || !Number.isFinite(toSec) || fromSec >= toSec) {
+      throw { statusCode: 400, message: 'Invalid from/to range' }
+    }
+
+    const series = new DeviceSeries(join(OPENBRIDGE_HOME, 'metrics'), deviceId, metrics)
+    const points = Math.min(5000, Math.max(10, Number(maxPoints) || 720))
+    const result = series.query(metric, fromSec, toSec, points)
+
+    return {
+      deviceId,
+      metrics,
+      series: {
+        metric: descriptor,
+        resolution: result.tier.interval,
+        tier: result.tier.name,
+        from: fromSec,
+        to: toSec,
+        points: result.points,
+      },
+    }
   })
 
   app.get('/api/devices/:deviceId/history', async (req) => {

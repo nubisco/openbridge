@@ -6,6 +6,8 @@ export type {
   PluginInstance,
   PluginStatus,
   DeviceDescriptor,
+  MetricDescriptor,
+  InterpolationDescriptor,
 } from './types.js'
 export { PluginRegistry } from './registry.js'
 export { PluginLifecycle } from './lifecycle.js'

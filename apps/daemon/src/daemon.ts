@@ -10,6 +10,8 @@ import { Logger } from '@nubisco/openbridge-logger'
 import { loadConfig, defaultConfigPath } from '@nubisco/openbridge-config'
 import type { OpenBridgeConfig } from '@nubisco/openbridge-config'
 import { createServer, type HapInfo } from './server.js'
+import { DeviceSeries, DEFAULT_TIERS } from './timeseries.js'
+import { HomeKitVisibility } from './homekit-visibility.js'
 import { HomebridgeAPI, loadHomebridgePlugin } from '@nubisco/openbridge-compatibility-homebridge'
 
 const log = Logger.create('system')
@@ -20,6 +22,10 @@ const req = createRequire(import.meta.url)
 export const OPENBRIDGE_HOME = resolve(os.homedir(), '.openbridge')
 export const OB_PLUGINS_DIR = join(OPENBRIDGE_HOME, 'plugins', 'openbridge')
 export const HB_PLUGINS_DIR = join(OPENBRIDGE_HOME, 'plugins', 'homebridge')
+export const METRICS_DIR = join(OPENBRIDGE_HOME, 'metrics')
+
+/** Metric sampling cadence, matched to the finest storage tier. */
+const SAMPLE_INTERVAL_MS = DEFAULT_TIERS[0].interval * 1000
 
 export interface DaemonOptions {
   configPath?: string
@@ -38,6 +44,10 @@ export class Daemon {
   private restrictedControls = new Set<string>()
   /** Main HAP bridge and hap-nodejs module, shared with native plugins */
   private hapBridgeRef: { bridge: unknown; hap: unknown } | null = null
+  /** Time-series store per device, for devices that declare metrics */
+  private metricSeries = new Map<string, DeviceSeries>()
+  /** Per-accessory HomeKit visibility, enforced at the bridge */
+  private homekitVisibility = new HomeKitVisibility(join(OPENBRIDGE_HOME, 'homekit-hidden.json'))
 
   async start(options: DaemonOptions = {}) {
     const configPath = options.configPath ?? defaultConfigPath()
@@ -122,11 +132,17 @@ export class Daemon {
         .setCharacteristic(hapNodeJs.Characteristic.Model, 'OpenBridge')
         .setCharacteristic(hapNodeJs.Characteristic.SoftwareRevision, '0.1.0')
 
+      // Wrap the bridge so per-accessory HomeKit visibility is enforced in one
+      // place. Both plugin kinds reach HomeKit through addBridgedAccessory, so
+      // wrapping here covers native and Homebridge-compat plugins alike, and
+      // works for plugins that offer no exposeToHomeKit setting of their own.
+      const visibleBridge = this.homekitVisibility.wrapBridge(hapBridge)
+
       // Store reference so native plugins can add accessories to the main bridge
-      this.hapBridgeRef = { bridge: hapBridge, hap: hapNodeJs }
+      this.hapBridgeRef = { bridge: visibleBridge, hap: hapNodeJs }
 
       // Create the HomebridgeAPI shim
-      homebridgeAPI = new HomebridgeAPI(hapNodeJs, hapBridge)
+      homebridgeAPI = new HomebridgeAPI(hapNodeJs, visibleBridge)
 
       // Restore cached accessories so they survive container restarts.
       // Must happen before launchPlatforms() so configureAccessory() can re-adopt them.
@@ -233,6 +249,7 @@ export class Daemon {
       this.knownHbPackageNames,
       this.controls,
       this.restrictedControls,
+      this.homekitVisibility,
     )
     await server.listen({ port, host: '0.0.0.0' })
 
@@ -245,6 +262,18 @@ export class Daemon {
     )
     // Also sample immediately on startup (after a short delay for devices to connect)
     setTimeout(() => this.sampleEnergyHistory(), 30_000)
+
+    // ── Metric history sampling ───────────────────────────────────────────────
+    // Devices that declare metrics are recorded at the finest tier's cadence.
+    // The store samples on its own timer rather than having plugins push every
+    // reading, so a fast-polling plugin cannot flood the disk and storage stays
+    // independent of plugin behaviour.
+    setInterval(() => this.sampleMetrics(), SAMPLE_INTERVAL_MS)
+    setTimeout(() => this.sampleMetrics(), 15_000)
+
+    // Rolling up is cheap but pointless to run often: the finest rollup window
+    // is a minute, so once a minute is enough to keep every tier current.
+    setInterval(() => this.rollupMetrics(), 60_000)
 
     // ── Platform health watchdog ─────────────────────────────────────────────
     // Monitors Homebridge-compatible platforms and restarts them if they enter
@@ -469,6 +498,68 @@ export class Daemon {
         log.info(`Control restricted: ${deviceId}::${controlId}`)
       },
       getHapBridge: () => this.hapBridgeRef,
+    }
+  }
+
+  /**
+   * Look up (and cache) the series for a device that declares metrics.
+   *
+   * Returns null when the device declares none, which is the signal that it has
+   * live telemetry but nothing worth storing.
+   */
+  private seriesFor(device: DeviceDescriptor): DeviceSeries | null {
+    if (!device.metrics || device.metrics.length === 0) return null
+    const cached = this.metricSeries.get(device.id)
+    if (cached) return cached
+    const series = new DeviceSeries(join(OPENBRIDGE_HOME, 'metrics'), device.id, device.metrics)
+    this.metricSeries.set(device.id, series)
+    return series
+  }
+
+  /** Record one sample per metric-declaring device from its latest telemetry. */
+  private sampleMetrics() {
+    const t = Math.floor(Date.now() / 1000)
+
+    for (const instance of this.registry.getAll()) {
+      if (!instance.devices) continue
+      for (const device of Object.values(instance.devices)) {
+        const series = this.seriesFor(device)
+        if (!series) continue
+
+        const telemetry = instance.telemetry?.[device.id]
+        if (!telemetry) continue
+
+        const values: Record<string, number> = {}
+        let any = false
+        for (const metric of device.metrics ?? []) {
+          const raw = telemetry[metric.key]
+          if (raw === undefined || raw === null) continue
+          const value = Number(raw)
+          if (!Number.isFinite(value)) continue
+          values[metric.key] = value
+          any = true
+        }
+        // A device that is offline reports nothing; storing a row of zeros
+        // would draw a phantom dip rather than a gap.
+        if (!any) continue
+
+        try {
+          series.append({ t, values })
+        } catch (err) {
+          log.warn(`Failed to record metrics for ${device.id}: ${err}`)
+        }
+      }
+    }
+  }
+
+  /** Roll finished windows into coarser tiers and drop expired records. */
+  private rollupMetrics() {
+    for (const series of this.metricSeries.values()) {
+      try {
+        series.rollup()
+      } catch (err) {
+        log.warn(`Failed to roll up metrics for ${series.deviceId}: ${err}`)
+      }
     }
   }
 
