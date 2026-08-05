@@ -1,3 +1,12 @@
+# [0.22.0](https://github.com/nubisco/openbridge/compare/v0.21.3...v0.22.0) (2026-08-05)
+
+
+### Features
+
+* **core:** tiered time-series store for device metrics ([d2fc2c6](https://github.com/nubisco/openbridge/commit/d2fc2c6804b04e5ba867a9c6903020d41f7d6954))
+* **daemon:** metric history sampling and per-accessory HomeKit visibility ([ed2a2e9](https://github.com/nubisco/openbridge/commit/ed2a2e932776bf63e037795517ae9e29530293d9))
+* **ui:** device detail page with metric charts and HomeKit visibility toggle ([d596d2f](https://github.com/nubisco/openbridge/commit/d596d2f5b4c7b0f2268690325b56e4a4e13363c4))
+
 ## [0.21.3](https://github.com/nubisco/openbridge/compare/v0.21.2...v0.21.3) (2026-08-05)
 
 
