@@ -28,6 +28,40 @@ export interface InterpolationDescriptor {
   configShape: { inputKey: string; outputKey: string }
 }
 
+/**
+ * Describes one time-series a device reports.
+ *
+ * Storage cannot infer that `power` is instantaneous while `totalForwardEnergy`
+ * only ever climbs, and the UI cannot infer that one is watts and the other
+ * kilowatt-hours. Declaring them keeps plugins data-only: no plugin ships UI
+ * code, and core can chart any device that describes its metrics, including
+ * devices from plugins that do not exist yet.
+ */
+export interface MetricDescriptor {
+  /** Matches the key used in reportTelemetry() */
+  key: string
+  /** Human label, e.g. "Power" */
+  label: string
+  /** Unit symbol, e.g. "W", "V", "A", "kWh" */
+  unit: string
+  /**
+   * `instant` values are sampled points (power, voltage): rolling them up takes
+   * the mean, and the min/max are kept so a spike is not averaged away.
+   * `cumulative` values only increase (energy meters): rolling up keeps the last
+   * value in the window, and a total over a period is the difference between
+   * the window edges.
+   */
+  kind: 'instant' | 'cumulative'
+  /** Decimal places to display. Defaults to 2. */
+  precision?: number
+  /**
+   * Retain min/max when rolling this metric into coarser tiers. Defaults to
+   * true for `instant` metrics. Worth disabling for values that barely move
+   * (voltage, power factor) to keep coarse tiers narrow.
+   */
+  trackExtremes?: boolean
+}
+
 export interface DeviceDescriptor {
   id: string
   name: string
@@ -38,6 +72,12 @@ export interface DeviceDescriptor {
   pluginId: string
   /** If present, this device supports interactive interpolation calibration */
   interpolation?: InterpolationDescriptor
+  /**
+   * Time-series this device reports. When present, OpenBridge records them to
+   * history and can chart them. When absent, the device is still shown live but
+   * nothing is stored.
+   */
+  metrics?: MetricDescriptor[]
 }
 
 export interface PluginContext {
