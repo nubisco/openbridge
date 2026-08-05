@@ -299,6 +299,26 @@
         </div>
       </div>
 
+      <!-- HomeKit visibility -->
+      <div class="detail-section">
+        <div class="section-label">HomeKit</div>
+        <div class="homekit-row">
+          <div class="homekit-copy">
+            <span class="homekit-title">Expose to HomeKit</span>
+            <span class="homekit-hint">
+              Hide devices the Home app cannot represent usefully. OpenBridge keeps its telemetry and history either
+              way.
+            </span>
+          </div>
+          <NbSwitch
+            :model-value="isHomekitVisible((selected as any).acc.uuid)"
+            :disabled="homekitBusy"
+            @update:model-value="(v: boolean) => setHomekitVisible((selected as any).acc.uuid, v)"
+          />
+        </div>
+        <div v-if="homekitNotice" class="homekit-notice">{{ homekitNotice }}</div>
+      </div>
+
       <div class="detail-uuid">UUID: {{ (selected as any).acc.uuid }}</div>
     </template>
   </div>
@@ -308,6 +328,50 @@
 import { ref, computed, watch, nextTick } from 'vue'
 import { useInspectorStore, type NativeDevice } from '@/stores/inspector'
 import { api, type Accessory, type InterpolationDescriptor } from '@/api'
+import { onMounted } from 'vue'
+
+// ─── HomeKit visibility ─────────────────────────────────────────────────────
+// Keyed by HAP accessory UUID, the only identifier native and Homebridge-compat
+// plugins share. Hiding is enforced at the bridge, so it applies to both.
+const hiddenAccessories = ref<Set<string>>(new Set())
+const homekitBusy = ref(false)
+const homekitNotice = ref('')
+
+function isHomekitVisible(uuid: string): boolean {
+  return !hiddenAccessories.value.has(uuid)
+}
+
+async function loadHomekitHidden() {
+  try {
+    const { hidden } = await api.homekitHidden()
+    hiddenAccessories.value = new Set(hidden)
+  } catch {
+    /* bridge may be unavailable; treat everything as visible */
+  }
+}
+
+async function setHomekitVisible(uuid: string, visible: boolean) {
+  homekitBusy.value = true
+  homekitNotice.value = ''
+  try {
+    const result = await api.setHomekitVisibility(uuid, visible)
+    const next = new Set(hiddenAccessories.value)
+    if (visible) next.delete(uuid)
+    else next.add(uuid)
+    hiddenAccessories.value = next
+    // Be honest when the running bridge could not be updated, rather than
+    // showing a toggle that looks applied but is not.
+    if (!result.applied) {
+      homekitNotice.value = 'Saved. This takes effect after the next OpenBridge restart.'
+    }
+  } catch (err) {
+    homekitNotice.value = `Could not change visibility: ${(err as Error).message}`
+  } finally {
+    homekitBusy.value = false
+  }
+}
+
+onMounted(loadHomekitHidden)
 
 const inspector = useInspectorStore()
 
@@ -1078,5 +1142,36 @@ const historyChartSeries = computed(() => {
   border: 1px solid #fde68a;
   border-radius: 6px;
   text-align: center;
+}
+
+.homekit-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.25rem 0;
+}
+
+.homekit-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.homekit-title {
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.homekit-hint {
+  font-size: 0.72rem;
+  line-height: 1.35;
+  color: var(--nb-color-text-muted, #6b7280);
+}
+
+.homekit-notice {
+  margin-top: 0.4rem;
+  font-size: 0.72rem;
+  color: var(--nb-color-text-muted, #6b7280);
 }
 </style>

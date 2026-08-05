@@ -147,6 +147,16 @@ export interface InterpolationDescriptor {
   configShape: { inputKey: string; outputKey: string }
 }
 
+/** One time-series a device reports, as declared by its plugin. */
+export interface MetricDescriptor {
+  key: string
+  label: string
+  unit: string
+  kind: 'instant' | 'cumulative'
+  precision?: number
+  trackExtremes?: boolean
+}
+
 export interface DeviceDescriptor {
   id: string
   name: string
@@ -155,6 +165,7 @@ export interface DeviceDescriptor {
   model?: string
   pluginId: string
   interpolation?: InterpolationDescriptor
+  metrics?: MetricDescriptor[]
 }
 
 export const api = {
@@ -217,6 +228,43 @@ export const api = {
       totalKwh: number
     }>(`/devices/${encodeURIComponent(deviceId)}/history?${params}`)
   },
+  /**
+   * Metric history. Called without `metric` it lists what the device reports,
+   * which is how the chart populates its selector without pulling a range.
+   */
+  deviceMetrics: (
+    deviceId: string,
+    options: { metric?: string; from?: number; to?: number; maxPoints?: number } = {},
+  ) => {
+    const params = new URLSearchParams()
+    if (options.metric) params.set('metric', options.metric)
+    if (options.from !== undefined) params.set('from', String(options.from))
+    if (options.to !== undefined) params.set('to', String(options.to))
+    if (options.maxPoints !== undefined) params.set('maxPoints', String(options.maxPoints))
+    const query = params.toString()
+    return get<{
+      deviceId: string
+      metrics: MetricDescriptor[]
+      series: {
+        metric: MetricDescriptor
+        resolution: number
+        tier: string
+        from: number
+        to: number
+        points: Array<{ t: number; value: number | null; min?: number | null; max?: number | null }>
+      } | null
+    }>(`/devices/${encodeURIComponent(deviceId)}/metrics${query ? `?${query}` : ''}`)
+  },
+  homekitHidden: () => get<{ hidden: string[] }>('/homekit/hidden'),
+  setHomekitVisibility: (uuid: string, visible: boolean) =>
+    fetch(`/api/homekit/visibility/${encodeURIComponent(uuid)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ visible }),
+    }).then((r) => {
+      if (!r.ok) throw new Error(`Visibility change failed: ${r.status}`)
+      return r.json() as Promise<{ uuid: string; visible: boolean; changed: boolean; applied: boolean }>
+    }),
   setCharacteristic: (uuid: string, serviceUuid: string, charUuid: string, value: unknown) =>
     fetch(`/api/accessories/${uuid}/characteristics`, {
       method: 'POST',

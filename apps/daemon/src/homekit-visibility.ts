@@ -71,16 +71,15 @@ export class HomeKitVisibility {
    */
   wrapBridge(bridge: any): any {
     this.bridge = bridge
-    const self = this
 
     return new Proxy(bridge, {
-      get(target, prop, receiver) {
+      get: (target, prop, receiver) => {
         if (prop === 'addBridgedAccessory') {
-          return function (accessory: any, ...rest: unknown[]) {
+          return (accessory: any, ...rest: unknown[]) => {
             const uuid = accessory?.UUID
             if (uuid) {
-              self.known.set(uuid, accessory)
-              if (self.hidden.has(uuid)) {
+              this.known.set(uuid, accessory)
+              if (this.hidden.has(uuid)) {
                 log.debug(`Not exposing "${accessory.displayName}" to HomeKit (hidden by user)`)
                 return accessory
               }
@@ -90,11 +89,11 @@ export class HomeKitVisibility {
         }
 
         if (prop === 'removeBridgedAccessory') {
-          return function (accessory: any, ...rest: unknown[]) {
+          return (accessory: any, ...rest: unknown[]) => {
             const uuid = accessory?.UUID
             // A hidden accessory was never added, so asking hap-nodejs to
             // remove it would throw.
-            if (uuid && self.hidden.has(uuid)) return
+            if (uuid && this.hidden.has(uuid)) return
             return target.removeBridgedAccessory(accessory, ...rest)
           }
         }

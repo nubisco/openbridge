@@ -29,6 +29,7 @@
           class="device-card native-card"
           :class="{ selected: selectedDeviceId === dev.id }"
           @click="selectNative(dev)"
+          @dblclick="openDetail(dev)"
         >
           <div class="device-icon native-icon">
             <NbIcon :name="widgetIcon(dev.widgetType)" :size="22" />
@@ -168,6 +169,7 @@
 
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { useDaemonStore } from '@/stores/daemon'
 import { useInspectorStore, type NativeDevice } from '@/stores/inspector'
 import { useLayoutStore } from '@/stores/layout'
@@ -175,6 +177,16 @@ import { api, type Accessory } from '@/api'
 
 const daemon = useDaemonStore()
 const inspector = useInspectorStore()
+
+const router = useRouter()
+
+/**
+ * Double-click opens the device's own page. Single click keeps its existing
+ * meaning (select and show the inspector), so nothing users already do changes.
+ */
+function openDetail(dev: NativeDevice) {
+  router.push({ name: 'device-detail', params: { id: dev.id } })
+}
 const layout = useLayoutStore()
 
 // ─── HAP accessories (existing) ──────────────────────────────────────────────

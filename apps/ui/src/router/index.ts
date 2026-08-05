@@ -3,6 +3,7 @@ import AppLayout from '@/views/AppLayout.vue'
 import DashboardView from '@/views/DashboardView.vue'
 import PluginsView from '@/views/PluginsView.vue'
 import DevicesView from '@/views/DevicesView.vue'
+import DeviceDetailView from '@/views/DeviceDetailView.vue'
 import ConfigView from '@/views/ConfigView.vue'
 import SettingsView from '@/views/SettingsView.vue'
 import TerminalView from '@/views/TerminalView.vue'
@@ -23,6 +24,7 @@ export const router = createRouter({
         { path: 'dashboard', name: 'dashboard', component: DashboardView },
         { path: 'plugins', name: 'plugins', component: PluginsView },
         { path: 'devices', name: 'devices', component: DevicesView },
+        { path: 'devices/:id', name: 'device-detail', component: DeviceDetailView },
         { path: 'config', name: 'config', component: ConfigView },
         { path: 'settings', name: 'settings', component: SettingsView },
         { path: 'terminal', name: 'terminal', component: TerminalView },
