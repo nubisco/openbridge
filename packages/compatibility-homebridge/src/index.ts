@@ -542,6 +542,58 @@ export class HomebridgeAPI extends EventEmitter {
   }
 
   /**
+   * Drop cached accessories whose owning platform is no longer installed.
+   *
+   * `loadCachedAccessories()` restores everything it finds and adds it to the
+   * bridge, because a platform has to be able to re-adopt its accessories via
+   * configureAccessory() before discovery starts. Nothing ever removed the
+   * accessories of a plugin that had since been uninstalled, so they stayed on
+   * the bridge forever: still in the Home app, still listed in OpenBridge, but
+   * with no plugin behind them to update or control them. They show up as
+   * "Default-Manufacturer / Default-Model" entries that do nothing.
+   *
+   * Attribution is by platform registration, not by discovery, so this is safe
+   * to call as soon as platforms have been launched: a platform registers at
+   * load time, long before it finishes finding devices.
+   *
+   * Accessories with no recorded owner are left alone. They cannot be
+   * attributed, and silently deleting a user's HomeKit devices is far worse
+   * than leaving one stale entry behind.
+   */
+  pruneOrphanedAccessories(): string[] {
+    const known = new Set<string>()
+    for (const reg of this._platformRegistrations) {
+      known.add(reg.platformName)
+      known.add(reg.pluginName)
+    }
+
+    const orphans = Array.from(this._accessories.values()).filter((acc) => {
+      const owner = acc._associatedPlatform
+      return typeof owner === 'string' && owner.length > 0 && !known.has(owner)
+    })
+
+    if (orphans.length === 0) return []
+
+    const removed: string[] = []
+    for (const acc of orphans) {
+      this._accessories.delete(acc.UUID)
+      try {
+        this._bridge?.removeBridgedAccessory(acc, false)
+      } catch {
+        /* was not on the bridge */
+      }
+      this._onAccessoryRemove?.(acc)
+      removed.push(acc.displayName)
+      hapLog.info(
+        `Removed orphaned accessory "${acc.displayName}" (plugin "${acc._associatedPlatform}" is no longer installed)`,
+      )
+    }
+
+    this.saveCachedAccessories()
+    return removed
+  }
+
+  /**
    * Persist the current accessory map to disk so accessories survive
    * container restarts without being re-discovered by HomeKit.
    */

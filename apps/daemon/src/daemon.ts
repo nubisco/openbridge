@@ -239,6 +239,17 @@ export class Daemon {
     await this.lifecycle.startAll(enabledPlugins, (plugin) => this.makeContext(plugin, config))
     await this.discoverMarketplacePlugins(config, disabledPlugins, homebridgeAPI)
 
+    // Every platform that is going to register has now done so, so anything
+    // left in the accessory cache belonging to an unknown platform came from a
+    // plugin that has since been uninstalled. Those accessories would otherwise
+    // stay on the bridge forever with nothing behind them.
+    if (homebridgeAPI) {
+      const orphans = homebridgeAPI.pruneOrphanedAccessories()
+      if (orphans.length > 0) {
+        log.info(`Removed ${orphans.length} orphaned accessory(ies) from uninstalled plugins: ${orphans.join(', ')}`)
+      }
+    }
+
     // ── HTTP server ───────────────────────────────────────────────────────────
     const localPluginSources = config.localPluginSources ?? []
     const server = await createServer(
