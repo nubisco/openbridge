@@ -1,3 +1,10 @@
+## [0.22.1](https://github.com/nubisco/openbridge/compare/v0.22.0...v0.22.1) (2026-08-05)
+
+
+### Bug Fixes
+
+* **compat:** remove cached accessories of uninstalled plugins ([11cd5d0](https://github.com/nubisco/openbridge/commit/11cd5d081322a80818f636410d269a0b4475e515))
+
 # [0.22.0](https://github.com/nubisco/openbridge/compare/v0.21.3...v0.22.0) (2026-08-05)
 
 
