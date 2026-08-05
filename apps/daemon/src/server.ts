@@ -865,13 +865,48 @@ export async function createServer(
   })
 
   // ─── Marketplace ──────────────────────────────────────────────────────────
+  // Plugins are discovered by npm keyword. Native OpenBridge plugins declare
+  // `openbridge-plugin`; Homebridge-compat ones declare `homebridge-plugin`.
+  // npm's search API has no OR for keywords (both `a,b` and `a+b` mean AND and
+  // return nothing), so each keyword needs its own query and the results are
+  // merged here. Searching only one keyword hides an entire class of plugin
+  // from the marketplace, including natives the user can actually install.
+  const PLUGIN_KEYWORDS = ['homebridge-plugin', 'openbridge-plugin']
+
   app.get('/api/marketplace/search', async (req) => {
     const { q = '', from = '0', size = '20' } = req.query as Record<string, string>
-    const text = encodeURIComponent(`keywords:homebridge-plugin ${q}`.trim())
-    const url = `https://registry.npmjs.org/-/v1/search?text=${text}&size=${size}&from=${from}`
-    const res = await fetch(url)
-    if (!res.ok) throw { statusCode: 502, message: `npm registry error: ${res.status}` }
-    return res.json()
+
+    const results = await Promise.all(
+      PLUGIN_KEYWORDS.map(async (keyword) => {
+        const text = encodeURIComponent(`keywords:${keyword} ${q}`.trim())
+        const url = `https://registry.npmjs.org/-/v1/search?text=${text}&size=${size}&from=${from}`
+        const res = await fetch(url)
+        if (!res.ok) throw { statusCode: 502, message: `npm registry error: ${res.status}` }
+        return (await res.json()) as { objects?: any[]; total?: number; time?: string }
+      }),
+    )
+
+    // Dedupe by package name: a plugin may legitimately declare both keywords.
+    const seen = new Set<string>()
+    const objects: any[] = []
+    for (const result of results) {
+      for (const obj of result.objects ?? []) {
+        const name = obj?.package?.name
+        if (!name || seen.has(name)) continue
+        seen.add(name)
+        objects.push(obj)
+      }
+    }
+
+    // Restore npm's own relevance ordering across the merged set, then trim to
+    // the requested page size so the response stays the shape the UI expects.
+    objects.sort((a, b) => (b?.searchScore ?? 0) - (a?.searchScore ?? 0))
+
+    return {
+      objects: objects.slice(0, Number(size) || 20),
+      total: results.reduce((sum, r) => sum + (r.total ?? 0), 0),
+      time: results[0]?.time,
+    }
   })
 
   // Probe a marketplace plugin to discover its platform name(s) without fully starting it

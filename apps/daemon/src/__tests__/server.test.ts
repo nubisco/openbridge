@@ -677,4 +677,94 @@ describe('OpenBridge Server API', () => {
       }
     })
   })
+
+  describe('Marketplace Search', () => {
+    beforeEach(() => {
+      writeConfig(baseConfig)
+    })
+
+    it('GET /api/marketplace/search returns native plugins alongside Homebridge ones', async () => {
+      const { createServer } = await import('../server.js')
+      const { PluginRegistry } = await import('@nubisco/openbridge-core')
+      const registry = new PluginRegistry()
+
+      const server = await createServer(registry, null, null, [], new Set(), new Map())
+      await server.listen({ port: TEST_PORT, host: '127.0.0.1' })
+
+      // npm has no OR for keywords, so the route must issue one query per
+      // keyword. Each mocked response answers only its own keyword, exactly as
+      // the real registry does.
+      const realFetch = globalThis.fetch
+      const queried: string[] = []
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+        const url = String(input)
+        if (url.startsWith('https://registry.npmjs.org/-/v1/search')) {
+          const isNative = url.includes('openbridge-plugin')
+          queried.push(isNative ? 'openbridge-plugin' : 'homebridge-plugin')
+          const body = isNative
+            ? {
+                objects: [{ package: { name: '@nubisco/openbridge-shelly-platform' }, searchScore: 0.9 }],
+                total: 2,
+                time: 'now',
+              }
+            : {
+                objects: [
+                  { package: { name: 'homebridge-shelly-ds9' }, searchScore: 0.5 },
+                  // Also returned by the native query — must not appear twice.
+                  { package: { name: '@nubisco/openbridge-shelly-platform' }, searchScore: 0.9 },
+                ],
+                total: 5651,
+                time: 'now',
+              }
+          return Promise.resolve(new Response(JSON.stringify(body), { status: 200 }))
+        }
+        return realFetch(input, init)
+      })
+
+      try {
+        const res = await fetch(`${BASE}/api/marketplace/search?q=shelly`)
+        const data = await res.json()
+
+        expect(res.status).toBe(200)
+        expect(queried.sort()).toEqual(['homebridge-plugin', 'openbridge-plugin'])
+
+        const names = data.objects.map((o: { package: { name: string } }) => o.package.name)
+        expect(names).toContain('@nubisco/openbridge-shelly-platform')
+        expect(names).toContain('homebridge-shelly-ds9')
+
+        // Deduped by package name, and ordered by npm's own relevance score.
+        expect(names.filter((n: string) => n === '@nubisco/openbridge-shelly-platform')).toHaveLength(1)
+        expect(names[0]).toBe('@nubisco/openbridge-shelly-platform')
+      } finally {
+        fetchSpy.mockRestore()
+        await server.close()
+      }
+    })
+
+    it('GET /api/marketplace/search surfaces registry failures', async () => {
+      const { createServer } = await import('../server.js')
+      const { PluginRegistry } = await import('@nubisco/openbridge-core')
+      const registry = new PluginRegistry()
+
+      const server = await createServer(registry, null, null, [], new Set(), new Map())
+      await server.listen({ port: TEST_PORT, host: '127.0.0.1' })
+
+      const realFetch = globalThis.fetch
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+        const url = String(input)
+        if (url.startsWith('https://registry.npmjs.org/-/v1/search')) {
+          return Promise.resolve(new Response('upstream boom', { status: 500 }))
+        }
+        return realFetch(input, init)
+      })
+
+      try {
+        const res = await fetch(`${BASE}/api/marketplace/search?q=shelly`)
+        expect(res.status).toBe(502)
+      } finally {
+        fetchSpy.mockRestore()
+        await server.close()
+      }
+    })
+  })
 })
