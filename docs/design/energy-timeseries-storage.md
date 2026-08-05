@@ -1,6 +1,6 @@
 # Design: multi-metric time-series storage for energy devices
 
-**Status:** scoped, not implemented
+**Status:** implemented (items 1-7); see "Decisions taken" below
 **Date:** 2026-08-05
 **Motivates:** per-phase voltage / current / power charting in the OpenBridge UI
 
@@ -159,6 +159,22 @@ in the five-minute tier cleanly. Keep the JSON file as `.json.bak` for one relea
 
 Items 1 to 5 are backend and independently shippable: the existing chart keeps working
 throughout. Items 6 and 7 are the visible payoff.
+
+## Decisions taken
+
+The three questions this document originally left open were resolved as follows.
+
+**Sampling cadence.** The store samples on its own timer at the finest tier's
+cadence rather than having plugins push every reading. Storage stays independent
+of how fast any plugin polls, and a one-second poller cannot flood the disk. The
+cost is that a spike landing between ticks is not recorded.
+
+**Where min/max belongs.** Kept for instant metrics by default, and controllable
+per metric through `trackExtremes`. Voltage and power factor barely move, so the
+Shelly plugin disables it for voltage and keeps it for power and current.
+
+**Retention configurability.** Fixed tiers for now. At roughly 6 MB per device
+there is little pressure to tune them, and fixed sizes keep rollup simple.
 
 ## Open questions
 

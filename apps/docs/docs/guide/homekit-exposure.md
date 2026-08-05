@@ -119,3 +119,32 @@ Hiding them is a host-side concern rather than a plugin setting.
 - [Creating a Plugin](/guide/creating-a-plugin)
 - [Plugin API Reference](/guide/plugin-api)
 - [Homebridge Compatibility](/guide/homebridge-compatibility)
+
+## The OpenBridge-level toggle
+
+Everything above describes what a plugin can offer. OpenBridge also enforces
+visibility itself, for every plugin, from the device inspector.
+
+Open a device, find **HomeKit → Expose to HomeKit**, and switch it off. The
+accessory is removed from the bridge immediately and will not be re-added on
+restart. Its OpenBridge telemetry, history and charts are unaffected, because
+none of that travels through HomeKit.
+
+This works regardless of whether the plugin implements `exposeToHomeKit`, which
+matters because Homebridge-compat plugins never will. Enforcement sits around
+the HAP bridge itself, and both plugin kinds reach HomeKit through the same
+`addBridgedAccessory` call.
+
+The two mechanisms compose without conflicting:
+
+|                                    | Set by                     | Applies to                |
+| ---------------------------------- | -------------------------- | ------------------------- |
+| `exposeToHomeKit` in plugin config | the plugin author's schema | that plugin's devices     |
+| Inspector toggle                   | the user, at runtime       | any accessory, any plugin |
+
+If a device is hidden by either, it does not reach HomeKit.
+
+Preferences live in `~/.openbridge/homekit-hidden.json`, keyed by HAP accessory
+UUID, the only identifier both plugin kinds share. If that file is unreadable
+OpenBridge hides nothing, on the grounds that a corrupt file should not silently
+strip devices out of someone's Home app.
