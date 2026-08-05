@@ -1,3 +1,10 @@
+## [0.21.2](https://github.com/nubisco/openbridge/compare/v0.21.1...v0.21.2) (2026-08-05)
+
+
+### Bug Fixes
+
+* **compat-homebridge:** implement updatePlatformAccessories ([24eecd7](https://github.com/nubisco/openbridge/commit/24eecd7875cae7f01902979fb9fe083bf335f876))
+
 ## [0.21.1](https://github.com/nubisco/openbridge/compare/v0.21.0...v0.21.1) (2026-07-24)
 
 
