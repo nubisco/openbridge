@@ -1,3 +1,10 @@
+## [0.21.3](https://github.com/nubisco/openbridge/compare/v0.21.2...v0.21.3) (2026-08-05)
+
+
+### Bug Fixes
+
+* **marketplace:** include native openbridge plugins in search ([112f094](https://github.com/nubisco/openbridge/commit/112f09486578b9c8a0704bb8e44ce9694de95ef9))
+
 ## [0.21.2](https://github.com/nubisco/openbridge/compare/v0.21.1...v0.21.2) (2026-08-05)
 
 
