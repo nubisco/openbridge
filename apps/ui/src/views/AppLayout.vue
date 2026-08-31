@@ -58,12 +58,23 @@
     </template>
 
     <!-- ═══ Topbar ═══ -->
+    <!-- The two empty divs are teleport targets. Views render their own chrome
+         into them (see stores/layout.ts), which keeps handlers and reactive
+         state in the view that owns them. -->
     <template #topbar-left>
-      <span v-if="layout.title" class="topbar-title">{{ layout.title }}</span>
+      <NbBreadcrumbs :subtitle="layout.title" />
       <NbBadge v-if="layout.count !== null">{{ layout.count }}</NbBadge>
+      <div id="ob-topbar-left" class="topbar-slot" />
     </template>
     <template #topbar-right>
-      <component :is="layout.actionsComponent" v-if="layout.actionsComponent" />
+      <div id="ob-topbar-right" class="topbar-slot" />
+      <NbButton
+        variant="ghost"
+        size="sm"
+        :icon="resolved === 'dark' ? 'sun' : 'moon'"
+        :title="resolved === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'"
+        @click="toggle()"
+      />
     </template>
 
     <!-- ═══ Notification banner ═══ -->
@@ -91,6 +102,13 @@
       <DeviceInspector v-else-if="inspector.mode === 'device'" />
     </template>
 
+    <!-- ═══ Live logs ═══ -->
+    <!-- App-wide: the log socket is opened here and streams regardless of the
+         active view, so the console belongs to the shell, not the dashboard. -->
+    <template #bottom>
+      <LiveLogsPanel />
+    </template>
+
     <!-- ═══ Main content ═══ -->
     <RouterView />
   </NbShell>
@@ -103,9 +121,11 @@ import { useDaemonStore } from '@/stores/daemon'
 import { useInspectorStore } from '@/stores/inspector'
 import { useLayoutStore } from '@/stores/layout'
 import { useAuth, type PlatformIdentity } from '@/composables/useAuth'
+import { useTheme } from '@/composables/useTheme'
 import PluginInspector from '@/components/PluginInspector.vue'
 import MarketplacePanel from '@/components/MarketplacePanel.vue'
 import DeviceInspector from '@/components/DeviceInspector.vue'
+import LiveLogsPanel from '@/components/LiveLogsPanel.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -113,6 +133,7 @@ const daemon = useDaemonStore()
 const inspector = useInspectorStore()
 const layout = useLayoutStore()
 const auth = useAuth()
+const { resolved, toggle } = useTheme()
 
 async function signOut() {
   await auth.logout()
@@ -182,6 +203,9 @@ watch(
 onMounted(async () => {
   await daemon.fetchHealth()
   await daemon.fetchPlugins()
+  // Preload recent history — the socket only delivers entries from now on, and
+  // the logs panel is mounted app-wide.
+  daemon.fetchLogs()
   daemon.connectLiveLogs()
 
   // Poll health every 10s
@@ -195,22 +219,18 @@ onUnmounted(() => daemon.disconnectLiveLogs())
 </script>
 
 <style lang="scss" scoped>
-// Sidebar logo — local tooltip (NbShell slot can't use NbSidebarLink's scoped tooltip)
-.sidebar-logo {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
-  text-decoration: none;
-
+// Flyout tooltip for items in the sidebar rail. The rail keeps its dark chrome
+// in both themes (--nb-shell-sidebar-bg), so the tooltip is derived from the
+// same variable rather than from the page surface.
+@mixin rail-tooltip {
   &[data-tooltip]::after {
     content: attr(data-tooltip);
     position: absolute;
     left: calc(100% + 10px);
     top: 50%;
     transform: translateY(-50%);
-    background: rgba(15, 15, 30, 0.95);
-    color: #fff;
+    background: color-mix(in srgb, var(--nb-shell-sidebar-bg) 95%, transparent);
+    color: var(--nb-c-white);
     padding: 0.3rem 0.65rem;
     border-radius: 5px;
     font-size: 0.76rem;
@@ -224,6 +244,17 @@ onUnmounted(() => daemon.disconnectLiveLogs())
   &[data-tooltip]:hover::after {
     opacity: 1;
   }
+}
+
+// Sidebar logo — local tooltip (NbShell slot can't use NbSidebarLink's scoped tooltip)
+.sidebar-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  text-decoration: none;
+
+  @include rail-tooltip;
 }
 
 // Daemon status indicator
@@ -236,51 +267,31 @@ onUnmounted(() => daemon.disconnectLiveLogs())
   border-radius: 50%;
   position: relative;
 
-  &[data-tooltip]::after {
-    content: attr(data-tooltip);
-    position: absolute;
-    left: calc(100% + 10px);
-    top: 50%;
-    transform: translateY(-50%);
-    background: rgba(15, 15, 30, 0.95);
-    color: #fff;
-    padding: 0.3rem 0.65rem;
-    border-radius: 5px;
-    font-size: 0.76rem;
-    white-space: nowrap;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.12s;
-    z-index: 500;
-  }
-
-  &[data-tooltip]:hover::after {
-    opacity: 1;
-  }
+  @include rail-tooltip;
 
   .daemon-dot {
     width: 10px;
     height: 10px;
     border-radius: 50%;
-    background: #6b7280;
+    background: var(--nb-c-component-inactive);
     transition: background 0.3s;
   }
 
   &.online .daemon-dot {
-    background: #34d399;
-    box-shadow: 0 0 6px rgba(52, 211, 153, 0.6);
+    background: var(--nb-c-success);
+    box-shadow: 0 0 6px color-mix(in srgb, var(--nb-c-success) 60%, transparent);
   }
 
   &.offline .daemon-dot {
-    background: #f87171;
+    background: var(--nb-c-danger);
   }
 }
 
-// Topbar left title
-.topbar-title {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: #1a1a2e;
+// Teleport targets for per-view topbar chrome
+.topbar-slot {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 // Update banner — rendered in the #notification slot above the topbar
@@ -289,12 +300,12 @@ onUnmounted(() => daemon.disconnectLiveLogs())
   align-items: center;
   gap: 0.5rem;
   padding: 0.4rem 1.5rem;
-  background: #0ea5e9;
-  color: #fff;
+  background: var(--nb-c-info);
+  color: var(--nb-c-info-a11y);
   font-size: 0.78rem;
 
   .update-link {
-    color: #fff;
+    color: inherit;
     font-weight: 600;
     text-decoration: underline;
     text-underline-offset: 2px;
@@ -305,14 +316,15 @@ onUnmounted(() => daemon.disconnectLiveLogs())
     margin-left: auto;
     background: transparent;
     border: none;
-    color: rgba(255, 255, 255, 0.8);
+    color: inherit;
+    opacity: 0.8;
     cursor: pointer;
     display: flex;
     align-items: center;
     padding: 0.1rem;
 
     &:hover {
-      color: #fff;
+      opacity: 1;
     }
   }
 }

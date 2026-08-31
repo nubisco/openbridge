@@ -120,7 +120,7 @@ onMounted(async () => {
   padding: 2.5rem 2rem;
   border: 1px solid var(--nb-c-component-plain-border, var(--nb-c-border));
   border-radius: 12px;
-  background: var(--nb-c-surface, #fff);
+  background: var(--nb-c-surface);
   display: flex;
   flex-direction: column;
   gap: 1rem;

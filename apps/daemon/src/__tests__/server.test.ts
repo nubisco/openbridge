@@ -11,8 +11,28 @@ const PLUGINS_DIR = join(TEST_DIR, 'plugins')
 const HB_PLUGINS_DIR = join(PLUGINS_DIR, 'homebridge')
 const OB_PLUGINS_DIR = join(PLUGINS_DIR, 'openbridge')
 
+// The port written into the test config.json. Distinct from the port a test
+// server actually binds — see listen() below.
 const TEST_PORT = 19582
-const BASE = `http://localhost:${TEST_PORT}`
+
+// Set by listen() to whatever port the OS handed the current test server.
+let BASE = ''
+
+/**
+ * Start a test server on an ephemeral port and point BASE at it.
+ *
+ * Every server here used to bind one hardcoded port. When an instance was slow
+ * to release it the next listen() blocked until the test timed out, and the
+ * test after that reached the *previous* server — which no longer had this
+ * test's mocks installed, so it failed with a confusing wrong-status assertion
+ * rather than anything resembling the real cause. Letting the OS pick the port
+ * removes the contention entirely.
+ */
+async function listen(server: { listen: (opts: object) => Promise<unknown>; server: { address: () => unknown } }) {
+  await server.listen({ port: 0, host: '127.0.0.1' })
+  const address = server.server.address() as { port: number }
+  BASE = `http://localhost:${address.port}`
+}
 
 function writeConfig(config: Record<string, unknown>) {
   writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2))
@@ -73,7 +93,7 @@ describe('OpenBridge Server API', () => {
       const registry = new PluginRegistry()
 
       const server = await createServer(registry, null, null, [], new Set(), new Map())
-      await server.listen({ port: TEST_PORT, host: '127.0.0.1' })
+      await listen(server)
 
       try {
         const res = await fetch(`${BASE}/api/health`)
@@ -94,7 +114,7 @@ describe('OpenBridge Server API', () => {
       const registry = new PluginRegistry()
 
       const server = await createServer(registry, null, null, [], new Set(), new Map())
-      await server.listen({ port: TEST_PORT, host: '127.0.0.1' })
+      await listen(server)
 
       try {
         const res = await fetch(`${BASE}/api/qr`)
@@ -114,7 +134,7 @@ describe('OpenBridge Server API', () => {
 
       const hapInfo = { setupURI: 'X-HM://test', pincode: '111-22-333' }
       const server = await createServer(registry, null, hapInfo, [], new Set(), new Map())
-      await server.listen({ port: TEST_PORT, host: '127.0.0.1' })
+      await listen(server)
 
       try {
         const res = await fetch(`${BASE}/api/qr`)
@@ -142,7 +162,7 @@ describe('OpenBridge Server API', () => {
       registry.updateStatus('test-plugin', 'running')
 
       const server = await createServer(registry, null, null, [], new Set(), new Map())
-      await server.listen({ port: TEST_PORT, host: '127.0.0.1' })
+      await listen(server)
 
       try {
         const res = await fetch(`${BASE}/api/plugins`)
@@ -168,7 +188,7 @@ describe('OpenBridge Server API', () => {
       registry.updateStatus('toggle-test', 'running')
 
       const server = await createServer(registry, null, null, [], new Set(), new Map())
-      await server.listen({ port: TEST_PORT, host: '127.0.0.1' })
+      await listen(server)
 
       try {
         // Disable
@@ -209,7 +229,7 @@ describe('OpenBridge Server API', () => {
       const registry = new PluginRegistry()
 
       const server = await createServer(registry, null, null, [], new Set(), new Map())
-      await server.listen({ port: TEST_PORT, host: '127.0.0.1' })
+      await listen(server)
 
       try {
         const res = await fetch(`${BASE}/api/config`)
@@ -230,7 +250,7 @@ describe('OpenBridge Server API', () => {
       const registry = new PluginRegistry()
 
       const server = await createServer(registry, null, null, [], new Set(), new Map())
-      await server.listen({ port: TEST_PORT, host: '127.0.0.1' })
+      await listen(server)
 
       try {
         const newConfig = { ...baseConfig, bridge: { ...baseConfig.bridge, name: 'Updated Bridge' } }
@@ -257,7 +277,7 @@ describe('OpenBridge Server API', () => {
       const registry = new PluginRegistry()
 
       const server = await createServer(registry, null, null, [], new Set(), new Map())
-      await server.listen({ port: TEST_PORT, host: '127.0.0.1' })
+      await listen(server)
 
       try {
         const res = await fetch(`${BASE}/api/config`, {
@@ -281,7 +301,7 @@ describe('OpenBridge Server API', () => {
       const registry = new PluginRegistry()
 
       const server = await createServer(registry, null, null, [], new Set(), new Map())
-      await server.listen({ port: TEST_PORT, host: '127.0.0.1' })
+      await listen(server)
 
       try {
         const res = await fetch(`${BASE}/api/bridge`)
@@ -302,7 +322,7 @@ describe('OpenBridge Server API', () => {
       const registry = new PluginRegistry()
 
       const server = await createServer(registry, null, null, [], new Set(), new Map())
-      await server.listen({ port: TEST_PORT, host: '127.0.0.1' })
+      await listen(server)
 
       try {
         const res = await fetch(`${BASE}/api/bridge`, {
@@ -345,7 +365,7 @@ describe('OpenBridge Server API', () => {
       registry.updateStatus('device-plugin', 'running')
 
       const server = await createServer(registry, null, null, [], new Set(), new Map())
-      await server.listen({ port: TEST_PORT, host: '127.0.0.1' })
+      await listen(server)
 
       try {
         const res = await fetch(`${BASE}/api/devices`)
@@ -383,7 +403,7 @@ describe('OpenBridge Server API', () => {
       registry.updateStatus('ctrl-plugin', 'running')
 
       const server = await createServer(registry, null, null, [], new Set(), controls)
-      await server.listen({ port: TEST_PORT, host: '127.0.0.1' })
+      await listen(server)
 
       try {
         const res = await fetch(`${BASE}/api/devices/dev-1/control`, {
@@ -427,7 +447,7 @@ describe('OpenBridge Server API', () => {
       writeFileSync(join(pkgDir, 'package.json'), '{"name":"remove-this","version":"1.0.0"}')
 
       const server = await createServer(registry, null, null, [], new Set(), new Map())
-      await server.listen({ port: TEST_PORT, host: '127.0.0.1' })
+      await listen(server)
 
       try {
         const res = await fetch(`${BASE}/api/marketplace/uninstall/remove-this`, {
@@ -474,7 +494,7 @@ describe('OpenBridge Server API', () => {
       writeFileSync(join(pkgDir, 'package.json'), '{"name":"remove-plugin","version":"1.0.0"}')
 
       const server = await createServer(registry, null, null, [], new Set(), new Map())
-      await server.listen({ port: TEST_PORT, host: '127.0.0.1' })
+      await listen(server)
 
       try {
         const res = await fetch(`${BASE}/api/marketplace/uninstall/remove-plugin`, {
@@ -545,7 +565,7 @@ describe('OpenBridge Server API', () => {
       const { createServer } = await import('../server.js')
       const { PluginRegistry } = await import('@nubisco/openbridge-core')
       const server = await createServer(new PluginRegistry(), null, null, [], new Set(), new Map())
-      await server.listen({ port: TEST_PORT, host: '127.0.0.1' })
+      await listen(server)
 
       try {
         await fn(BASE)
@@ -611,7 +631,7 @@ describe('OpenBridge Server API', () => {
       const registry = new PluginRegistry()
 
       const server = await createServer(registry, null, null, [], new Set(), new Map())
-      await server.listen({ port: TEST_PORT, host: '127.0.0.1' })
+      await listen(server)
 
       const realFetch = globalThis.fetch
       const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
@@ -652,7 +672,7 @@ describe('OpenBridge Server API', () => {
       const registry = new PluginRegistry()
 
       const server = await createServer(registry, null, null, [], new Set(), new Map())
-      await server.listen({ port: TEST_PORT, host: '127.0.0.1' })
+      await listen(server)
 
       const realFetch = globalThis.fetch
       const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
@@ -707,7 +727,7 @@ describe('OpenBridge Server API', () => {
       }
 
       const server = await createServer(registry, null, null, [], new Set(), new Map())
-      await server.listen({ port: TEST_PORT, host: '127.0.0.1' })
+      await listen(server)
       return server
     }
 
@@ -797,7 +817,7 @@ describe('OpenBridge Server API', () => {
       const registry = new PluginRegistry()
 
       const server = await createServer(registry, null, null, [], new Set(), new Map())
-      await server.listen({ port: TEST_PORT, host: '127.0.0.1' })
+      await listen(server)
 
       // npm has no OR for keywords, so the route must issue one query per
       // keyword. Each mocked response answers only its own keyword, exactly as
@@ -855,7 +875,7 @@ describe('OpenBridge Server API', () => {
       const registry = new PluginRegistry()
 
       const server = await createServer(registry, null, null, [], new Set(), new Map())
-      await server.listen({ port: TEST_PORT, host: '127.0.0.1' })
+      await listen(server)
 
       const realFetch = globalThis.fetch
       const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {

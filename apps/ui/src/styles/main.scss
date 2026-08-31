@@ -26,7 +26,7 @@ body {
     BlinkMacSystemFont,
     'Segoe UI',
     sans-serif;
-  color: #1a1a1a;
+  color: var(--nb-c-text);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }

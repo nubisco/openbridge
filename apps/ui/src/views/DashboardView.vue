@@ -1,202 +1,172 @@
 <template>
   <div class="dashboard">
     <!-- ─── Row 1: HomeKit + System Info + Plugins ────────────────────────── -->
-    <template v-if="!logsExpanded">
-      <div class="top-row">
-        <!-- HomeKit pairing card -->
-        <div class="card hk-card">
-          <div class="card-title">HomeKit Pairing</div>
-          <div class="hk-body">
-            <div v-if="qrDataUrl" class="qr-wrap">
-              <img :src="qrDataUrl" alt="HomeKit QR Code" class="qr-img" />
-            </div>
-            <div v-else class="qr-placeholder">
-              <NbIcon name="qr-code" :size="48" />
-              <span>No HAP bridge configured</span>
-            </div>
-            <div class="hk-details">
-              <div v-if="pincode" class="pin-display">{{ pincode }}</div>
-              <div v-if="pincode" class="pin-label">Scan to add to HomeKit</div>
-              <div class="hk-status">
-                <span class="dot" :class="daemon.connected ? 'green' : 'gray'" />
-                {{ daemon.connected ? 'Bridge running' : 'Bridge offline' }}
-              </div>
-            </div>
+    <div class="top-row">
+      <!-- HomeKit pairing card -->
+      <div class="card hk-card">
+        <div class="card-title">HomeKit Pairing</div>
+        <div class="hk-body">
+          <div v-if="qrDataUrl" class="qr-wrap">
+            <img :src="qrDataUrl" alt="HomeKit QR Code" class="qr-img" />
           </div>
-        </div>
-
-        <!-- System information card -->
-        <div class="card sys-card">
-          <div class="card-title">System Information</div>
-          <div v-if="sysInfo" class="sys-grid">
-            <span class="sys-key">OS</span>
-            <span class="sys-val">{{ sysInfo.os }}</span>
-            <span class="sys-key">Arch</span>
-            <span class="sys-val">{{ sysInfo.arch }}</span>
-            <span class="sys-key">Hostname</span>
-            <span class="sys-val">{{ sysInfo.hostname }}</span>
-            <span class="sys-key">IP Address</span>
-            <span class="sys-val">{{ sysInfo.ip }}</span>
-            <span class="sys-key">User</span>
-            <span class="sys-val">{{ sysInfo.user }}</span>
-            <span class="sys-key">Node.js</span>
-            <span class="sys-val">{{ sysInfo.nodeVersion }}</span>
-            <span class="sys-key">OpenBridge</span>
-            <span class="sys-val">v{{ daemon.health?.version ?? '—' }}</span>
-            <span class="sys-key">Config</span>
-            <span class="sys-val mono">{{ sysInfo.configPath }}</span>
-            <span class="sys-key">OB plugins</span>
-            <span class="sys-val mono">{{ sysInfo.obPluginsDir }}</span>
-            <span class="sys-key">HB plugins</span>
-            <span class="sys-val mono">{{ sysInfo.hbPluginsDir }}</span>
+          <div v-else class="qr-placeholder">
+            <NbIcon name="qr-code" :size="48" />
+            <span>No HAP bridge configured</span>
           </div>
-          <div v-else class="loading-inline">
-            <NbIcon name="spinner" :size="16" />
-            Loading...
-          </div>
-        </div>
-
-        <!-- Plugins mini-list card -->
-        <div class="card plugins-card">
-          <div class="card-title">
-            Plugins
-            <span class="plugins-counts">
-              <span class="pill green">{{ daemon.runningCount }} running</span>
-              <span v-if="daemon.errorCount" class="pill red">{{ daemon.errorCount }} error</span>
-            </span>
-          </div>
-          <div v-if="daemon.plugins.length === 0" class="empty-inline">No plugins loaded yet.</div>
-          <div v-else class="plugins-list">
-            <div v-for="p in daemon.plugins" :key="p.id" class="plugin-row">
-              <div class="plugin-dot" :class="p.status" />
-              <span class="plugin-name">{{ p.manifest.name }}</span>
-              <span class="plugin-ver">v{{ p.manifest.version }}</span>
-              <span v-if="p.source === 'homebridge'" class="hb-badge">HB</span>
-              <span class="plugin-status" :class="p.status">{{ p.status }}</span>
+          <div class="hk-details">
+            <div v-if="pincode" class="pin-display">{{ pincode }}</div>
+            <div v-if="pincode" class="pin-label">Scan to add to HomeKit</div>
+            <div class="hk-status">
+              <span class="dot" :class="daemon.connected ? 'green' : 'gray'" />
+              {{ daemon.connected ? 'Bridge running' : 'Bridge offline' }}
             </div>
           </div>
         </div>
       </div>
 
-      <!-- ─── Row 2: Metrics cards ──────────────────────────────────────────── -->
-      <div class="metrics-row">
-        <!-- CPU -->
-        <div class="card metric-card">
-          <div class="metric-header">
-            <div class="metric-icon purple"><NbIcon name="cpu" :size="13" /></div>
-            <span class="metric-title">CPU</span>
-          </div>
-          <div class="metric-values">
-            <div class="metric-big">
-              {{ latest?.cpu ?? '—' }}
-              <span class="metric-unit">%</span>
-            </div>
-            <div v-if="latest?.cpuTemp && latest.cpuTemp > 0" class="metric-sub">{{ latest.cpuTemp }}°C</div>
-          </div>
-          <div class="metric-chart">
-            <NbSparkline :data="cpuHistory" color="#7c3aed" :height="40" />
-          </div>
+      <!-- System information card -->
+      <div class="card sys-card">
+        <div class="card-title">System Information</div>
+        <div v-if="sysInfo" class="sys-grid">
+          <span class="sys-key">OS</span>
+          <span class="sys-val">{{ sysInfo.os }}</span>
+          <span class="sys-key">Arch</span>
+          <span class="sys-val">{{ sysInfo.arch }}</span>
+          <span class="sys-key">Hostname</span>
+          <span class="sys-val">{{ sysInfo.hostname }}</span>
+          <span class="sys-key">IP Address</span>
+          <span class="sys-val">{{ sysInfo.ip }}</span>
+          <span class="sys-key">User</span>
+          <span class="sys-val">{{ sysInfo.user }}</span>
+          <span class="sys-key">Node.js</span>
+          <span class="sys-val">{{ sysInfo.nodeVersion }}</span>
+          <span class="sys-key">OpenBridge</span>
+          <span class="sys-val">v{{ daemon.health?.version ?? '—' }}</span>
+          <span class="sys-key">Config</span>
+          <span class="sys-val mono">{{ sysInfo.configPath }}</span>
+          <span class="sys-key">OB plugins</span>
+          <span class="sys-val mono">{{ sysInfo.obPluginsDir }}</span>
+          <span class="sys-key">HB plugins</span>
+          <span class="sys-val mono">{{ sysInfo.hbPluginsDir }}</span>
         </div>
-
-        <!-- Memory -->
-        <div class="card metric-card">
-          <div class="metric-header">
-            <div class="metric-icon blue"><NbIcon name="database" :size="13" /></div>
-            <span class="metric-title">Memory</span>
-          </div>
-          <div class="metric-values">
-            <div class="metric-big">
-              {{ memPct }}
-              <span class="metric-unit">%</span>
-            </div>
-            <div class="metric-sub">{{ memUsed }} / {{ memTotal }}</div>
-          </div>
-          <div class="mem-bar-wrap"><div class="mem-bar" :style="{ width: memPct + '%' }" /></div>
-          <div class="metric-chart">
-            <NbSparkline :data="memHistory" color="#3b82f6" :height="32" />
-          </div>
+        <div v-else class="loading-inline">
+          <NbIcon name="spinner" :size="16" />
+          Loading...
         </div>
+      </div>
 
-        <!-- Uptime + Restart -->
-        <div class="card metric-card">
-          <div class="metric-header">
-            <div class="metric-icon green"><NbIcon name="clock" :size="13" /></div>
-            <span class="metric-title">Uptime</span>
-          </div>
-          <div class="uptime-rows">
-            <div class="uptime-row">
-              <span class="uptime-val">{{ sysInfo ? fmtUptime(sysInfo.uptimeSystem) : '—' }}</span>
-              <span class="uptime-label">System</span>
-            </div>
-            <div class="uptime-divider" />
-            <div class="uptime-row">
-              <span class="uptime-val">{{ sysInfo ? fmtUptime(sysInfo.uptimeProcess) : '—' }}</span>
-              <span class="uptime-label">Process</span>
-            </div>
-          </div>
-          <div style="margin-top: 0.75rem">
-            <NbButton
-              variant="secondary"
-              size="sm"
-              outlined
-              style="width: 100%; justify-content: center"
-              :loading="restarting"
-              :icon="restartDone ? 'check' : restarting ? 'spinner' : 'arrows-clockwise'"
-              @click="restartOpenBridge"
-            >
-              {{ restartDone ? 'Restarted' : restarting ? 'Restarting…' : 'Restart OpenBridge' }}
-            </NbButton>
-          </div>
+      <!-- Plugins mini-list card -->
+      <div class="card plugins-card">
+        <div class="card-title">
+          Plugins
+          <span class="plugins-counts">
+            <span class="pill green">{{ daemon.runningCount }} running</span>
+            <span v-if="daemon.errorCount" class="pill red">{{ daemon.errorCount }} error</span>
+          </span>
         </div>
-
-        <!-- Network -->
-        <div class="card metric-card net-card">
-          <div class="metric-header">
-            <div class="metric-icon amber"><NbIcon name="activity" :size="13" /></div>
-            <span class="metric-title">Network</span>
-          </div>
-          <div class="net-values">
-            <div>
-              <div class="net-val">{{ latest ? fmtBytes(latest.netRxSec) + '/s' : '—' }}</div>
-              <div class="net-label">↓ Received</div>
-            </div>
-            <div>
-              <div class="net-val">{{ latest ? fmtBytes(latest.netTxSec) + '/s' : '—' }}</div>
-              <div class="net-label">↑ Sent</div>
-            </div>
-          </div>
-          <div class="metric-chart net-charts">
-            <NbSparkline :data="netRxHistory" color="#10b981" :height="28" />
-            <NbSparkline :data="netTxHistory" color="#f59e0b" :height="28" />
+        <div v-if="daemon.plugins.length === 0" class="empty-inline">No plugins loaded yet.</div>
+        <div v-else class="plugins-list">
+          <div v-for="p in daemon.plugins" :key="p.id" class="plugin-row">
+            <div class="plugin-dot" :class="p.status" />
+            <span class="plugin-name">{{ p.manifest.name }}</span>
+            <span class="plugin-ver">v{{ p.manifest.version }}</span>
+            <span v-if="p.source === 'homebridge'" class="hb-badge">HB</span>
+            <span class="plugin-status" :class="p.status">{{ p.status }}</span>
           </div>
         </div>
       </div>
-    </template>
-    <!-- end v-if="!logsExpanded" -->
+    </div>
 
-    <!-- ─── Row 3: Live Logs ──────────────────────────────────────────────── -->
-    <div class="card logs-card" :class="{ 'logs-card--expanded': logsExpanded }">
-      <div class="logs-card-header">
-        <span class="card-title" style="margin-bottom: 0">Live Logs</span>
-        <div class="logs-filter">
-          <NbSelect v-model="logFilter" multiple :options="pluginFilterOptions" placeholder="All plugins" size="sm" />
+    <!-- ─── Row 2: Metrics cards ──────────────────────────────────────────── -->
+    <div class="metrics-row">
+      <!-- CPU -->
+      <div class="card metric-card">
+        <div class="metric-header">
+          <div class="metric-icon purple"><NbIcon name="cpu" :size="13" /></div>
+          <span class="metric-title">CPU</span>
         </div>
-        <NbButton
-          variant="ghost"
-          size="sm"
-          :icon="logsExpanded ? 'arrows-in' : 'arrows-out'"
-          :title="logsExpanded ? 'Collapse' : 'Expand'"
-          @click="logsExpanded = !logsExpanded"
-        />
-        <NbButton variant="ghost" size="sm" icon="trash" title="Clear" @click="clearLogs" />
+        <div class="metric-values">
+          <div class="metric-big">
+            {{ latest?.cpu ?? '—' }}
+            <span class="metric-unit">%</span>
+          </div>
+          <div v-if="latest?.cpuTemp && latest.cpuTemp > 0" class="metric-sub">{{ latest.cpuTemp }}°C</div>
+        </div>
+        <div class="metric-chart">
+          <NbSparkline :data="cpuHistory" color="var(--nb-c-primary)" :height="40" />
+        </div>
       </div>
-      <div ref="logsEl" class="log-list">
-        <div v-if="filteredLogs.length === 0" class="log-empty">No log entries yet.</div>
-        <div v-for="(entry, i) in filteredLogs" :key="i" class="log-line">
-          <span class="log-time">{{ new Date(entry.timestamp).toLocaleTimeString() }}</span>
-          <span class="log-level" :style="{ color: LOG_COLORS[entry.level] }">{{ entry.level.toUpperCase() }}</span>
-          <span class="log-plugin">{{ entry.plugin }}</span>
-          <span class="log-msg">{{ entry.message }}</span>
+
+      <!-- Memory -->
+      <div class="card metric-card">
+        <div class="metric-header">
+          <div class="metric-icon blue"><NbIcon name="database" :size="13" /></div>
+          <span class="metric-title">Memory</span>
+        </div>
+        <div class="metric-values">
+          <div class="metric-big">
+            {{ memPct }}
+            <span class="metric-unit">%</span>
+          </div>
+          <div class="metric-sub">{{ memUsed }} / {{ memTotal }}</div>
+        </div>
+        <div class="mem-bar-wrap"><div class="mem-bar" :style="{ width: memPct + '%' }" /></div>
+        <div class="metric-chart">
+          <NbSparkline :data="memHistory" color="var(--nb-c-info)" :height="32" />
+        </div>
+      </div>
+
+      <!-- Uptime + Restart -->
+      <div class="card metric-card">
+        <div class="metric-header">
+          <div class="metric-icon green"><NbIcon name="clock" :size="13" /></div>
+          <span class="metric-title">Uptime</span>
+        </div>
+        <div class="uptime-rows">
+          <div class="uptime-row">
+            <span class="uptime-val">{{ sysInfo ? fmtUptime(sysInfo.uptimeSystem) : '—' }}</span>
+            <span class="uptime-label">System</span>
+          </div>
+          <div class="uptime-divider" />
+          <div class="uptime-row">
+            <span class="uptime-val">{{ sysInfo ? fmtUptime(sysInfo.uptimeProcess) : '—' }}</span>
+            <span class="uptime-label">Process</span>
+          </div>
+        </div>
+        <div style="margin-top: 0.75rem">
+          <NbButton
+            variant="secondary"
+            size="sm"
+            outlined
+            style="width: 100%; justify-content: center"
+            :loading="restarting"
+            :icon="restartDone ? 'check' : restarting ? 'spinner' : 'arrows-clockwise'"
+            @click="restartOpenBridge"
+          >
+            {{ restartDone ? 'Restarted' : restarting ? 'Restarting…' : 'Restart OpenBridge' }}
+          </NbButton>
+        </div>
+      </div>
+
+      <!-- Network -->
+      <div class="card metric-card net-card">
+        <div class="metric-header">
+          <div class="metric-icon amber"><NbIcon name="activity" :size="13" /></div>
+          <span class="metric-title">Network</span>
+        </div>
+        <div class="net-values">
+          <div>
+            <div class="net-val">{{ latest ? fmtBytes(latest.netRxSec) + '/s' : '—' }}</div>
+            <div class="net-label">↓ Received</div>
+          </div>
+          <div>
+            <div class="net-val">{{ latest ? fmtBytes(latest.netTxSec) + '/s' : '—' }}</div>
+            <div class="net-label">↑ Sent</div>
+          </div>
+        </div>
+        <div class="metric-chart net-charts">
+          <NbSparkline :data="netRxHistory" color="var(--nb-c-success)" :height="28" />
+          <NbSparkline :data="netTxHistory" color="var(--nb-c-warning)" :height="28" />
         </div>
       </div>
     </div>
@@ -334,38 +304,9 @@ const memUsed = computed(() => (latest.value ? fmtBytes(latest.value.memTotal - 
 const memTotal = computed(() => (latest.value ? fmtBytes(latest.value.memTotal) : '—'))
 const memPct = computed(() => (latest.value ? memPercent(latest.value) : 0))
 
-// ─── Log section ─────────────────────────────────────────────────────────────
-const logFilter = ref<string[]>([]) // empty = show all
-const logsEl = ref<HTMLElement | null>(null)
-const logsExpanded = ref(false)
-
-const pluginFilterOptions = computed(() => [
-  { value: 'system', label: 'system' },
-  ...daemon.plugins.map((p) => ({ value: p.manifest.name, label: p.manifest.name })),
-])
-
-const filteredLogs = computed(() => {
-  if (logFilter.value.length === 0) return daemon.logs
-  return daemon.logs.filter((e) => logFilter.value.includes(e.plugin))
-})
-
-const LOG_COLORS: Record<string, string> = {
-  debug: '#6b7280',
-  info: '#06b6d4',
-  warn: '#f59e0b',
-  error: '#ef4444',
-}
-
-function clearLogs() {
-  daemon.logs.length = 0
-}
-
 onMounted(async () => {
   layout.setPage('Dashboard')
   daemon.fetchPlugins()
-
-  // Pre-load recent log history (WebSocket only delivers new entries)
-  daemon.fetchLogs()
 
   try {
     sysInfo.value = await api.system()
@@ -380,7 +321,9 @@ onMounted(async () => {
       qrDataUrl.value = await QRCode.toDataURL(qrRes.setupURI, {
         width: 148,
         margin: 1,
-        color: { dark: '#1a1a2e', light: '#ffffff' },
+        // Literal, not tokenised: these are scanned by a camera, so maximum
+        // contrast matters more than matching the theme.
+        color: { dark: '#000000', light: '#ffffff' },
       })
     }
   } catch {
@@ -409,8 +352,8 @@ onUnmounted(() => {
 
 // ─── Cards ────────────────────────────────────────────────────────────────────
 .card {
-  background: #fff;
-  border: 1px solid #e8e8f0;
+  background: var(--nb-c-surface);
+  border: 1px solid var(--nb-c-border);
   border-radius: 12px;
   padding: 1.1rem 1.25rem;
 }
@@ -420,7 +363,7 @@ onUnmounted(() => {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
   margin-bottom: 0.85rem;
   display: flex;
   align-items: center;
@@ -448,7 +391,7 @@ onUnmounted(() => {
 .qr-wrap {
   border-radius: 8px;
   overflow: hidden;
-  border: 1px solid #e8e8f0;
+  border: 1px solid var(--nb-c-border);
 }
 .qr-img {
   display: block;
@@ -463,10 +406,10 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  color: #d1d5db;
+  color: var(--nb-c-border);
   font-size: 0.75rem;
   text-align: center;
-  border: 1px dashed #e8e8f0;
+  border: 1px dashed var(--nb-c-border);
   border-radius: 8px;
 }
 .hk-details {
@@ -476,12 +419,12 @@ onUnmounted(() => {
   font-size: 1.3rem;
   font-weight: 800;
   letter-spacing: 0.12em;
-  color: #1a1a2e;
+  color: var(--nb-c-text);
   font-family: monospace;
 }
 .pin-label {
   font-size: 0.72rem;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
   margin-top: 2px;
 }
 .hk-status {
@@ -489,7 +432,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.4rem;
   font-size: 0.75rem;
-  color: #6b7280;
+  color: var(--nb-c-text-muted);
   margin-top: 0.5rem;
 }
 .dot {
@@ -497,11 +440,11 @@ onUnmounted(() => {
   height: 8px;
   border-radius: 50%;
   &.green {
-    background: #34d399;
-    box-shadow: 0 0 4px rgba(52, 211, 153, 0.6);
+    background: var(--nb-c-success);
+    box-shadow: 0 0 4px color-mix(in srgb, var(--nb-c-success) 60%, transparent);
   }
   &.gray {
-    background: #d1d5db;
+    background: var(--nb-c-border);
   }
 }
 
@@ -517,23 +460,23 @@ onUnmounted(() => {
   font-size: 0.81rem;
 }
 .sys-key {
-  color: #6b7280;
+  color: var(--nb-c-text-muted);
   white-space: nowrap;
 }
 .sys-val {
-  color: #111827;
+  color: var(--nb-c-text);
   word-break: break-all;
   &.mono {
     font-family: monospace;
     font-size: 0.75rem;
-    color: #6b7280;
+    color: var(--nb-c-text-muted);
   }
 }
 .loading-inline {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
   font-size: 0.82rem;
 }
 
@@ -554,17 +497,17 @@ onUnmounted(() => {
   border-radius: 20px;
   text-transform: uppercase;
   &.green {
-    background: #d1fae5;
-    color: #065f46;
+    background: color-mix(in srgb, var(--nb-c-success) 30%, var(--nb-c-surface));
+    color: var(--nb-c-success);
   }
   &.red {
-    background: #fee2e2;
-    color: #991b1b;
+    background: color-mix(in srgb, var(--nb-c-danger) 30%, var(--nb-c-surface));
+    color: var(--nb-c-danger);
   }
 }
 .empty-inline {
   font-size: 0.82rem;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
 }
 .plugins-list {
   display: flex;
@@ -579,10 +522,10 @@ onUnmounted(() => {
   gap: 0.6rem;
   padding: 0.45rem 0.7rem;
   border-radius: 7px;
-  background: #f9f9fc;
+  background: var(--nb-c-layer-1);
   font-size: 0.82rem;
   &:hover {
-    background: #f0f0f8;
+    background: var(--nb-c-layer-1);
   }
 }
 .plugin-dot {
@@ -590,20 +533,20 @@ onUnmounted(() => {
   height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
-  background: #d1d5db;
+  background: var(--nb-c-border);
   &.running {
-    background: #34d399;
+    background: var(--nb-c-success);
   }
   &.error {
-    background: #f87171;
+    background: var(--nb-c-danger);
   }
   &.loading {
-    background: #fbbf24;
+    background: var(--nb-c-warning);
   }
 }
 .plugin-name {
   font-weight: 500;
-  color: #111827;
+  color: var(--nb-c-text);
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -611,15 +554,15 @@ onUnmounted(() => {
   white-space: nowrap;
 }
 .plugin-ver {
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
   flex-shrink: 0;
 }
 .hb-badge {
   font-size: 0.62rem;
   font-weight: 700;
-  background: #fef3c7;
-  color: #92400e;
-  border: 1px solid #fcd34d;
+  background: color-mix(in srgb, var(--nb-c-warning) 30%, var(--nb-c-surface));
+  color: var(--nb-c-warning);
+  border: 1px solid var(--nb-c-warning);
   padding: 0 0.35rem;
   border-radius: 3px;
   flex-shrink: 0;
@@ -629,15 +572,15 @@ onUnmounted(() => {
   font-weight: 700;
   text-transform: uppercase;
   flex-shrink: 0;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
   &.running {
-    color: #059669;
+    color: var(--nb-c-success);
   }
   &.error {
-    color: #dc2626;
+    color: var(--nb-c-danger);
   }
   &.loading {
-    color: #d97706;
+    color: var(--nb-c-warning);
   }
 }
 
@@ -662,7 +605,7 @@ onUnmounted(() => {
 .metric-title {
   font-size: 0.7rem;
   font-weight: 600;
-  color: #6b7280;
+  color: var(--nb-c-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.06em;
 }
@@ -675,20 +618,20 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   &.purple {
-    background: #f0eeff;
-    color: #7c3aed;
+    background: color-mix(in srgb, var(--nb-c-primary) 12%, var(--nb-c-surface));
+    color: var(--nb-c-primary);
   }
   &.blue {
-    background: #eff6ff;
-    color: #3b82f6;
+    background: color-mix(in srgb, var(--nb-c-info) 10%, var(--nb-c-surface));
+    color: var(--nb-c-info);
   }
   &.green {
-    background: #ecfdf5;
-    color: #10b981;
+    background: color-mix(in srgb, var(--nb-c-success) 10%, var(--nb-c-surface));
+    color: var(--nb-c-success);
   }
   &.amber {
-    background: #fffbeb;
-    color: #f59e0b;
+    background: color-mix(in srgb, var(--nb-c-warning) 10%, var(--nb-c-surface));
+    color: var(--nb-c-warning);
   }
 }
 
@@ -700,18 +643,18 @@ onUnmounted(() => {
 .metric-big {
   font-size: 1.6rem;
   font-weight: 800;
-  color: #111827;
+  color: var(--nb-c-text);
   line-height: 1;
   .metric-unit {
     font-size: 0.82rem;
     font-weight: 500;
-    color: #9ca3af;
+    color: var(--nb-c-text-subtle);
     margin-left: 1px;
   }
 }
 .metric-sub {
   font-size: 0.72rem;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
 }
 .metric-chart {
   margin-top: auto;
@@ -719,13 +662,13 @@ onUnmounted(() => {
 
 .mem-bar-wrap {
   height: 3px;
-  background: #f0f0f8;
+  background: var(--nb-c-layer-1);
   border-radius: 2px;
   overflow: hidden;
 }
 .mem-bar {
   height: 100%;
-  background: #3b82f6;
+  background: var(--nb-c-info);
   border-radius: 2px;
   transition: width 0.5s ease;
   max-width: 100%;
@@ -748,16 +691,16 @@ onUnmounted(() => {
 .uptime-val {
   font-size: 1.15rem;
   font-weight: 700;
-  color: #111827;
+  color: var(--nb-c-text);
 }
 .uptime-label {
   font-size: 0.66rem;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
 }
 .uptime-divider {
   width: 1px;
   height: 28px;
-  background: #e8e8f0;
+  background: var(--nb-c-border);
   flex-shrink: 0;
 }
 
@@ -768,11 +711,11 @@ onUnmounted(() => {
 .net-val {
   font-size: 0.9rem;
   font-weight: 700;
-  color: #111827;
+  color: var(--nb-c-text);
 }
 .net-label {
   font-size: 0.66rem;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
   margin-top: 2px;
 }
 .net-charts {
@@ -780,81 +723,5 @@ onUnmounted(() => {
   flex-direction: column;
   gap: 2px;
   margin-top: 0.5rem;
-}
-
-// ─── Row 3: Logs ──────────────────────────────────────────────────────────────
-.logs-card {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-}
-
-.logs-card-header {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.75rem;
-  flex-shrink: 0;
-
-  .logs-filter {
-    width: 260px;
-  }
-}
-
-.log-list {
-  background: #0d1117;
-  border-radius: 8px;
-  padding: 0.6rem 0.75rem;
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-  font-family: 'MesloLGS NF', monospace;
-  font-size: 0.72rem;
-  line-height: 1.55;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-.log-empty {
-  color: #4b5563;
-  padding: 1rem 0;
-  text-align: center;
-}
-
-.log-line {
-  display: flex;
-  gap: 0.5rem;
-  align-items: baseline;
-  &:hover {
-    background: rgba(255, 255, 255, 0.03);
-    border-radius: 3px;
-  }
-}
-
-.log-time {
-  color: #4b5563;
-  flex-shrink: 0;
-  font-size: 0.68rem;
-}
-.log-level {
-  flex-shrink: 0;
-  width: 34px;
-  font-weight: 700;
-  font-size: 0.66rem;
-}
-.log-plugin {
-  color: #7c6f9f;
-  flex-shrink: 0;
-  max-width: 140px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.log-msg {
-  color: #c9d1d9;
-  flex: 1;
-  word-break: break-word;
 }
 </style>

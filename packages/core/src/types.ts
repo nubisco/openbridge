@@ -126,6 +126,16 @@ export interface PluginInstance {
   source?: 'native' | 'homebridge'
   disabled?: boolean
   platformName?: string
+  /**
+   * npm package name the plugin was installed as.
+   *
+   * Distinct from `platformName` (what the plugin calls itself in
+   * `registerPlatform`) and from `manifest.name`. It matters because an
+   * auto-discovered Homebridge plugin's config is stored in `config.plugins[]`
+   * keyed by *package* name, so the UI cannot find that entry from the platform
+   * name alone.
+   */
+  packageName?: string
   enrichedMetadata?: Record<string, unknown> // Cached npm metadata (downloads, stars, sponsors, docs url)
   /** Live telemetry keyed by device ID, set via ctx.reportTelemetry() */
   telemetry?: Record<string, Record<string, unknown>>

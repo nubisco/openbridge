@@ -90,7 +90,7 @@
           variant="ghost"
           size="sm"
           icon="trash"
-          style="color: #dc2626"
+          style="color: var(--nb-c-danger)"
           @click="confirmingRemove = true"
         >
           Remove plugin
@@ -107,7 +107,7 @@
               variant="primary"
               size="sm"
               :loading="removing"
-              style="background: #dc2626; border-color: #dc2626"
+              style="background: var(--nb-c-danger); border-color: var(--nb-c-danger)"
               @click="removePlugin"
             >
               Remove
@@ -624,9 +624,10 @@ watch(
 
     loadingInfo.value = true
     try {
-      // Homebridge instances can expose package name in manifest and platform name separately.
-      // Always target config by platformName when available.
-      const existing = await api.config.getPlatform(selectedHomebridgePlatformName.value)
+      // Config can live in config.platforms[] (keyed by platform name) or in
+      // config.plugins[] (keyed by npm package name) depending on how the
+      // plugin was loaded — the endpoint resolves across both.
+      const existing = await api.config.getHbPlugin(selectedHomebridgePlatformName.value, plugin.packageName)
       if (existing.config) {
         selectedPlatform.value = selectedHomebridgePlatformName.value
         configJson.value = JSON.stringify(existing.config, null, 2)
@@ -635,10 +636,10 @@ watch(
         return
       }
 
-      // Not yet configured — probe to discover the platform name.
-      if (plugin.status !== 'stopped') return
-
-      const info = await api.pluginInfo(plugin.manifest.name)
+      // Nothing stored yet — probe the package to discover its platform name so
+      // the editor can be seeded. (This used to bail out for anything that was
+      // not 'stopped', which skipped the probe for every running plugin.)
+      const info = await api.pluginInfo(plugin.packageName ?? plugin.manifest.name)
       pluginInfo.value = info
       if (info.platforms.length > 0) {
         await selectPlatform(info.platforms[0], info.mainFile)
@@ -647,10 +648,11 @@ watch(
     } catch {
       // Probe failed (e.g. plugin not in marketplace dir) — try by name as fallback
       try {
-        const existing = await api.config.getPlatform(selectedHomebridgePlatformName.value)
+        const existing = await api.config.getHbPlugin(selectedHomebridgePlatformName.value, plugin.packageName)
         if (existing.config) {
           selectedPlatform.value = selectedHomebridgePlatformName.value
           configJson.value = JSON.stringify(existing.config, null, 2)
+          visualConfig.value = existing.config as Record<string, unknown>
         }
       } catch {
         /* nothing to show */
@@ -777,10 +779,10 @@ onBeforeUnmount(() => {
 })
 
 const LOG_COLORS: Record<string, string> = {
-  debug: '#6b7280',
-  info: '#06b6d4',
-  warn: '#f59e0b',
-  error: '#ef4444',
+  debug: 'var(--nb-c-text-muted)',
+  info: 'var(--nb-c-info)',
+  warn: 'var(--nb-c-warning)',
+  error: 'var(--nb-c-danger)',
 }
 
 async function save() {
@@ -794,8 +796,15 @@ async function save() {
   saveError.value = null
   saveSuccess.value = false
   try {
-    // Save to config.plugins (unified — works for both native and Homebridge plugins)
-    await api.config.savePlugin(inspector.selectedPlugin.manifest.name, parsed)
+    const plugin = inspector.selectedPlugin
+    if (plugin.source === 'homebridge') {
+      // Round trips to wherever the config was found. Writing by manifest.name
+      // would key the entry on the *platform* name for plugins that use
+      // registerPlatform's 2-arg form, which the loader never looks up.
+      await api.config.saveHbPlugin(selectedHomebridgePlatformName.value, parsed, plugin.packageName)
+    } else {
+      await api.config.savePlugin(plugin.manifest.name, parsed)
+    }
     saveSuccess.value = true
     setTimeout(() => {
       saveSuccess.value = false
@@ -820,7 +829,7 @@ async function save() {
   align-items: center;
   gap: 0.75rem;
   padding: 1rem 1.1rem;
-  border-bottom: 1px solid #f0f0f8;
+  border-bottom: 1px solid var(--nb-c-layer-1);
   flex-shrink: 0;
 }
 
@@ -831,20 +840,20 @@ async function save() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #f0f0f8;
-  color: #6b7280;
+  background: var(--nb-c-layer-1);
+  color: var(--nb-c-text-muted);
   flex-shrink: 0;
   &.running {
-    background: #d1fae5;
-    color: #059669;
+    background: color-mix(in srgb, var(--nb-c-success) 30%, var(--nb-c-surface));
+    color: var(--nb-c-success);
   }
   &.error {
-    background: #fee2e2;
-    color: #dc2626;
+    background: color-mix(in srgb, var(--nb-c-danger) 30%, var(--nb-c-surface));
+    color: var(--nb-c-danger);
   }
   &.loading {
-    background: #fef3c7;
-    color: #d97706;
+    background: color-mix(in srgb, var(--nb-c-warning) 30%, var(--nb-c-surface));
+    color: var(--nb-c-warning);
   }
 }
 
@@ -856,11 +865,11 @@ async function save() {
   margin: 0;
   font-size: 0.95rem;
   font-weight: 700;
-  color: #111827;
+  color: var(--nb-c-text);
 }
 .inspector-version {
   font-size: 0.75rem;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
 }
 
 .hap-bridge-info {
@@ -875,7 +884,7 @@ async function save() {
   width: 120px;
   height: 120px;
   border-radius: 8px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--nb-c-border);
 }
 .hap-details {
   flex: 1;
@@ -884,7 +893,7 @@ async function save() {
 .hap-hint {
   margin: 0.5rem 0 0;
   font-size: 0.72rem;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
   line-height: 1.4;
 }
 
@@ -908,8 +917,8 @@ async function save() {
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  background: #eff6ff;
-  border: 1px solid #bfdbfe;
+  background: color-mix(in srgb, var(--nb-c-info) 10%, var(--nb-c-surface));
+  border: 1px solid color-mix(in srgb, var(--nb-c-info) 30%, var(--nb-c-surface));
   border-radius: 8px;
   padding: 0.65rem 0.75rem;
 }
@@ -918,20 +927,20 @@ async function save() {
   align-items: center;
   gap: 0.4rem;
   font-size: 0.78rem;
-  color: #1e40af;
+  color: var(--nb-c-info);
   line-height: 1.4;
 }
 
 .remove-confirm {
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  background: color-mix(in srgb, var(--nb-c-danger) 10%, var(--nb-c-surface));
+  border: 1px solid color-mix(in srgb, var(--nb-c-danger) 30%, var(--nb-c-surface));
   border-radius: 8px;
   padding: 0.75rem;
 }
 .remove-warning {
   margin: 0 0 0.5rem;
   font-size: 0.78rem;
-  color: #991b1b;
+  color: var(--nb-c-danger);
   line-height: 1.4;
 }
 .remove-actions {
@@ -946,7 +955,7 @@ async function save() {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
   display: flex;
   align-items: center;
   gap: 0.35rem;
@@ -959,13 +968,13 @@ async function save() {
   font-size: 0.83rem;
 }
 .field-label {
-  color: #6b7280;
+  color: var(--nb-c-text-muted);
   width: 80px;
   flex-shrink: 0;
   padding-top: 1px;
 }
 .field-value {
-  color: #111827;
+  color: var(--nb-c-text);
   flex: 1;
   word-break: break-word;
 }
@@ -977,36 +986,36 @@ async function save() {
   border-radius: 20px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  background: #f3f4f6;
-  color: #6b7280;
+  background: var(--nb-c-layer-1);
+  color: var(--nb-c-text-muted);
   &.running {
-    background: #d1fae5;
-    color: #065f46;
+    background: color-mix(in srgb, var(--nb-c-success) 30%, var(--nb-c-surface));
+    color: var(--nb-c-success);
   }
   &.error {
-    background: #fee2e2;
-    color: #991b1b;
+    background: color-mix(in srgb, var(--nb-c-danger) 30%, var(--nb-c-surface));
+    color: var(--nb-c-danger);
   }
   &.loading {
-    background: #fef3c7;
-    color: #92400e;
+    background: color-mix(in srgb, var(--nb-c-warning) 30%, var(--nb-c-surface));
+    color: var(--nb-c-warning);
   }
 }
 
 .error-box {
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  background: color-mix(in srgb, var(--nb-c-danger) 10%, var(--nb-c-surface));
+  border: 1px solid color-mix(in srgb, var(--nb-c-danger) 30%, var(--nb-c-surface));
   border-radius: 6px;
   padding: 0.65rem;
   font-size: 0.8rem;
-  color: #dc2626;
+  color: var(--nb-c-danger);
   font-family: monospace;
 }
 
 // ─── Setup / config section ───────────────────────────────────────────────────
 .setup-section {
-  background: #f9f9fc;
-  border: 1px solid #e8e8f0;
+  background: var(--nb-c-layer-1);
+  border: 1px solid var(--nb-c-border);
   border-radius: 10px;
   padding: 0.9rem;
   gap: 0.75rem;
@@ -1018,9 +1027,9 @@ async function save() {
   align-items: center;
   gap: 0.4rem;
   font-size: 0.8rem;
-  color: #6b7280;
+  color: var(--nb-c-text-muted);
   code {
-    background: #e8e8f0;
+    background: var(--nb-c-border);
     padding: 0.1rem 0.3rem;
     border-radius: 3px;
     font-size: 0.76rem;
@@ -1030,7 +1039,7 @@ async function save() {
 .editor-tabs {
   display: flex;
   gap: 2px;
-  background: #f0f0f8;
+  background: var(--nb-c-layer-1);
   border-radius: 7px;
   padding: 2px;
 }
@@ -1045,15 +1054,15 @@ async function save() {
   border: none;
   cursor: pointer;
   background: transparent;
-  color: #6b7280;
+  color: var(--nb-c-text-muted);
   transition: all 0.12s;
   &.active {
-    background: #fff;
-    color: #7c3aed;
+    background: var(--nb-c-surface);
+    color: var(--nb-c-primary);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
   }
   &:hover:not(.active) {
-    color: #374151;
+    color: var(--nb-c-text);
   }
 }
 
@@ -1073,32 +1082,32 @@ async function save() {
   font-weight: 600;
   padding: 0.25rem 0.65rem;
   border-radius: 6px;
-  border: 1.5px solid #e8e8f0;
+  border: 1.5px solid var(--nb-c-border);
   cursor: pointer;
-  background: #fff;
-  color: #6b7280;
+  background: var(--nb-c-surface);
+  color: var(--nb-c-text-muted);
   transition: all 0.12s;
   &.active {
-    border-color: #7c3aed;
-    background: #f0eeff;
-    color: #7c3aed;
+    border-color: var(--nb-c-primary);
+    background: color-mix(in srgb, var(--nb-c-primary) 12%, var(--nb-c-surface));
+    color: var(--nb-c-primary);
   }
   &:hover:not(.active) {
-    border-color: #c4b5fd;
+    border-color: var(--nb-c-primary);
   }
 }
 
 .config-editor-wrap {
   position: relative;
-  border: 1.5px solid #374151;
+  border: 1.5px solid var(--nb-c-text);
   border-radius: 8px;
   overflow: hidden;
   transition: border-color 0.15s;
   &:focus-within {
-    border-color: #7c3aed;
+    border-color: var(--nb-c-primary);
   }
   &.invalid {
-    border-color: #fca5a5;
+    border-color: var(--nb-c-danger);
   }
 }
 
@@ -1107,8 +1116,8 @@ async function save() {
   bottom: 4px;
   right: 8px;
   font-size: 0.68rem;
-  color: #f87171;
-  background: rgba(30, 30, 46, 0.85);
+  color: var(--nb-c-danger);
+  background: var(--nb-c-scrim);
   padding: 1px 6px;
   border-radius: 3px;
   pointer-events: none;
@@ -1119,7 +1128,7 @@ async function save() {
   align-items: center;
   gap: 0.4rem;
   font-size: 0.78rem;
-  color: #dc2626;
+  color: var(--nb-c-danger);
 }
 
 .setup-actions {
@@ -1131,7 +1140,7 @@ async function save() {
 
 // ─── Per-plugin log terminal ──────────────────────────────────────────────────
 .plugin-log-terminal {
-  background: #0d1117;
+  background: var(--nb-c-layer-1);
   border-radius: 8px;
   padding: 0.6rem 0.75rem;
   max-height: 200px;
@@ -1149,13 +1158,13 @@ async function save() {
   gap: 0.5rem;
   align-items: baseline;
   &:hover {
-    background: rgba(255, 255, 255, 0.03);
+    background: var(--nb-c-surface-hover);
     border-radius: 3px;
   }
 }
 
 .plog-time {
-  color: #4b5563;
+  color: var(--nb-c-text-muted);
   flex-shrink: 0;
   font-size: 0.68rem;
 }
@@ -1166,7 +1175,7 @@ async function save() {
   font-size: 0.66rem;
 }
 .plog-msg {
-  color: #c9d1d9;
+  color: var(--nb-c-text-muted);
   flex: 1;
   word-break: break-word;
 }
@@ -1182,18 +1191,18 @@ async function save() {
   gap: 0.5rem;
   padding: 0.4rem 0.5rem;
   border-radius: 6px;
-  background: #f9f9fc;
-  border: 1px solid #f3f4f6;
+  background: var(--nb-c-layer-1);
+  border: 1px solid var(--nb-c-layer-1);
   font-size: 0.8rem;
 }
 .plugin-device-name {
   flex: 1;
   font-weight: 500;
-  color: #111827;
+  color: var(--nb-c-text);
 }
 .plugin-device-type {
   font-size: 0.7rem;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
   text-transform: capitalize;
 }
 </style>

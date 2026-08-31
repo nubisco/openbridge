@@ -460,8 +460,8 @@ function generatePin() {
 }
 
 .settings-card {
-  background: #fff;
-  border: 1px solid #e8e8f0;
+  background: var(--nb-c-surface);
+  border: 1px solid var(--nb-c-border);
   border-radius: 12px;
   padding: 1.4rem 1.5rem;
 }
@@ -475,8 +475,8 @@ function generatePin() {
 .card-icon {
   width: 40px;
   height: 40px;
-  background: #f0eeff;
-  color: #7c3aed;
+  background: color-mix(in srgb, var(--nb-c-primary) 12%, var(--nb-c-surface));
+  color: var(--nb-c-primary);
   border-radius: 10px;
   display: flex;
   align-items: center;
@@ -487,12 +487,12 @@ function generatePin() {
   margin: 0;
   font-size: 0.95rem;
   font-weight: 700;
-  color: #111827;
+  color: var(--nb-c-text);
 }
 .card-subtitle {
   margin: 0.15rem 0 0;
   font-size: 0.78rem;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
 }
 
 .field-grid {
@@ -505,7 +505,7 @@ function generatePin() {
 .field-label {
   font-size: 0.82rem;
   font-weight: 500;
-  color: #374151;
+  color: var(--nb-c-text);
   padding-top: 0.45rem;
 }
 
@@ -517,7 +517,7 @@ function generatePin() {
 
 .field-input {
   padding: 0.42rem 0.65rem;
-  border: 1px solid #e8e8f0;
+  border: 1px solid var(--nb-c-border);
   border-radius: 7px;
   font-size: 0.82rem;
   outline: none;
@@ -525,7 +525,7 @@ function generatePin() {
   box-sizing: border-box;
   transition: border-color 0.15s;
   &:focus {
-    border-color: #a78bfa;
+    border-color: var(--nb-c-primary);
   }
   &--short {
     max-width: 110px;
@@ -539,21 +539,21 @@ function generatePin() {
 
 .field-select {
   padding: 0.42rem 0.65rem;
-  border: 1px solid #e8e8f0;
+  border: 1px solid var(--nb-c-border);
   border-radius: 7px;
   font-size: 0.82rem;
   outline: none;
   width: fit-content;
-  background: #fff;
+  background: var(--nb-c-surface);
   cursor: pointer;
   &:focus {
-    border-color: #a78bfa;
+    border-color: var(--nb-c-primary);
   }
 }
 
 .field-hint {
   font-size: 0.72rem;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
 }
 
 .pin-row {
@@ -567,15 +567,15 @@ function generatePin() {
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid #e8e8f0;
+  border: 1px solid var(--nb-c-border);
   border-radius: 7px;
-  background: #fff;
-  color: #6b7280;
+  background: var(--nb-c-surface);
+  color: var(--nb-c-text-muted);
   cursor: pointer;
   flex-shrink: 0;
   &:hover {
-    border-color: #a78bfa;
-    color: #7c3aed;
+    border-color: var(--nb-c-primary);
+    color: var(--nb-c-primary);
   }
 }
 
@@ -584,7 +584,7 @@ function generatePin() {
   align-items: center;
   gap: 0.4rem;
   font-size: 0.78rem;
-  color: #dc2626;
+  color: var(--nb-c-danger);
   margin-top: 0.75rem;
 }
 
@@ -594,7 +594,7 @@ function generatePin() {
   gap: 0.65rem;
   margin-top: 1.25rem;
   padding-top: 1rem;
-  border-top: 1px solid #f0f0f8;
+  border-top: 1px solid var(--nb-c-layer-1);
 }
 
 .action-hint {
@@ -602,7 +602,7 @@ function generatePin() {
   align-items: center;
   gap: 0.3rem;
   font-size: 0.72rem;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
 }
 
 // ─── Updates card ────────────────────────────────────────────────────────────
@@ -628,19 +628,19 @@ function generatePin() {
   font-size: 0.78rem;
   padding: 0.25rem 0.6rem;
   border-radius: 20px;
-  background: #f3f4f6;
-  color: #374151;
+  background: var(--nb-c-layer-1);
+  color: var(--nb-c-text);
 
   &--available {
-    background: #fef3c7;
-    color: #92400e;
+    background: color-mix(in srgb, var(--nb-c-warning) 30%, var(--nb-c-surface));
+    color: var(--nb-c-warning);
   }
   &--ok {
-    background: #d1fae5;
-    color: #065f46;
+    background: color-mix(in srgb, var(--nb-c-success) 30%, var(--nb-c-surface));
+    color: var(--nb-c-success);
   }
   &--muted {
-    color: #9ca3af;
+    color: var(--nb-c-text-subtle);
   }
 }
 
@@ -656,26 +656,26 @@ function generatePin() {
   display: flex;
   justify-content: space-between;
   font-size: 0.78rem;
-  color: #6b7280;
+  color: var(--nb-c-text-muted);
   margin-bottom: 0.35rem;
 }
 .update-progress-stage {
-  color: #374151;
+  color: var(--nb-c-text);
   font-weight: 500;
 }
 .update-progress-pct {
-  color: #7c3aed;
+  color: var(--nb-c-primary);
   font-weight: 600;
 }
 .update-progress-bar {
   height: 6px;
-  background: #f3f4f6;
+  background: var(--nb-c-layer-1);
   border-radius: 3px;
   overflow: hidden;
 }
 .update-progress-fill {
   height: 100%;
-  background: #7c3aed;
+  background: var(--nb-c-primary);
   border-radius: 3px;
 }
 
@@ -684,25 +684,25 @@ function generatePin() {
   align-items: center;
   gap: 0.4rem;
   font-size: 0.78rem;
-  color: #6b7280;
+  color: var(--nb-c-text-muted);
   margin: 0.75rem 0 0;
 
   code {
-    background: #f3f4f6;
+    background: var(--nb-c-layer-1);
     padding: 0.15rem 0.4rem;
     border-radius: 4px;
     font-size: 0.72rem;
   }
 
   &--error {
-    color: #dc2626;
+    color: var(--nb-c-danger);
   }
 }
 
 // ─── Info card ───────────────────────────────────────────────────────────────
 .info-card {
-  background: #fafaf8;
-  border-color: #e8e8e0;
+  background: var(--nb-c-layer-1);
+  border-color: var(--nb-c-border);
 }
 .info-title {
   display: flex;
@@ -710,7 +710,7 @@ function generatePin() {
   gap: 0.4rem;
   font-size: 0.78rem;
   font-weight: 700;
-  color: #6b7280;
+  color: var(--nb-c-text-muted);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   margin: 0 0 0.75rem;
@@ -719,7 +719,7 @@ function generatePin() {
   margin: 0;
   padding-left: 1.25rem;
   font-size: 0.82rem;
-  color: #374151;
+  color: var(--nb-c-text);
   line-height: 1.7;
   li {
     margin-bottom: 0.25rem;

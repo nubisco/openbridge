@@ -279,6 +279,27 @@
       <!-- Services & characteristics -->
       <div v-for="svc in mainServices((selected as any).acc)" :key="svc.uuid" class="detail-section">
         <div class="section-label">{{ svc.displayName || svc.name }}</div>
+
+        <!-- Present-as override. Offered only for the interchangeable on/off
+             service types, which is what the daemon will accept. -->
+        <div v-if="canRetype(svc.uuid)" class="homekit-row">
+          <div class="homekit-copy">
+            <span class="homekit-title">Show in HomeKit as</span>
+            <span class="homekit-hint">
+              A plugin cannot know what a generic relay drives. Set it here and OpenBridge re-applies it on every
+              restart, so the Home app stops reverting to a switch.
+            </span>
+          </div>
+          <NbSelect
+            :model-value="serviceTypeFor((selected as any).acc.uuid, svc.uuid)"
+            :options="serviceTypeOptions"
+            :disabled="homekitBusy"
+            size="sm"
+            @update:model-value="(v: string) => setServiceType((selected as any).acc.uuid, svc.uuid, v)"
+          />
+        </div>
+        <div v-if="serviceTypeNotice" class="homekit-notice">{{ serviceTypeNotice }}</div>
+
         <div class="char-list">
           <div v-for="ch in svc.characteristics" :key="ch.uuid" class="char-row">
             <span class="char-name">{{ ch.name }}</span>
@@ -371,7 +392,69 @@ async function setHomekitVisible(uuid: string, visible: boolean) {
   }
 }
 
-onMounted(loadHomekitHidden)
+// ─── HomeKit service type ───────────────────────────────────────────────────
+// What a service is *presented* as in the Home app. The set of valid targets
+// comes from the daemon rather than being restated here, so the picker cannot
+// offer a conversion the bridge would reject.
+const serviceTypeOverrides = ref<Record<string, Record<string, string>>>({})
+const availableServiceTypes = ref<Array<{ key: string; label: string; serviceUuid: string }>>([])
+// Kept separate from homekitNotice so feedback appears beside the control the
+// user just touched, not in the visibility section further down.
+const serviceTypeNotice = ref('')
+
+const serviceTypeOptions = computed(() => [
+  { value: '', label: 'Default (as published)' },
+  ...availableServiceTypes.value.map((t) => ({ value: t.key, label: t.label })),
+])
+
+/** Only the interchangeable on/off services can be re-typed. */
+function canRetype(serviceUuid: string): boolean {
+  return availableServiceTypes.value.some((t) => t.serviceUuid === serviceUuid)
+}
+
+function serviceTypeFor(accessoryUuid: string, serviceUuid: string): string {
+  return serviceTypeOverrides.value[accessoryUuid]?.[serviceUuid] ?? ''
+}
+
+async function loadServiceTypes() {
+  try {
+    const { overrides, available } = await api.homekitServiceTypes()
+    serviceTypeOverrides.value = overrides
+    availableServiceTypes.value = available
+  } catch {
+    /* bridge may be unavailable; the picker simply does not render */
+  }
+}
+
+async function setServiceType(accessoryUuid: string, serviceUuid: string, type: string) {
+  homekitBusy.value = true
+  serviceTypeNotice.value = ''
+  try {
+    await api.setHomekitServiceType(accessoryUuid, serviceUuid, type || null)
+
+    const next = { ...serviceTypeOverrides.value }
+    const forAccessory = { ...(next[accessoryUuid] ?? {}) }
+    if (type) forAccessory[serviceUuid] = type
+    else delete forAccessory[serviceUuid]
+
+    if (Object.keys(forAccessory).length > 0) next[accessoryUuid] = forAccessory
+    else delete next[accessoryUuid]
+    serviceTypeOverrides.value = next
+
+    // Always a restart: HomeKit caches an accessory's shape at pairing, so this
+    // one genuinely cannot be applied live.
+    serviceTypeNotice.value = 'Saved. This takes effect after the next OpenBridge restart.'
+  } catch (err) {
+    serviceTypeNotice.value = `Could not change type: ${(err as Error).message}`
+  } finally {
+    homekitBusy.value = false
+  }
+}
+
+onMounted(() => {
+  loadHomekitHidden()
+  loadServiceTypes()
+})
 
 const inspector = useInspectorStore()
 
@@ -792,32 +875,32 @@ const historyChartSeries = computed(() => {
   align-items: center;
   gap: 0.75rem;
   padding: 1rem;
-  border-bottom: 1px solid #e5e7eb;
+  border-bottom: 1px solid var(--nb-c-border);
   position: sticky;
   top: 0;
-  background: #fff;
+  background: var(--nb-c-surface);
 }
 
 .detail-icon {
   width: 44px;
   height: 44px;
   border-radius: 10px;
-  background: #ede9fe;
-  color: #7c3aed;
+  background: color-mix(in srgb, var(--nb-c-primary) 12%, var(--nb-c-surface));
+  color: var(--nb-c-primary);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   &.native-icon {
-    background: #ede9fe;
-    color: #7c3aed;
+    background: color-mix(in srgb, var(--nb-c-primary) 12%, var(--nb-c-surface));
+    color: var(--nb-c-primary);
   }
 }
 
 .detail-name {
   font-weight: 700;
   font-size: 0.95rem;
-  color: #111827;
+  color: var(--nb-c-text);
   margin: 0;
 }
 
@@ -829,27 +912,27 @@ const historyChartSeries = computed(() => {
 .rename-input {
   font-size: 0.9rem;
   font-weight: 600;
-  color: #111827;
-  border: 1px solid #c4b5fd;
+  color: var(--nb-c-text);
+  border: 1px solid var(--nb-c-primary);
   border-radius: 6px;
   padding: 0.2rem 0.4rem;
   outline: none;
   flex: 1;
   min-width: 0;
   &:focus {
-    border-color: #7c3aed;
-    box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.1);
+    border-color: var(--nb-c-primary);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--nb-c-primary) 10%, transparent);
   }
 }
 
 .detail-type {
   font-size: 0.75rem;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
 }
 
 .detail-section {
   padding: 0.85rem 1rem 0.5rem;
-  border-bottom: 1px solid #f3f4f6;
+  border-bottom: 1px solid var(--nb-c-layer-1);
 }
 
 .section-label {
@@ -857,7 +940,7 @@ const historyChartSeries = computed(() => {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
   margin-bottom: 0.5rem;
 }
 
@@ -868,16 +951,16 @@ const historyChartSeries = computed(() => {
   font-size: 0.8rem;
 }
 .info-key {
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
   text-transform: capitalize;
 }
 .info-val {
-  color: #111827;
+  color: var(--nb-c-text);
   word-break: break-all;
   &.mono {
     font-family: monospace;
     font-size: 0.72rem;
-    color: #6b7280;
+    color: var(--nb-c-text-muted);
   }
 }
 
@@ -896,11 +979,11 @@ const historyChartSeries = computed(() => {
 .energy-value {
   font-size: 2rem;
   font-weight: 700;
-  color: #111827;
+  color: var(--nb-c-text);
 }
 .energy-unit {
   font-size: 1rem;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
 }
 .energy-secondary {
   display: flex;
@@ -915,12 +998,12 @@ const historyChartSeries = computed(() => {
   font-size: 0.68rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
 }
 .energy-item-val {
   font-size: 0.85rem;
   font-weight: 600;
-  color: #111827;
+  color: var(--nb-c-text);
 }
 
 // ─── Widget: thermostat / dehumidifier ────────────────────────────────────────
@@ -935,24 +1018,24 @@ const historyChartSeries = computed(() => {
   justify-content: space-between;
   padding: 0.3rem 0.5rem;
   border-radius: 6px;
-  background: #f9f9fc;
+  background: var(--nb-c-layer-1);
 }
 .thermo-label {
   font-size: 0.8rem;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
 }
 .thermo-value {
   font-size: 0.9rem;
   font-weight: 600;
-  color: #111827;
+  color: var(--nb-c-text);
   &.accent {
-    color: #7c3aed;
+    color: var(--nb-c-primary);
   }
   &.on {
-    color: #059669;
+    color: var(--nb-c-success);
   }
   &.off {
-    color: #9ca3af;
+    color: var(--nb-c-text-subtle);
   }
 }
 
@@ -964,7 +1047,7 @@ const historyChartSeries = computed(() => {
 }
 .no-telemetry {
   font-size: 0.8rem;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
   font-style: italic;
 }
 
@@ -982,24 +1065,24 @@ const historyChartSeries = computed(() => {
   font-size: 0.8rem;
   padding: 0.3rem 0.5rem;
   border-radius: 6px;
-  background: #f9f9fc;
-  border: 1px solid #f3f4f6;
+  background: var(--nb-c-layer-1);
+  border: 1px solid var(--nb-c-layer-1);
 }
 
 .char-name {
   flex: 1;
-  color: #6b7280;
+  color: var(--nb-c-text-muted);
 }
 .char-value {
-  color: #111827;
+  color: var(--nb-c-text);
   font-weight: 500;
   font-size: 0.78rem;
   &.on {
-    color: #059669;
+    color: var(--nb-c-success);
   }
 }
 .char-writable {
-  color: #7c3aed;
+  color: var(--nb-c-primary);
   display: flex;
   align-items: center;
 }
@@ -1007,7 +1090,7 @@ const historyChartSeries = computed(() => {
 .detail-uuid {
   padding: 0.75rem 1rem;
   font-size: 0.68rem;
-  color: #d1d5db;
+  color: var(--nb-c-border);
   font-family: monospace;
   word-break: break-all;
 }
@@ -1029,15 +1112,15 @@ const historyChartSeries = computed(() => {
   font-weight: 600;
   text-transform: capitalize;
   border-radius: 6px;
-  border: 1px solid #e5e7eb;
-  background: #fff;
-  color: #6b7280;
+  border: 1px solid var(--nb-c-border);
+  background: var(--nb-c-surface);
+  color: var(--nb-c-text-muted);
   cursor: pointer;
   transition: all 0.15s;
   &.active {
-    background: #ede9fe;
-    border-color: #c4b5fd;
-    color: #7c3aed;
+    background: color-mix(in srgb, var(--nb-c-primary) 12%, var(--nb-c-surface));
+    border-color: var(--nb-c-primary);
+    color: var(--nb-c-primary);
   }
 }
 
@@ -1049,8 +1132,8 @@ const historyChartSeries = computed(() => {
 }
 .history-nav-btn {
   background: none;
-  border: 1px solid #e5e7eb;
-  color: #6b7280;
+  border: 1px solid var(--nb-c-border);
+  color: var(--nb-c-text-muted);
   border-radius: 6px;
   width: 28px;
   height: 28px;
@@ -1060,8 +1143,8 @@ const historyChartSeries = computed(() => {
   align-items: center;
   justify-content: center;
   &:hover {
-    color: #111827;
-    border-color: #9ca3af;
+    color: var(--nb-c-text);
+    border-color: var(--nb-c-text-subtle);
   }
 }
 .history-nav-center {
@@ -1073,16 +1156,16 @@ const historyChartSeries = computed(() => {
 .history-total {
   font-size: 1.2rem;
   font-weight: 700;
-  color: #111827;
+  color: var(--nb-c-text);
 }
 .history-unit {
   font-size: 0.7rem;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
   font-weight: 400;
 }
 .history-date {
   font-size: 0.7rem;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
 }
 
 .history-chart {
@@ -1100,7 +1183,7 @@ const historyChartSeries = computed(() => {
 }
 .history-bar {
   width: 100%;
-  background: #7c3aed;
+  background: var(--nb-c-primary);
   border-radius: 2px 2px 0 0;
   transition: height 0.3s ease;
   min-height: 2px;
@@ -1112,7 +1195,7 @@ const historyChartSeries = computed(() => {
 
 .no-history {
   font-size: 0.78rem;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
   font-style: italic;
   text-align: center;
   padding: 1rem 0;
@@ -1121,7 +1204,7 @@ const historyChartSeries = computed(() => {
 // ─── Calibration ──────────────────────────────────────────────────────────────
 .calibration-hint {
   font-size: 0.68rem;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
   text-align: center;
   margin-top: 0.25rem;
   margin-bottom: 0.5rem;
@@ -1137,9 +1220,9 @@ const historyChartSeries = computed(() => {
   margin-top: 0.5rem;
   padding: 0.4rem 0.6rem;
   font-size: 0.75rem;
-  color: #92400e;
-  background: #fef3c7;
-  border: 1px solid #fde68a;
+  color: var(--nb-c-warning);
+  background: color-mix(in srgb, var(--nb-c-warning) 30%, var(--nb-c-surface));
+  border: 1px solid color-mix(in srgb, var(--nb-c-warning) 30%, var(--nb-c-surface));
   border-radius: 6px;
   text-align: center;
 }
@@ -1166,12 +1249,12 @@ const historyChartSeries = computed(() => {
 .homekit-hint {
   font-size: 0.72rem;
   line-height: 1.35;
-  color: var(--nb-color-text-muted, #6b7280);
+  color: var(--nb-color-text-muted, var(--nb-c-text-muted));
 }
 
 .homekit-notice {
   margin-top: 0.4rem;
   font-size: 0.72rem;
-  color: var(--nb-color-text-muted, #6b7280);
+  color: var(--nb-color-text-muted, var(--nb-c-text-muted));
 }
 </style>

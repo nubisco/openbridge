@@ -704,7 +704,8 @@ const SERVICE_UUID_TO_CATEGORY: Record<string, number> = {
   '000000BB-0000-1000-8000-0026BB765291': 19, // AirPurifier
   '000000BC-0000-1000-8000-0026BB765291': 20, // HeaterCooler
   '000000BD-0000-1000-8000-0026BB765291': 22, // HumidifierDehumidifier
-  '000000D0-0000-1000-8000-0026BB765291': 32, // Television
+  '000000D0-0000-1000-8000-0026BB765291': 29, // Valve (FAUCET)
+  '000000D8-0000-1000-8000-0026BB765291': 31, // Television
 }
 
 function inferCategoryFromServices(acc: any): number {

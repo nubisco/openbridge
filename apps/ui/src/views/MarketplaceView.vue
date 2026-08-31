@@ -210,7 +210,7 @@ onMounted(async () => {
     left: 0.6rem;
     top: 50%;
     transform: translateY(-50%);
-    color: #9ca3af;
+    color: var(--nb-c-text-subtle);
     pointer-events: none;
   }
 }
@@ -218,24 +218,24 @@ onMounted(async () => {
 .search-input {
   width: 100%;
   padding: 0.45rem 0.75rem 0.45rem 2rem;
-  border: 1px solid #e8e8f0;
+  border: 1px solid var(--nb-c-border);
   border-radius: 8px;
   font-size: 0.875rem;
   outline: none;
   transition: border-color 0.15s;
   &:focus {
-    border-color: #a78bfa;
+    border-color: var(--nb-c-primary);
   }
 }
 
 .result-count {
   font-size: 0.78rem;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
 }
 
 .install-success {
-  background: #ecfdf5;
-  border: 1px solid #a7f3d0;
+  background: color-mix(in srgb, var(--nb-c-success) 10%, var(--nb-c-surface));
+  border: 1px solid color-mix(in srgb, var(--nb-c-success) 30%, var(--nb-c-surface));
   border-radius: 10px;
   padding: 0.85rem 1rem;
   display: flex;
@@ -247,7 +247,7 @@ onMounted(async () => {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    color: #065f46;
+    color: var(--nb-c-success);
     font-size: 0.875rem;
     strong {
       flex: 1;
@@ -256,17 +256,17 @@ onMounted(async () => {
 
   p {
     margin: 0;
-    color: #374151;
+    color: var(--nb-c-text);
   }
 
   .config-snippet {
-    background: #f0fdf4;
-    border: 1px solid #bbf7d0;
+    background: color-mix(in srgb, var(--nb-c-success) 10%, var(--nb-c-surface));
+    border: 1px solid color-mix(in srgb, var(--nb-c-success) 30%, var(--nb-c-surface));
     border-radius: 6px;
     padding: 0.6rem 0.8rem;
     font-size: 0.75rem;
     font-family: monospace;
-    color: #1a1a2e;
+    color: var(--nb-c-text);
     margin: 0;
     white-space: pre-wrap;
     word-break: break-all;
@@ -276,8 +276,8 @@ onMounted(async () => {
     display: inline-flex;
     align-items: center;
     gap: 0.35rem;
-    background: #059669;
-    color: #fff;
+    background: var(--nb-c-success);
+    color: var(--nb-c-success-a11y);
     border: none;
     border-radius: 7px;
     padding: 0.4rem 0.9rem;
@@ -286,7 +286,7 @@ onMounted(async () => {
     cursor: pointer;
     align-self: flex-start;
     &:hover {
-      background: #047857;
+      background: var(--nb-c-success);
     }
   }
 
@@ -294,11 +294,11 @@ onMounted(async () => {
     background: none;
     border: none;
     cursor: pointer;
-    color: #6b7280;
+    color: var(--nb-c-text-muted);
     padding: 2px;
     display: flex;
     &:hover {
-      color: #111827;
+      color: var(--nb-c-text);
     }
   }
 }
@@ -307,12 +307,12 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  background: color-mix(in srgb, var(--nb-c-danger) 10%, var(--nb-c-surface));
+  border: 1px solid color-mix(in srgb, var(--nb-c-danger) 30%, var(--nb-c-surface));
   border-radius: 8px;
   padding: 0.6rem 0.9rem;
   font-size: 0.82rem;
-  color: #dc2626;
+  color: var(--nb-c-danger);
 }
 
 .loading-state,
@@ -322,7 +322,7 @@ onMounted(async () => {
   align-items: center;
   gap: 0.75rem;
   padding: 4rem 2rem;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
   text-align: center;
   p {
     margin: 0;
@@ -340,13 +340,13 @@ onMounted(async () => {
   display: flex;
   align-items: flex-start;
   gap: 0.75rem;
-  background: #fff;
-  border: 1.5px solid #e8e8f0;
+  background: var(--nb-c-surface);
+  border: 1.5px solid var(--nb-c-border);
   border-radius: 10px;
   padding: 0.85rem 1rem;
   transition: border-color 0.12s;
   &:hover {
-    border-color: #c4b5fd;
+    border-color: var(--nb-c-primary);
   }
 }
 
@@ -355,8 +355,8 @@ onMounted(async () => {
   height: 36px;
   flex-shrink: 0;
   border-radius: 8px;
-  background: #f0eeff;
-  color: #7c3aed;
+  background: color-mix(in srgb, var(--nb-c-primary) 12%, var(--nb-c-surface));
+  color: var(--nb-c-primary);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -379,13 +379,13 @@ onMounted(async () => {
 .plugin-name {
   font-weight: 600;
   font-size: 0.875rem;
-  color: #111827;
+  color: var(--nb-c-text);
 }
 
 .plugin-version {
   font-size: 0.72rem;
-  color: #9ca3af;
-  background: #f3f4f6;
+  color: var(--nb-c-text-subtle);
+  background: var(--nb-c-layer-1);
   padding: 0.1rem 0.4rem;
   border-radius: 4px;
 }
@@ -398,16 +398,16 @@ onMounted(async () => {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: #92400e;
-  background: #fef3c7;
-  border: 1px solid #fcd34d;
+  color: var(--nb-c-warning);
+  background: color-mix(in srgb, var(--nb-c-warning) 30%, var(--nb-c-surface));
+  border: 1px solid var(--nb-c-warning);
   border-radius: 20px;
   padding: 0.1rem 0.45rem;
 }
 
 .plugin-desc {
   font-size: 0.82rem;
-  color: #6b7280;
+  color: var(--nb-c-text-muted);
   margin: 0 0 0.35rem;
   line-height: 1.4;
   white-space: nowrap;
@@ -420,13 +420,13 @@ onMounted(async () => {
   align-items: center;
   gap: 0.35rem;
   font-size: 0.74rem;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
 
   .sep {
-    color: #d1d5db;
+    color: var(--nb-c-border);
   }
   .npm-link {
-    color: #7c3aed;
+    color: var(--nb-c-primary);
     text-decoration: none;
     &:hover {
       text-decoration: underline;
@@ -462,23 +462,23 @@ onMounted(async () => {
 
 .btn-install {
   @extend %btn-base;
-  background: #7c3aed;
-  color: #fff;
+  background: var(--nb-c-primary);
+  color: var(--nb-c-primary-a11y);
   &:not(:disabled):hover {
-    background: #6d28d9;
+    background: var(--nb-c-primary-hover);
   }
 }
 
 .btn-installing {
   @extend %btn-base;
-  background: #e5e7eb;
-  color: #6b7280;
+  background: var(--nb-c-border);
+  color: var(--nb-c-text-muted);
 }
 
 .btn-installed {
   @extend %btn-base;
-  background: #d1fae5;
-  color: #065f46;
+  background: color-mix(in srgb, var(--nb-c-success) 30%, var(--nb-c-surface));
+  color: var(--nb-c-success);
 }
 
 .load-more {
@@ -489,15 +489,15 @@ onMounted(async () => {
 
 .btn-load-more {
   font-size: 0.82rem;
-  color: #7c3aed;
+  color: var(--nb-c-primary);
   background: none;
-  border: 1.5px solid #e8e8f0;
+  border: 1.5px solid var(--nb-c-border);
   border-radius: 8px;
   padding: 0.45rem 1.25rem;
   cursor: pointer;
   transition: border-color 0.15s;
   &:hover:not(:disabled) {
-    border-color: #a78bfa;
+    border-color: var(--nb-c-primary);
   }
   &:disabled {
     opacity: 0.5;

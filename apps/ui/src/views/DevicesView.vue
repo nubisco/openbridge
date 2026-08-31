@@ -1,13 +1,20 @@
 <template>
   <div class="devices-view">
-    <div class="devices-toolbar">
-      <div v-if="totalDevices > 0" class="toolbar-count">
-        {{ totalDevices }} device{{ totalDevices !== 1 ? 's' : '' }}
-        <span v-if="nativeDevices.length > 0" class="toolbar-badge">{{ nativeDevices.length }} native</span>
-      </div>
-      <div class="toolbar-spacer" />
-      <NbButton variant="ghost" size="sm" icon="arrows-clockwise" :loading="refreshing" @click="refresh" />
-    </div>
+    <Teleport v-if="totalDevices > 0" defer to="#ob-topbar-left">
+      <span class="toolbar-count">{{ totalDevices }} device{{ totalDevices !== 1 ? 's' : '' }}</span>
+      <NbBadge v-if="nativeDevices.length > 0">{{ nativeDevices.length }} native</NbBadge>
+    </Teleport>
+
+    <Teleport defer to="#ob-topbar-right">
+      <NbButton
+        variant="ghost"
+        size="sm"
+        icon="arrows-clockwise"
+        title="Refresh"
+        :loading="refreshing"
+        @click="refresh"
+      />
+    </Teleport>
 
     <div v-if="totalDevices === 0" class="empty-state">
       <NbIcon name="devices" :size="40" />
@@ -23,7 +30,7 @@
       <!-- Device grid -->
       <div class="device-grid">
         <!-- Native plugin devices -->
-        <div
+        <NbPanel
           v-for="dev in nativeDevices"
           :key="'native:' + dev.id"
           class="device-card native-card"
@@ -31,6 +38,7 @@
           @click="selectNative(dev)"
           @dblclick="openDetail(dev)"
         >
+          <span class="device-card__accent" />
           <div class="device-icon native-icon">
             <NbIcon :name="widgetIcon(dev.widgetType)" :size="22" />
           </div>
@@ -114,10 +122,10 @@
             </div>
           </div>
           <div class="device-reachability" :class="dev.pluginStatus === 'running' ? 'online' : 'offline'" />
-        </div>
+        </NbPanel>
 
         <!-- HAP / Homebridge accessories -->
-        <div
+        <NbPanel
           v-for="acc in daemon.accessories"
           :key="acc.uuid"
           class="device-card hap-card"
@@ -145,7 +153,7 @@
             </div>
           </div>
           <div class="device-reachability" :class="acc.reachable ? 'online' : 'offline'" />
-        </div>
+        </NbPanel>
       </div>
     </div>
 
@@ -437,29 +445,10 @@ onUnmounted(() => {
   min-height: 0;
 }
 
-.devices-toolbar {
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-  margin-bottom: -0.25rem;
-}
+// Teleported next to the breadcrumb in the shell topbar.
 .toolbar-count {
   font-size: 0.8rem;
-  color: #9ca3af;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-.toolbar-badge {
-  font-size: 0.7rem;
-  background: rgba(124, 58, 237, 0.08);
-  color: #7c3aed;
-  border: 1px solid rgba(124, 58, 237, 0.2);
-  border-radius: 99px;
-  padding: 0.1rem 0.5rem;
-}
-.toolbar-spacer {
-  flex: 1;
+  color: var(--nb-c-text-muted);
 }
 
 .empty-state {
@@ -468,9 +457,9 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.5rem;
   padding: 4rem 2rem;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
   text-align: center;
-  border: 1px dashed #d1d5db;
+  border: 1px dashed var(--nb-c-border);
   border-radius: 12px;
   p {
     margin: 0;
@@ -495,62 +484,63 @@ onUnmounted(() => {
   align-content: start;
 }
 
+// NbPanel supplies the surface, border and layer — the same primitive the
+// plugin cards use, so the two pages read as one system. Only selection,
+// the native/HAP accent and the inner rhythm live here.
 .device-card {
-  background: #fff;
-  border: 1.5px solid #e5e7eb;
-  border-radius: 12px;
-  padding: 1rem;
+  position: relative;
+  overflow: hidden;
   cursor: pointer;
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
   transition:
     border-color 0.15s,
-    box-shadow 0.15s;
+    background 0.15s;
+
   &:hover {
-    border-color: #c4b5fd;
+    background: var(--nb-c-surface-hover);
   }
   &.selected {
-    border-color: #7c3aed;
-    box-shadow: 0 2px 12px rgba(124, 58, 237, 0.12);
+    border-color: var(--nb-c-primary);
+    box-shadow: 0 0 0 1px var(--nb-c-primary);
   }
   &.unreachable {
     opacity: 0.55;
   }
-  &.native-card {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.5rem;
-    border-left: 3px solid #c4b5fd;
-  }
-  &.hap-card {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.5rem;
-  }
+}
+
+// Marks a device served by a native OpenBridge plugin, mirroring the status
+// accent on the plugin cards.
+.device-card__accent {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--nb-c-primary);
 }
 
 .device-icon {
   width: 44px;
   height: 44px;
   border-radius: 10px;
-  background: #ede9fe;
-  color: #7c3aed;
+  background: color-mix(in srgb, var(--nb-c-primary) 12%, var(--nb-c-surface));
+  color: var(--nb-c-primary);
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
   &.unreachable {
-    background: #f3f4f6;
-    color: #9ca3af;
+    background: var(--nb-c-layer-1);
+    color: var(--nb-c-text-subtle);
   }
   &.native-icon {
-    background: #ede9fe;
-    color: #7c3aed;
+    background: color-mix(in srgb, var(--nb-c-primary) 12%, var(--nb-c-surface));
+    color: var(--nb-c-primary);
   }
   &.hap-icon {
-    background: #f3f4f6;
-    color: #6b7280;
+    background: var(--nb-c-layer-1);
+    color: var(--nb-c-text-muted);
   }
 }
 
@@ -562,14 +552,14 @@ onUnmounted(() => {
 .device-name {
   font-weight: 600;
   font-size: 0.875rem;
-  color: #111827;
+  color: var(--nb-c-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .device-type {
   font-size: 0.74rem;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
   margin-top: 2px;
 }
 .device-summary {
@@ -581,11 +571,11 @@ onUnmounted(() => {
 .summary-primary {
   font-size: 1.1rem;
   font-weight: 700;
-  color: #111827;
+  color: var(--nb-c-text);
 }
 .summary-secondary {
   font-size: 0.72rem;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
 }
 .summary-status {
   font-size: 0.75rem;
@@ -593,12 +583,12 @@ onUnmounted(() => {
   padding: 0.1rem 0.4rem;
   border-radius: 4px;
   &.on {
-    background: #d1fae5;
-    color: #065f46;
+    background: color-mix(in srgb, var(--nb-c-success) 30%, var(--nb-c-surface));
+    color: var(--nb-c-success);
   }
   &.off {
-    background: #f3f4f6;
-    color: #9ca3af;
+    background: var(--nb-c-layer-1);
+    color: var(--nb-c-text-subtle);
   }
 }
 
@@ -610,10 +600,10 @@ onUnmounted(() => {
   align-self: flex-start;
   margin-top: 0.25rem;
   &.online {
-    background: #34d399;
+    background: var(--nb-c-success);
   }
   &.offline {
-    background: #d1d5db;
+    background: var(--nb-c-border);
   }
 }
 
@@ -628,26 +618,26 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  background: #f9f9fc;
-  border: 1px solid #e5e7eb;
+  background: var(--nb-c-layer-1);
+  border: 1px solid var(--nb-c-border);
   border-radius: 6px;
   padding: 0.1rem 0.25rem;
   button {
     background: none;
     border: none;
-    color: #6b7280;
+    color: var(--nb-c-text-muted);
     cursor: pointer;
     font-size: 1rem;
     line-height: 1;
     padding: 0 0.2rem;
     &:hover {
-      color: #111827;
+      color: var(--nb-c-text);
     }
   }
   span {
     font-size: 0.8rem;
     font-weight: 600;
-    color: #111827;
+    color: var(--nb-c-text);
     min-width: 2.5rem;
     text-align: center;
   }
@@ -657,14 +647,14 @@ onUnmounted(() => {
 .confirm-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--nb-c-scrim);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
 }
 .confirm-dialog {
-  background: #fff;
+  background: var(--nb-c-surface);
   border-radius: 12px;
   padding: 1.5rem;
   max-width: 360px;
@@ -679,15 +669,15 @@ onUnmounted(() => {
   width: 44px;
   height: 44px;
   border-radius: 10px;
-  background: #fef3c7;
-  color: #92400e;
+  background: color-mix(in srgb, var(--nb-c-warning) 30%, var(--nb-c-surface));
+  color: var(--nb-c-warning);
   display: flex;
   align-items: center;
   justify-content: center;
 }
 .confirm-message {
   font-size: 0.85rem;
-  color: #374151;
+  color: var(--nb-c-text);
   text-align: center;
   margin: 0;
   line-height: 1.5;

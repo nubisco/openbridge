@@ -58,8 +58,8 @@ function dismiss(id: string) {
 
 .toast {
   border-radius: 10px;
-  border: 1px solid #e5e7eb;
-  background: #ffffff;
+  border: 1px solid var(--nb-c-border);
+  background: var(--nb-c-surface);
   box-shadow: 0 10px 22px rgba(0, 0, 0, 0.08);
   display: flex;
   align-items: flex-start;
@@ -68,23 +68,23 @@ function dismiss(id: string) {
   padding: 0.55rem 0.6rem 0.6rem;
 
   &--success {
-    border-color: #86efac;
-    background: #f0fdf4;
+    border-color: color-mix(in srgb, var(--nb-c-success) 30%, var(--nb-c-surface));
+    background: color-mix(in srgb, var(--nb-c-success) 10%, var(--nb-c-surface));
   }
 
   &--error {
-    border-color: #fca5a5;
-    background: #fef2f2;
+    border-color: var(--nb-c-danger);
+    background: color-mix(in srgb, var(--nb-c-danger) 10%, var(--nb-c-surface));
   }
 
   &--warning {
-    border-color: #fcd34d;
-    background: #fffbeb;
+    border-color: var(--nb-c-warning);
+    background: color-mix(in srgb, var(--nb-c-warning) 10%, var(--nb-c-surface));
   }
 
   &--info {
-    border-color: #93c5fd;
-    background: #eff6ff;
+    border-color: color-mix(in srgb, var(--nb-c-info) 30%, var(--nb-c-surface));
+    background: color-mix(in srgb, var(--nb-c-info) 10%, var(--nb-c-surface));
   }
 }
 
@@ -96,26 +96,26 @@ function dismiss(id: string) {
 .toast-title {
   font-size: 0.74rem;
   font-weight: 700;
-  color: #111827;
+  color: var(--nb-c-text);
   margin-bottom: 0.12rem;
 }
 
 .toast-message {
   font-size: 0.78rem;
-  color: #374151;
+  color: var(--nb-c-text);
   line-height: 1.35;
 }
 
 .toast-close {
   border: none;
   background: transparent;
-  color: #6b7280;
+  color: var(--nb-c-text-muted);
   padding: 0.15rem;
   cursor: pointer;
   border-radius: 6px;
 
   &:hover {
-    background: rgba(0, 0, 0, 0.06);
+    background: var(--nb-c-surface-hover);
   }
 }
 </style>

@@ -115,6 +115,6 @@ const rootSchema = computed(() => props.hbSchema.schema ?? { type: 'object', pro
 }
 .pcf-no-schema {
   font-size: 0.8rem;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
 }
 </style>

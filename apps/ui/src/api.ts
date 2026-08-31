@@ -16,6 +16,8 @@ export interface PluginInstance {
   source?: 'native' | 'homebridge'
   disabled?: boolean
   platformName?: string
+  /** npm package name — how config.plugins[] keys this plugin's config. */
+  packageName?: string
   enrichedMetadata?: Record<string, unknown> // Cached npm metadata (downloads, stars, sponsors, docs url)
   hapBridge?: { setupURI: string; pincode: string; port: number; name: string }
   devices?: Record<string, DeviceDescriptor>
@@ -265,6 +267,26 @@ export const api = {
       if (!r.ok) throw new Error(`Visibility change failed: ${r.status}`)
       return r.json() as Promise<{ uuid: string; visible: boolean; changed: boolean; applied: boolean }>
     }),
+
+  /**
+   * Per-service HomeKit type overrides — what a service is *presented* as,
+   * regardless of what the plugin published. `available` is served by the
+   * daemon so the picker can't drift from what it will accept.
+   */
+  homekitServiceTypes: () =>
+    get<{
+      overrides: Record<string, Record<string, string>>
+      available: Array<{ key: string; label: string; serviceUuid: string }>
+    }>('/homekit/service-types'),
+  setHomekitServiceType: (uuid: string, serviceUuid: string, type: string | null) =>
+    fetch(`/api/homekit/service-type/${encodeURIComponent(uuid)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ serviceUuid, type }),
+    }).then(async (r) => {
+      if (!r.ok) throw new Error((await r.json().catch(() => null))?.message ?? `Type change failed: ${r.status}`)
+      return r.json() as Promise<{ uuid: string; serviceUuid: string; type: string | null; applied: boolean }>
+    }),
   setCharacteristic: (uuid: string, serviceUuid: string, charUuid: string, value: unknown) =>
     fetch(`/api/accessories/${uuid}/characteristics`, {
       method: 'POST',
@@ -299,6 +321,24 @@ export const api = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ platform }),
+      }).then((r) => {
+        if (!r.ok) throw new Error(`Save failed: ${r.status}`)
+        return r.json()
+      }),
+    /**
+     * Homebridge-compat plugin config, resolved across config.platforms[] and
+     * config.plugins[]. `location` reports which one held it so the save goes
+     * back to the place the daemon actually reads.
+     */
+    getHbPlugin: (name: string, packageName?: string) =>
+      get<{ config: Record<string, unknown> | null; location: 'platforms' | 'plugins' | null }>(
+        `/config/hb-plugin/${encodeURIComponent(name)}${packageName ? `?packageName=${encodeURIComponent(packageName)}` : ''}`,
+      ),
+    saveHbPlugin: (name: string, config: Record<string, unknown>, packageName?: string) =>
+      fetch('/api/config/hb-plugin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, packageName, config }),
       }).then((r) => {
         if (!r.ok) throw new Error(`Save failed: ${r.status}`)
         return r.json()

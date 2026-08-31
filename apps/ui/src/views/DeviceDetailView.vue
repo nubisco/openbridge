@@ -243,7 +243,7 @@ watch(deviceId, async () => {
 
 .detail-message {
   padding: 1rem 0;
-  color: var(--nb-color-text-muted, #6b7280);
+  color: var(--nb-color-text-muted, var(--nb-c-text-muted));
 }
 
 .summary-row {
@@ -257,7 +257,7 @@ watch(deviceId, async () => {
   flex-direction: column;
   gap: 0.25rem;
   padding: 0.75rem 0.9rem;
-  border: 1px solid var(--nb-color-border, #e5e7eb);
+  border: 1px solid var(--nb-color-border, var(--nb-c-border));
   border-radius: 10px;
   cursor: pointer;
   transition:
@@ -266,19 +266,19 @@ watch(deviceId, async () => {
 }
 
 .summary-tile:hover {
-  border-color: var(--nb-color-primary, #7c3aed);
+  border-color: var(--nb-color-primary, var(--nb-c-primary));
 }
 
 .summary-tile.active {
-  border-color: var(--nb-color-primary, #7c3aed);
-  background: color-mix(in srgb, var(--nb-color-primary, #7c3aed) 6%, transparent);
+  border-color: var(--nb-color-primary, var(--nb-c-primary));
+  background: color-mix(in srgb, var(--nb-color-primary, var(--nb-c-primary)) 6%, transparent);
 }
 
 .tile-label {
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--nb-color-text-muted, #6b7280);
+  color: var(--nb-color-text-muted, var(--nb-c-text-muted));
 }
 
 .tile-value {
@@ -290,7 +290,7 @@ watch(deviceId, async () => {
 .tile-unit {
   font-size: 0.8rem;
   font-weight: 400;
-  color: var(--nb-color-text-muted, #6b7280);
+  color: var(--nb-color-text-muted, var(--nb-c-text-muted));
   margin-left: 0.15rem;
 }
 
@@ -314,22 +314,22 @@ watch(deviceId, async () => {
   padding: 0.3rem 0.65rem;
   font-size: 0.82rem;
   cursor: pointer;
-  color: var(--nb-color-text-muted, #6b7280);
+  color: var(--nb-color-text-muted, var(--nb-c-text-muted));
 }
 
 .range-tab.active {
-  border-color: var(--nb-color-border, #e5e7eb);
-  color: var(--nb-color-text, #111827);
+  border-color: var(--nb-color-border, var(--nb-c-border));
+  color: var(--nb-color-text, var(--nb-c-text));
   font-weight: 600;
 }
 
 .resolution-note {
   font-size: 0.75rem;
-  color: var(--nb-color-text-muted, #6b7280);
+  color: var(--nb-color-text-muted, var(--nb-c-text-muted));
 }
 
 .chart-panel {
-  border: 1px solid var(--nb-color-border, #e5e7eb);
+  border: 1px solid var(--nb-color-border, var(--nb-c-border));
   border-radius: 12px;
   padding: 0.75rem;
   min-height: 340px;
@@ -340,7 +340,7 @@ watch(deviceId, async () => {
   display: grid;
   place-items: center;
   height: 320px;
-  color: var(--nb-color-text-muted, #6b7280);
+  color: var(--nb-color-text-muted, var(--nb-c-text-muted));
   font-size: 0.9rem;
   text-align: center;
   padding: 0 2rem;

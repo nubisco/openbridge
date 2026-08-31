@@ -8,6 +8,7 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onBeforeUnmount, shallowRef } from 'vue'
 import loader from '@monaco-editor/loader'
+import { useTheme } from '@/composables/useTheme'
 
 const props = defineProps<{
   modelValue: string
@@ -15,6 +16,8 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{ 'update:modelValue': [value: string] }>()
+
+const { resolved } = useTheme()
 
 const containerEl = ref<HTMLElement | null>(null)
 const editor = shallowRef<any>(null)
@@ -25,10 +28,14 @@ onMounted(async () => {
   const monaco = await loader.init()
   if (!containerEl.value) return
 
+  // Monaco ships its own themes rather than reading CSS variables, so the app
+  // theme is mapped onto its nearest built-in and re-applied on change.
+  watch(resolved, (mode) => monaco.editor.setTheme(mode === 'dark' ? 'vs-dark' : 'vs'))
+
   editor.value = monaco.editor.create(containerEl.value, {
     value: props.modelValue,
     language: 'json',
-    theme: 'vs-dark',
+    theme: resolved.value === 'dark' ? 'vs-dark' : 'vs',
     fontSize: 12,
     fontFamily: '"MesloLGS NF", monospace',
     minimap: { enabled: false },
@@ -75,7 +82,7 @@ watch(
 .monaco-skeleton {
   position: absolute;
   inset: 0;
-  background: #1e1e1e;
+  background: var(--nb-c-layer-1);
   border-radius: inherit;
   display: flex;
   align-items: center;
@@ -85,8 +92,8 @@ watch(
   content: '';
   width: 40px;
   height: 40px;
-  border: 3px solid rgba(255, 255, 255, 0.1);
-  border-top-color: rgba(255, 255, 255, 0.4);
+  border: 3px solid var(--nb-c-border);
+  border-top-color: var(--nb-c-primary);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }

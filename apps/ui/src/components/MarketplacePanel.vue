@@ -404,14 +404,14 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   padding: 1rem 1.1rem;
-  border-bottom: 1px solid #f0f0f8;
+  border-bottom: 1px solid var(--nb-c-layer-1);
   flex-shrink: 0;
 }
 
 .mp-title {
   font-size: 0.9rem;
   font-weight: 700;
-  color: #111827;
+  color: var(--nb-c-text);
 }
 
 .mp-search-wrap {
@@ -422,7 +422,7 @@ onMounted(async () => {
 .mp-count {
   padding: 0.35rem 1.1rem 0;
   font-size: 0.72rem;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
   flex-shrink: 0;
 }
 
@@ -431,12 +431,12 @@ onMounted(async () => {
   display: flex;
   align-items: flex-start;
   gap: 0.5rem;
-  background: #ecfdf5;
-  border: 1px solid #a7f3d0;
+  background: color-mix(in srgb, var(--nb-c-success) 10%, var(--nb-c-surface));
+  border: 1px solid color-mix(in srgb, var(--nb-c-success) 30%, var(--nb-c-surface));
   border-radius: 8px;
   padding: 0.55rem 0.7rem;
   font-size: 0.78rem;
-  color: #065f46;
+  color: var(--nb-c-success);
   flex-shrink: 0;
 
   .mp-installed-body {
@@ -446,7 +446,7 @@ onMounted(async () => {
     background: none;
     border: none;
     cursor: pointer;
-    color: #6b7280;
+    color: var(--nb-c-text-muted);
     padding: 0;
     display: flex;
   }
@@ -458,9 +458,9 @@ onMounted(async () => {
   gap: 0.4rem;
   margin: 0.5rem 1.1rem 0;
   font-size: 0.78rem;
-  color: #dc2626;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  color: var(--nb-c-danger);
+  background: color-mix(in srgb, var(--nb-c-danger) 10%, var(--nb-c-surface));
+  border: 1px solid color-mix(in srgb, var(--nb-c-danger) 30%, var(--nb-c-surface));
   border-radius: 8px;
   padding: 0.5rem 0.7rem;
   flex-shrink: 0;
@@ -478,7 +478,7 @@ onMounted(async () => {
   align-items: center;
   gap: 0.5rem;
   padding: 3rem 1rem;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
   font-size: 0.82rem;
 }
 
@@ -491,15 +491,19 @@ onMounted(async () => {
   transition: background 0.1s;
   border-left: 3px solid transparent;
   &:hover {
-    background: #f9f9fc;
+    background: var(--nb-c-layer-1);
   }
 
   // OpenBridge native plugin highlight
   &.mp-row--ob {
-    border-left-color: #7c3aed;
-    background: linear-gradient(90deg, rgba(124, 58, 237, 0.04) 0%, transparent 100%);
+    border-left-color: var(--nb-c-primary);
+    background: linear-gradient(90deg, color-mix(in srgb, var(--nb-c-primary) 4%, transparent) 0%, transparent 100%);
     &:hover {
-      background: linear-gradient(90deg, rgba(124, 58, 237, 0.08) 0%, #f9f9fc 100%);
+      background: linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--nb-c-primary) 8%, transparent) 0%,
+        var(--nb-c-layer-1) 100%
+      );
     }
   }
 }
@@ -509,8 +513,8 @@ onMounted(async () => {
   height: 36px;
   flex-shrink: 0;
   border-radius: 8px;
-  background: #f0f0f8;
-  color: #9ca3af;
+  background: var(--nb-c-layer-1);
+  color: var(--nb-c-text-subtle);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -518,8 +522,8 @@ onMounted(async () => {
   position: relative;
 
   &.mp-avatar--ob {
-    background: linear-gradient(135deg, #7c3aed, #4f46e5);
-    color: #fff;
+    background: linear-gradient(135deg, var(--nb-c-primary), var(--nb-c-primary));
+    color: var(--nb-c-primary-a11y);
   }
 }
 
@@ -548,14 +552,14 @@ onMounted(async () => {
 .mp-name {
   font-size: 0.82rem;
   font-weight: 600;
-  color: #111827;
+  color: var(--nb-c-text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .mp-ver {
   font-size: 0.68rem;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
 }
 
 .badge {
@@ -571,20 +575,20 @@ onMounted(async () => {
   flex-shrink: 0;
 
   &--native {
-    background: linear-gradient(135deg, #7c3aed, #4f46e5);
-    color: #fff;
-    box-shadow: 0 1px 4px rgba(124, 58, 237, 0.4);
+    background: linear-gradient(135deg, var(--nb-c-primary), var(--nb-c-primary));
+    color: var(--nb-c-primary-a11y);
+    box-shadow: 0 1px 4px color-mix(in srgb, var(--nb-c-primary) 40%, transparent);
   }
   &--hb {
-    background: #fef3c7;
-    color: #92400e;
-    border: 1px solid #fcd34d;
+    background: color-mix(in srgb, var(--nb-c-warning) 30%, var(--nb-c-surface));
+    color: var(--nb-c-warning);
+    border: 1px solid var(--nb-c-warning);
   }
 }
 
 .mp-desc {
   font-size: 0.75rem;
-  color: #6b7280;
+  color: var(--nb-c-text-muted);
   margin: 0 0 0.2rem;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -593,17 +597,17 @@ onMounted(async () => {
 }
 .mp-meta {
   font-size: 0.68rem;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
   display: flex;
   gap: 0.3rem;
   .mp-sep {
-    color: #d1d5db;
+    color: var(--nb-c-border);
   }
 }
 
 .mp-enriched {
   font-size: 0.68rem;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -616,22 +620,22 @@ onMounted(async () => {
   align-items: center;
   gap: 0.25rem;
   padding: 0.15rem 0.4rem;
-  background: #f3f4f6;
+  background: var(--nb-c-layer-1);
   border-radius: 4px;
-  color: #6b7280;
+  color: var(--nb-c-text-muted);
   font-size: 0.65rem;
   white-space: nowrap;
 
   &.mp-stat--link {
     cursor: pointer;
-    color: #7c3aed;
-    background: rgba(124, 58, 237, 0.08);
-    border: 1px solid rgba(124, 58, 237, 0.2);
+    color: var(--nb-c-primary);
+    background: color-mix(in srgb, var(--nb-c-primary) 8%, transparent);
+    border: 1px solid color-mix(in srgb, var(--nb-c-primary) 20%, transparent);
     text-decoration: none;
     transition: all 0.15s;
     &:hover {
-      background: rgba(124, 58, 237, 0.12);
-      border-color: rgba(124, 58, 237, 0.3);
+      background: color-mix(in srgb, var(--nb-c-primary) 12%, transparent);
+      border-color: color-mix(in srgb, var(--nb-c-primary) 30%, transparent);
     }
   }
 
@@ -648,7 +652,7 @@ onMounted(async () => {
 // ─── Local plugins section ────────────────────────────────────────────────────
 .mp-local-section {
   flex-shrink: 0;
-  border-bottom: 1px solid #f0f0f8;
+  border-bottom: 1px solid var(--nb-c-layer-1);
   padding-bottom: 0.25rem;
 }
 
@@ -660,14 +664,18 @@ onMounted(async () => {
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #7c3aed;
+  color: var(--nb-c-primary);
   padding: 0.5rem 1.1rem 0.25rem;
 }
 
 .mp-row--local {
-  background: linear-gradient(90deg, rgba(124, 58, 237, 0.06) 0%, transparent 100%);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--nb-c-primary) 6%, transparent) 0%, transparent 100%);
   &:hover {
-    background: linear-gradient(90deg, rgba(124, 58, 237, 0.1) 0%, #f9f9fc 100%);
+    background: linear-gradient(
+      90deg,
+      color-mix(in srgb, var(--nb-c-primary) 10%, transparent) 0%,
+      var(--nb-c-layer-1) 100%
+    );
   }
 }
 
@@ -682,9 +690,9 @@ onMounted(async () => {
   padding: 0.1rem 0.4rem;
   border-radius: 20px;
   flex-shrink: 0;
-  background: #ede9fe;
-  color: #6d28d9;
-  border: 1px solid #c4b5fd;
+  background: color-mix(in srgb, var(--nb-c-primary) 12%, var(--nb-c-surface));
+  color: var(--nb-c-primary-hover);
+  border: 1px solid var(--nb-c-primary);
 }
 
 .mp-load-more-wrap {

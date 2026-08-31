@@ -31,6 +31,13 @@ export class HomeKitVisibility {
   constructor(
     private readonly path: string,
     private bridge: any = null,
+    /**
+     * Applied to each accessory on its way to the bridge. It rides along here
+     * rather than wrapping the bridge a second time so there stays exactly one
+     * interception point for everything OpenBridge overrides about an
+     * accessory before HomeKit sees it.
+     */
+    private serviceTypes: { apply(accessory: any): void } | null = null,
   ) {
     this.load()
   }
@@ -84,6 +91,10 @@ export class HomeKitVisibility {
                 return accessory
               }
             }
+            // Must run before the accessory is published: HomeKit caches an
+            // accessory's shape, so a service type swapped afterwards is not
+            // picked up until re-pairing.
+            this.serviceTypes?.apply(accessory)
             return target.addBridgedAccessory(accessory, ...rest)
           }
         }

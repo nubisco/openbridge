@@ -197,7 +197,7 @@ function arrayItems(): unknown[] {
 
 <style lang="scss" scoped>
 .pcf-section {
-  border: 1px solid #e8e8f0;
+  border: 1px solid var(--nb-c-border);
   border-radius: 8px;
   overflow: hidden;
 }
@@ -207,10 +207,10 @@ function arrayItems(): unknown[] {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.07em;
-  color: #9ca3af;
-  background: #f9f9fc;
+  color: var(--nb-c-text-subtle);
+  background: var(--nb-c-layer-1);
   padding: 0.45rem 0.75rem;
-  border-bottom: 1px solid #e8e8f0;
+  border-bottom: 1px solid var(--nb-c-border);
 }
 
 .pcf-section-body {
@@ -243,7 +243,7 @@ function arrayItems(): unknown[] {
 .pcf-label {
   font-size: 0.82rem;
   font-weight: 500;
-  color: #374151;
+  color: var(--nb-c-text);
   padding-top: 0.3rem;
 }
 
@@ -252,7 +252,7 @@ function arrayItems(): unknown[] {
 }
 
 .pcf-required {
-  color: #ef4444;
+  color: var(--nb-c-danger);
   margin-left: 2px;
 }
 
@@ -264,7 +264,7 @@ function arrayItems(): unknown[] {
 
 .pcf-hint {
   font-size: 0.71rem;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
   line-height: 1.4;
 }
 

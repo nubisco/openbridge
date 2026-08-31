@@ -12,6 +12,7 @@ import type { OpenBridgeConfig } from '@nubisco/openbridge-config'
 import { createServer, type HapInfo } from './server.js'
 import { DeviceSeries, DEFAULT_TIERS } from './timeseries.js'
 import { HomeKitVisibility } from './homekit-visibility.js'
+import { HomeKitServiceTypes } from './homekit-service-type.js'
 import { HomebridgeAPI, loadHomebridgePlugin } from '@nubisco/openbridge-compatibility-homebridge'
 
 const log = Logger.create('system')
@@ -46,8 +47,14 @@ export class Daemon {
   private hapBridgeRef: { bridge: unknown; hap: unknown } | null = null
   /** Time-series store per device, for devices that declare metrics */
   private metricSeries = new Map<string, DeviceSeries>()
+  /** Per-service HomeKit type overrides, applied at the bridge */
+  private homekitServiceTypes = new HomeKitServiceTypes(join(OPENBRIDGE_HOME, 'homekit-service-types.json'))
   /** Per-accessory HomeKit visibility, enforced at the bridge */
-  private homekitVisibility = new HomeKitVisibility(join(OPENBRIDGE_HOME, 'homekit-hidden.json'))
+  private homekitVisibility = new HomeKitVisibility(
+    join(OPENBRIDGE_HOME, 'homekit-hidden.json'),
+    null,
+    this.homekitServiceTypes,
+  )
 
   async start(options: DaemonOptions = {}) {
     const configPath = options.configPath ?? defaultConfigPath()
@@ -136,6 +143,7 @@ export class Daemon {
       // place. Both plugin kinds reach HomeKit through addBridgedAccessory, so
       // wrapping here covers native and Homebridge-compat plugins alike, and
       // works for plugins that offer no exposeToHomeKit setting of their own.
+      this.homekitServiceTypes.setHap(hapNodeJs)
       const visibleBridge = this.homekitVisibility.wrapBridge(hapBridge)
 
       // Store reference so native plugins can add accessories to the main bridge
@@ -261,6 +269,7 @@ export class Daemon {
       this.controls,
       this.restrictedControls,
       this.homekitVisibility,
+      this.homekitServiceTypes,
     )
     await server.listen({ port, host: '0.0.0.0' })
 
@@ -444,6 +453,13 @@ export class Daemon {
               const platformLogger = Logger.create('hap')
               await homebridgeAPI.launchPlatforms([platformConfig as any], platformLogger, this.registry)
 
+              // launchPlatforms registers the instance under the platform name,
+              // which is all it knows. Record the package name too: this
+              // plugin's config lives in config.plugins[] keyed by it, and
+              // without this the UI has no way back to that entry.
+              const launched = this.registry.get(platformName)
+              if (launched) launched.instance.packageName = name
+
               log.info(`Loaded Homebridge plugin from marketplace: ${name} v${pkg.version ?? '?'}`)
               continue
             } catch (err) {
@@ -464,6 +480,7 @@ export class Daemon {
 
         const instance = this.registry.register(pseudoPlugin)
         if (isHb) instance.source = 'homebridge'
+        instance.packageName = name
         this.registry.updateStatus(name, 'stopped')
         log.info(`Discovered marketplace plugin: ${name} v${pkg.version ?? '?'} (not yet configured)`)
       } catch (err) {

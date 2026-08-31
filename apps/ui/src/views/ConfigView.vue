@@ -1,20 +1,24 @@
 <template>
   <div class="config-view">
-    <div class="config-toolbar">
-      <div class="toolbar-left">
-        <span class="config-path">~/.openbridge/config.json</span>
-      </div>
-      <div class="toolbar-right">
-        <button class="btn-format" title="Format JSON" @click="format">
-          <NbIcon name="magic-wand" :size="14" />
-          Format
-        </button>
-        <button class="btn-save" :class="{ saving, saved }" :disabled="saving" @click="save">
-          <NbIcon :name="saved ? 'check' : saving ? 'spinner' : 'floppy-disk'" :size="14" />
-          {{ saved ? 'Saved!' : saving ? 'Saving…' : 'Save' }}
-        </button>
-      </div>
-    </div>
+    <!-- The file being edited reads as page identity, so it sits beside the
+         breadcrumb rather than taking a row out of the editor. -->
+    <Teleport defer to="#ob-topbar-left">
+      <span class="config-path">~/.openbridge/config.json</span>
+    </Teleport>
+
+    <Teleport defer to="#ob-topbar-right">
+      <NbButton variant="ghost" size="sm" icon="magic-wand" title="Format JSON" @click="format">Format</NbButton>
+      <NbButton
+        variant="primary"
+        size="sm"
+        :icon="saved ? 'check' : 'floppy-disk'"
+        :loading="saving"
+        :disabled="saving"
+        @click="save"
+      >
+        {{ saved ? 'Saved!' : saving ? 'Saving…' : 'Save' }}
+      </NbButton>
+    </Teleport>
 
     <div v-if="error" class="error-banner">
       <NbIcon name="warning" :size="14" />
@@ -36,12 +40,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, shallowRef } from 'vue'
+import { ref, onMounted, onBeforeUnmount, shallowRef, watch } from 'vue'
 import loader from '@monaco-editor/loader'
 import { api } from '@/api'
 import { useLayoutStore } from '@/stores/layout'
+import { useTheme } from '@/composables/useTheme'
 
 const layout = useLayoutStore()
+const { resolved } = useTheme()
 const editorContainer = ref<HTMLElement | null>(null)
 const editor = shallowRef<any>(null)
 const saving = ref(false)
@@ -124,10 +130,14 @@ onMounted(async () => {
 
   if (!editorContainer.value) return
 
+  // Monaco ships its own themes rather than reading CSS variables, so the app
+  // theme is mapped onto its nearest built-in and re-applied on change.
+  watch(resolved, (mode) => monaco.editor.setTheme(mode === 'dark' ? 'vs-dark' : 'vs'))
+
   editor.value = monaco.editor.create(editorContainer.value, {
     value: content,
     language: 'json',
-    theme: 'vs-dark',
+    theme: resolved.value === 'dark' ? 'vs-dark' : 'vs',
     fontSize: 13,
     fontFamily: '"MesloLGS NF", monospace',
     minimap: { enabled: true },
@@ -182,85 +192,26 @@ function format() {
   gap: 0.75rem;
 }
 
-.config-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-shrink: 0;
-}
-
-.toolbar-left {
-  display: flex;
-  align-items: center;
-}
-.toolbar-right {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
+// Teleported next to the breadcrumb in the shell topbar.
 .config-path {
   font-family: monospace;
   font-size: 0.82rem;
-  color: #6b7280;
-  background: #f3f4f6;
+  color: var(--nb-c-text-muted);
+  background: var(--nb-c-field-bg);
   padding: 0.25rem 0.6rem;
   border-radius: 6px;
-}
-
-%btn {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.8rem;
-  font-weight: 600;
-  padding: 0.4rem 0.85rem;
-  border-radius: 7px;
-  border: none;
-  cursor: pointer;
-  transition:
-    background 0.15s,
-    opacity 0.15s;
-  &:disabled {
-    opacity: 0.6;
-    cursor: default;
-  }
-}
-
-.btn-format {
-  @extend %btn;
-  background: #f3f4f6;
-  color: #374151;
-  &:hover:not(:disabled) {
-    background: #e5e7eb;
-  }
-}
-
-.btn-save {
-  @extend %btn;
-  background: #7c3aed;
-  color: #fff;
-  &:hover:not(:disabled) {
-    background: #6d28d9;
-  }
-  &.saving {
-    background: #8b5cf6;
-  }
-  &.saved {
-    background: #059669;
-  }
 }
 
 .error-banner {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
+  background: color-mix(in srgb, var(--nb-c-danger) 12%, var(--nb-c-surface));
+  border: 1px solid color-mix(in srgb, var(--nb-c-danger) 35%, transparent);
   border-radius: 8px;
   padding: 0.6rem 0.9rem;
   font-size: 0.82rem;
-  color: #dc2626;
+  color: var(--nb-c-danger);
   flex-shrink: 0;
 }
 
@@ -270,7 +221,7 @@ function format() {
   align-items: center;
   gap: 0.75rem;
   padding: 4rem;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
 }
 
 .editor-container {
@@ -278,7 +229,7 @@ function format() {
   min-height: 0;
   border-radius: 10px;
   overflow: hidden;
-  border: 1px solid #374151;
+  border: 1px solid var(--nb-c-border);
 }
 
 .config-footer {
@@ -286,7 +237,7 @@ function format() {
   align-items: center;
   gap: 0.4rem;
   font-size: 0.74rem;
-  color: #9ca3af;
+  color: var(--nb-c-text-subtle);
   flex-shrink: 0;
 }
 </style>

@@ -61,6 +61,12 @@ const uiAvailable = !!uiDist
 import { OPENBRIDGE_HOME, OB_PLUGINS_DIR, HB_PLUGINS_DIR } from './daemon.js'
 import { DeviceSeries } from './timeseries.js'
 import type { HomeKitVisibility } from './homekit-visibility.js'
+import {
+  CONVERTIBLE_SERVICES,
+  isConvertible,
+  type HomeKitServiceTypes,
+  type ServiceTypeKey,
+} from './homekit-service-type.js'
 
 export interface HapInfo {
   setupURI: string
@@ -95,6 +101,7 @@ export async function createServer(
   controls: Map<string, (value: unknown) => void | Promise<void>> = new Map(),
   restrictedControls: Set<string> = new Set(),
   homekitVisibility: HomeKitVisibility | null = null,
+  homekitServiceTypes: HomeKitServiceTypes | null = null,
 ) {
   const app = Fastify({ logger: false })
 
@@ -573,6 +580,51 @@ export async function createServer(
     return { uuid, visible, ...result }
   })
 
+  // ─── HomeKit service type ───────────────────────────────────────────────
+  // A plugin publishing a generic relay as a Switch cannot know it drives a
+  // light. HomeKit takes its tile, icon and Siri grammar from the service type
+  // and re-typing in the Home app does not survive a restart, so the choice is
+  // recorded here and re-applied every time the accessory is bridged.
+  app.get('/api/homekit/service-types', async () => {
+    return {
+      overrides: homekitServiceTypes?.all() ?? {},
+      // The UI builds its picker from this rather than hardcoding a parallel
+      // list that could drift from what the daemon will actually accept.
+      available: Object.entries(CONVERTIBLE_SERVICES).map(([key, def]) => ({
+        key,
+        label: def.label,
+        serviceUuid: def.uuid,
+      })),
+    }
+  })
+
+  app.post('/api/homekit/service-type/:uuid', async (req) => {
+    const { uuid } = req.params as { uuid: string }
+    const { serviceUuid, type } = req.body as { serviceUuid?: string; type?: string | null }
+
+    if (!serviceUuid) throw { statusCode: 400, message: 'serviceUuid is required' }
+    if (!homekitServiceTypes) throw { statusCode: 503, message: 'HomeKit bridge is not available' }
+
+    if (type != null && !(type in CONVERTIBLE_SERVICES)) {
+      throw {
+        statusCode: 400,
+        message: `Unsupported type '${type}'. Expected one of: ${Object.keys(CONVERTIBLE_SERVICES).join(', ')}`,
+      }
+    }
+    // Only On-based services are interchangeable; anything else would lose the
+    // characteristics that give it meaning.
+    if (type != null && !isConvertible(serviceUuid)) {
+      throw { statusCode: 400, message: `Service ${serviceUuid} cannot be re-typed` }
+    }
+
+    homekitServiceTypes.set(uuid, serviceUuid, (type ?? null) as ServiceTypeKey | null)
+    log.info(`HomeKit service type for ${uuid}/${serviceUuid} set to ${type ?? 'default'}`)
+
+    // Never applied live: HomeKit caches an accessory's shape at pairing, so a
+    // type swapped on a published accessory is not picked up until restart.
+    return { uuid, serviceUuid, type: type ?? null, applied: false }
+  })
+
   // ─── Device rename ──────────────────────────────────────────────────────
   app.post('/api/devices/:deviceId/rename', async (req) => {
     const { deviceId } = req.params as { deviceId: string }
@@ -944,6 +996,85 @@ export async function createServer(
     writeFileSync(configPath, JSON.stringify(cfg, null, 2), 'utf8')
     log.info(`Plugin config saved: ${name}`)
     return { saved: true, name }
+  })
+
+  // ─── Homebridge plugin config ─────────────────────────────────────────────
+  // A Homebridge-compat plugin's config can sit in either of two places, and
+  // which one depends on how it was loaded:
+  //
+  //   - config.platforms[], keyed by *platform* name — the legacy form, for
+  //     entries with an explicit `plugin` file path (daemon.ts, "Legacy").
+  //   - config.plugins[], keyed by npm *package* name — what auto-discovered
+  //     marketplace plugins actually read (daemon.ts, marketplace discovery).
+  //
+  // The UI only knows the platform name it is inspecting, so looking in one
+  // place found nothing for the other kind and showed an empty editor — worse,
+  // saving then wrote to a location the loader never reads. Both endpoints
+  // below resolve across the two and report which one won, so a save round
+  // trips back to where the config was found.
+  type HbConfigLocation = 'platforms' | 'plugins'
+
+  function readConfigFile(): any {
+    try {
+      return JSON.parse(readFileSync(configPath, 'utf8'))
+    } catch {
+      return {}
+    }
+  }
+
+  function findHbConfig(
+    cfg: any,
+    platformName: string,
+    packageName?: string,
+  ): { config: Record<string, unknown> | null; location: HbConfigLocation | null } {
+    const platformEntry = (cfg.platforms ?? []).find((p: any) => p.platform === platformName)
+    if (platformEntry) return { config: platformEntry, location: 'platforms' }
+
+    // Match on the package name when the UI knows it, else fall back to the
+    // platform name — some entries are keyed that way.
+    const pluginEntry = (cfg.plugins ?? []).find((p: any) => p.name === (packageName ?? platformName))
+    if (pluginEntry) return { config: pluginEntry.config ?? {}, location: 'plugins' }
+
+    return { config: null, location: null }
+  }
+
+  app.get('/api/config/hb-plugin/:name', async (req) => {
+    const { name } = req.params as { name: string }
+    const { packageName } = req.query as { packageName?: string }
+    return findHbConfig(readConfigFile(), name, packageName)
+  })
+
+  app.post('/api/config/hb-plugin', async (req) => {
+    const { name, packageName, config } = req.body as {
+      name: string
+      packageName?: string
+      config: Record<string, unknown>
+    }
+    if (!name) throw { statusCode: 400, message: 'name is required' }
+
+    const cfg = readConfigFile()
+    const { location } = findHbConfig(cfg, name, packageName)
+
+    if (location === 'platforms') {
+      const platforms: any[] = cfg.platforms ?? []
+      const idx = platforms.findIndex((p: any) => p.platform === name)
+      platforms[idx] = { ...config, platform: name }
+      cfg.platforms = platforms
+    } else {
+      // Default for anything not already in platforms[]: auto-discovered
+      // plugins are read from plugins[], so a new entry must go there or the
+      // save is silently ignored on the next start.
+      const key = packageName ?? name
+      const plugins: any[] = cfg.plugins ?? []
+      const idx = plugins.findIndex((p: any) => p.name === key)
+      if (idx >= 0) plugins[idx] = { ...plugins[idx], config }
+      else plugins.push({ name: key, enabled: true, config })
+      cfg.plugins = plugins
+    }
+
+    writeFileSync(configPath, JSON.stringify(cfg, null, 2), 'utf8')
+    log.info(`Homebridge plugin config saved: ${name} (${location ?? 'plugins'})`)
+    return { saved: true, name, location: location ?? 'plugins' }
   })
 
   // ─── Marketplace ──────────────────────────────────────────────────────────
