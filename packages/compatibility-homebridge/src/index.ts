@@ -722,7 +722,7 @@ function inferCategoryFromServices(acc: any): number {
   return 1 // OTHER
 }
 
-function serializeAccessory(acc: any): SerializedAccessory {
+export function serializeAccessory(acc: any): SerializedAccessory {
   const services: SerializedService[] = []
 
   try {

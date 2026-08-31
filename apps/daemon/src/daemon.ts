@@ -13,7 +13,7 @@ import { createServer, type HapInfo } from './server.js'
 import { DeviceSeries, DEFAULT_TIERS } from './timeseries.js'
 import { HomeKitVisibility } from './homekit-visibility.js'
 import { HomeKitServiceTypes } from './homekit-service-type.js'
-import { HomebridgeAPI, loadHomebridgePlugin } from '@nubisco/openbridge-compatibility-homebridge'
+import { HomebridgeAPI, loadHomebridgePlugin, serializeAccessory } from '@nubisco/openbridge-compatibility-homebridge'
 
 const log = Logger.create('system')
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -55,6 +55,26 @@ export class Daemon {
     null,
     this.homekitServiceTypes,
   )
+
+  /**
+   * Find the HAP accessory a native plugin published for one of its devices.
+   *
+   * Native plugins add accessories straight to the bridge, so they never enter
+   * HomebridgeAPI's map and /api/accessories cannot see them. Every accessory
+   * does pass through the visibility proxy though, so it holds the full set.
+   *
+   * The link is by convention: plugins seed the accessory UUID from the device
+   * id (`hap.uuid.generate(deviceId)`), which is what the SDK's own accessory
+   * helpers do. A plugin that seeds it differently simply resolves to null and
+   * the UI omits the HomeKit controls, rather than showing the wrong ones.
+   */
+  private resolveNativeAccessory(deviceId: string): unknown | null {
+    const hap = this.hapBridgeRef?.hap as any
+    if (!hap?.uuid?.generate) return null
+
+    const accessory = this.homekitVisibility.find(hap.uuid.generate(deviceId))
+    return accessory ? serializeAccessory(accessory) : null
+  }
 
   async start(options: DaemonOptions = {}) {
     const configPath = options.configPath ?? defaultConfigPath()
@@ -271,6 +291,7 @@ export class Daemon {
       this.restrictedControls,
       this.homekitVisibility,
       this.homekitServiceTypes,
+      (deviceId) => this.resolveNativeAccessory(deviceId),
     )
     await server.listen({ port, host: '0.0.0.0' })
 

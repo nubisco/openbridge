@@ -102,6 +102,12 @@ export async function createServer(
   restrictedControls: Set<string> = new Set(),
   homekitVisibility: HomeKitVisibility | null = null,
   homekitServiceTypes: HomeKitServiceTypes | null = null,
+  /**
+   * Resolve the HAP accessory a native plugin published for one of its
+   * devices. Native plugins add accessories to the bridge directly, so they
+   * never appear in /api/accessories; this is how the UI reaches them.
+   */
+  resolveNativeAccessory: ((deviceId: string) => unknown | null) | null = null,
 ) {
   const app = Fastify({ logger: false })
 
@@ -623,6 +629,20 @@ export async function createServer(
     // Never applied live: HomeKit caches an accessory's shape at pairing, so a
     // type swapped on a published accessory is not picked up until restart.
     return { uuid, serviceUuid, type: type ?? null, applied: false }
+  })
+
+  /**
+   * The HAP accessory behind a native plugin's device, if it published one.
+   *
+   * Lets the devices inspector offer the same HomeKit controls for a native
+   * device as for a compat one. Returns `accessory: null` rather than 404ing
+   * when a plugin publishes no accessory at all, which is a normal state (a
+   * telemetry-only device) and not an error.
+   */
+  app.get('/api/devices/:deviceId/accessory', async (req) => {
+    const { deviceId } = req.params as { deviceId: string }
+    const accessory = resolveNativeAccessory?.(deviceId) ?? null
+    return { accessory }
   })
 
   // ─── Device rename ──────────────────────────────────────────────────────

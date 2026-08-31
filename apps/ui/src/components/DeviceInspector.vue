@@ -231,6 +231,51 @@
           </div>
         </div>
       </NbShellPanel>
+
+      <!-- HomeKit, when the plugin published an accessory for this device.
+           Native plugins add accessories straight to the bridge, so the device
+           and its accessory are two views of one thing and the controls belong
+           here rather than on a separate card. -->
+      <NbShellPanel v-if="nativeAccessory" title="HomeKit" fluid>
+        <div
+          v-for="svc in mainServices(nativeAccessory)"
+          v-show="canRetype(svc.uuid)"
+          :key="svc.uuid"
+          class="homekit-row"
+        >
+          <div class="homekit-copy">
+            <span class="homekit-title">Show in HomeKit as</span>
+            <span class="homekit-hint">
+              A plugin cannot know what a generic relay drives. Set it here and OpenBridge re-applies it on every
+              restart, so the Home app stops reverting to a switch.
+            </span>
+          </div>
+          <NbSelect
+            :model-value="serviceTypeFor(nativeAccessory.uuid, svc.uuid)"
+            :options="serviceTypeOptions"
+            :disabled="homekitBusy"
+            size="sm"
+            @update:model-value="(v: string) => setServiceType(nativeAccessory!.uuid, svc.uuid, v)"
+          />
+        </div>
+        <div v-if="serviceTypeNotice" class="homekit-notice">{{ serviceTypeNotice }}</div>
+
+        <div class="homekit-row">
+          <div class="homekit-copy">
+            <span class="homekit-title">Expose to HomeKit</span>
+            <span class="homekit-hint">
+              Hide devices the Home app cannot represent usefully. OpenBridge keeps its telemetry and history either
+              way.
+            </span>
+          </div>
+          <NbSwitch
+            :model-value="isHomekitVisible(nativeAccessory.uuid)"
+            :disabled="homekitBusy"
+            @update:model-value="(v: boolean) => setHomekitVisible(nativeAccessory!.uuid, v)"
+          />
+        </div>
+        <div v-if="homekitNotice" class="homekit-notice">{{ homekitNotice }}</div>
+      </NbShellPanel>
     </template>
 
     <!-- HAP accessory detail (original) -->
@@ -416,6 +461,21 @@ function canRetype(serviceUuid: string): boolean {
 
 function serviceTypeFor(accessoryUuid: string, serviceUuid: string): string {
   return serviceTypeOverrides.value[accessoryUuid]?.[serviceUuid] ?? ''
+}
+
+// A native plugin's device and the HAP accessory it published are two views of
+// one thing, but the accessory never reaches /api/accessories, so it is fetched
+// per selection. Null is a normal answer: plenty of devices are telemetry only.
+const nativeAccessory = ref<Accessory | null>(null)
+
+async function loadNativeAccessory(deviceId: string) {
+  nativeAccessory.value = null
+  try {
+    const { accessory } = await api.deviceAccessory(deviceId)
+    nativeAccessory.value = accessory
+  } catch {
+    /* bridge unavailable; the HomeKit panel simply does not render */
+  }
 }
 
 async function loadServiceTypes() {
@@ -685,6 +745,12 @@ watch(
   (newId, oldId) => {
     if (newId === oldId && historyData.value) return
     const val = selected.value
+
+    // Only native devices need this: a HAP selection already carries its
+    // accessory, so there is nothing to resolve.
+    if (val?.kind === 'native') loadNativeAccessory((val as any).dev.id)
+    else nativeAccessory.value = null
+
     if (val?.kind === 'native' && (val as any).dev.widgetType === 'energy_meter') {
       historyDate.value = new Date().toISOString().slice(0, 10)
       historyPeriod.value = 'day'

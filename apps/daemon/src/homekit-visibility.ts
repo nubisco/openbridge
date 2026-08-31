@@ -148,4 +148,17 @@ export class HomeKitVisibility {
   track(uuid: string, accessory: unknown): void {
     if (uuid) this.known.set(uuid, accessory)
   }
+
+  /**
+   * Look up an accessory seen by the bridge, whichever plugin published it.
+   *
+   * Native plugins add accessories to the bridge directly rather than through
+   * the compat layer, so they never enter HomebridgeAPI's own map and are
+   * invisible to /api/accessories. They do all pass through the proxy above,
+   * which makes this the only place that knows about every accessory HomeKit
+   * has been told about.
+   */
+  find(uuid: string): unknown | null {
+    return this.known.get(uuid) ?? null
+  }
 }

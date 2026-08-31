@@ -273,6 +273,13 @@ export const api = {
    * regardless of what the plugin published. `available` is served by the
    * daemon so the picker can't drift from what it will accept.
    */
+  /**
+   * The HAP accessory a native plugin published for a device, if any. Native
+   * plugins bypass the compat layer, so these never appear in /accessories.
+   */
+  deviceAccessory: (deviceId: string) =>
+    get<{ accessory: Accessory | null }>(`/devices/${encodeURIComponent(deviceId)}/accessory`),
+
   homekitServiceTypes: () =>
     get<{
       overrides: Record<string, Record<string, string>>
