@@ -1,3 +1,10 @@
+## [0.23.3](https://github.com/nubisco/openbridge/compare/v0.23.2...v0.23.3) (2026-08-31)
+
+
+### Bug Fixes
+
+* **ui:** offer HomeKit controls on native plugin devices ([5601bd5](https://github.com/nubisco/openbridge/commit/5601bd5a38bca06b9c248528e900d8a19a423e77))
+
 ## [0.23.2](https://github.com/nubisco/openbridge/compare/v0.23.1...v0.23.2) (2026-08-31)
 
 
