@@ -1,3 +1,10 @@
+# [0.24.0](https://github.com/nubisco/openbridge/compare/v0.23.3...v0.24.0) (2026-08-31)
+
+
+### Features
+
+* **ui:** reflect HomeKit type on cards, simplify inspectors, add devices table ([4398d51](https://github.com/nubisco/openbridge/commit/4398d51f899666054530a6775d66395e3bcf2671))
+
 ## [0.23.3](https://github.com/nubisco/openbridge/compare/v0.23.2...v0.23.3) (2026-08-31)
 
 
