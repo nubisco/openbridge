@@ -1,3 +1,10 @@
+# [0.23.0](https://github.com/nubisco/openbridge/compare/v0.22.1...v0.23.0) (2026-08-31)
+
+
+### Features
+
+* **ui:** adopt NubiscoUI 2.1.0 shell layout, add dark mode and HomeKit type overrides ([47c3494](https://github.com/nubisco/openbridge/commit/47c34940e6c2ce53331a7d388a7b76b056b2fa0e)), closes [#bottom](https://github.com/nubisco/openbridge/issues/bottom)
+
 ## [0.22.1](https://github.com/nubisco/openbridge/compare/v0.22.0...v0.22.1) (2026-08-05)
 
 
