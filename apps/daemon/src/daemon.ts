@@ -69,11 +69,19 @@ export class Daemon {
    * the UI omits the HomeKit controls, rather than showing the wrong ones.
    */
   private resolveNativeAccessory(deviceId: string): unknown | null {
+    const accessory = this.findNativeAccessory(deviceId)
+    return accessory ? serializeAccessory(accessory) : null
+  }
+
+  /** As above, but only the UUID: cheap enough to call for every device. */
+  private nativeAccessoryUuid(deviceId: string): string | null {
+    return (this.findNativeAccessory(deviceId) as any)?.UUID ?? null
+  }
+
+  private findNativeAccessory(deviceId: string): unknown | null {
     const hap = this.hapBridgeRef?.hap as any
     if (!hap?.uuid?.generate) return null
-
-    const accessory = this.homekitVisibility.find(hap.uuid.generate(deviceId))
-    return accessory ? serializeAccessory(accessory) : null
+    return this.homekitVisibility.find(hap.uuid.generate(deviceId))
   }
 
   async start(options: DaemonOptions = {}) {
@@ -292,6 +300,7 @@ export class Daemon {
       this.homekitVisibility,
       this.homekitServiceTypes,
       (deviceId) => this.resolveNativeAccessory(deviceId),
+      (deviceId) => this.nativeAccessoryUuid(deviceId),
     )
     await server.listen({ port, host: '0.0.0.0' })
 

@@ -8,7 +8,6 @@
         <h2 class="inspector-name">{{ inspector.selectedPlugin.manifest.name }}</h2>
         <span class="inspector-version">v{{ inspector.selectedPlugin.manifest.version }}</span>
       </div>
-      <NbButton variant="ghost" size="sm" icon="x" @click="inspector.close()" />
     </div>
 
     <div class="inspector-body">

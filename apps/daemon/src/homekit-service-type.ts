@@ -100,6 +100,19 @@ export class HomeKitServiceTypes {
   }
 
   /**
+   * The type an accessory is presented as, ignoring which service carries it.
+   *
+   * A device maps to a single accessory and only one of its services is
+   * convertible, so the first override is the accessory's effective type. Used
+   * to label and icon the device card, which has no notion of services.
+   */
+  typeForAccessory(accessoryUuid: string): ServiceTypeKey | null {
+    const forAccessory = this.overrides[accessoryUuid]
+    if (!forAccessory) return null
+    return Object.values(forAccessory)[0] ?? null
+  }
+
+  /**
    * Record an override. Passing the service's own type (or null) clears it.
    *
    * Not applied live: an accessory already published to HomeKit cannot change

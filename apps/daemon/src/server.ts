@@ -108,6 +108,8 @@ export async function createServer(
    * never appear in /api/accessories; this is how the UI reaches them.
    */
   resolveNativeAccessory: ((deviceId: string) => unknown | null) | null = null,
+  /** UUID of the accessory a native plugin published for a device, if any. */
+  nativeAccessoryUuid: ((deviceId: string) => string | null) | null = null,
 ) {
   const app = Fastify({ logger: false })
 
@@ -553,13 +555,22 @@ export async function createServer(
       /* no custom names */
     }
 
-    const devices: Array<DeviceDescriptor & { telemetry: Record<string, unknown>; pluginStatus: string }> = []
+    const devices: Array<
+      DeviceDescriptor & { telemetry: Record<string, unknown>; pluginStatus: string; homekitType: string | null }
+    > = []
     for (const instance of registry.getAll()) {
       if (!instance.devices) continue
       for (const device of Object.values(instance.devices)) {
         const telemetry = instance.telemetry?.[device.id] ?? {}
         const name = customNames[device.id] ?? device.name
-        devices.push({ ...device, name, telemetry, pluginStatus: instance.status })
+
+        // What the device is *presented* as, which may differ from the widget
+        // type its plugin declared. Sent so the card can show a relay driving a
+        // lamp as a light rather than contradicting the inspector next to it.
+        const accessoryUuid = nativeAccessoryUuid?.(device.id) ?? null
+        const homekitType = accessoryUuid ? (homekitServiceTypes?.typeForAccessory(accessoryUuid) ?? null) : null
+
+        devices.push({ ...device, name, telemetry, pluginStatus: instance.status, homekitType })
       }
     }
     return { devices }

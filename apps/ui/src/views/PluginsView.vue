@@ -34,7 +34,11 @@
       </template>
     </div>
 
-    <PluginList v-else :rows="rows" :view="view" :selected-id="selectedId" @select="selectPlugin" />
+    <!-- self: a click on the empty area around the cards dismisses the
+         inspector, which is why there is no close button on it. -->
+    <div v-else class="plugins-body" @click.self="inspector.close()">
+      <PluginList :rows="rows" :view="view" :selected-id="selectedId" @select="selectPlugin" />
+    </div>
   </div>
 </template>
 
@@ -252,10 +256,20 @@ watch(
 </script>
 
 <style lang="scss" scoped>
+// flex: 1 so the view fills the shell's content row. Without it the body below
+// the cards has no height, and there is no empty area to click for dismissal.
 .plugins-view {
+  flex: 1;
   display: flex;
   flex-direction: column;
+  min-height: 0;
   gap: 1rem;
+}
+
+// Grows past the cards so there is empty area to click for dismissal.
+.plugins-body {
+  flex: 1;
+  min-height: 0;
 }
 
 .empty-state {

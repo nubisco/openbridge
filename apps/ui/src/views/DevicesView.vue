@@ -9,6 +9,13 @@
       <NbButton
         variant="ghost"
         size="sm"
+        :icon="view === 'cards' ? 'list' : 'squares-four'"
+        :title="view === 'cards' ? 'Show as table' : 'Show as cards'"
+        @click="toggleView"
+      />
+      <NbButton
+        variant="ghost"
+        size="sm"
         icon="arrows-clockwise"
         title="Refresh"
         :loading="refreshing"
@@ -26,9 +33,11 @@
       </p>
     </div>
 
-    <div v-else class="devices-layout">
+    <!-- self on the layout, not the grid: the click must land on the empty
+         area around the cards, and a card click stops at the card itself. -->
+    <div v-else class="devices-layout" @click.self="inspector.close()">
       <!-- Device grid -->
-      <div class="device-grid">
+      <div v-if="view === 'cards'" class="device-grid" @click.self="inspector.close()">
         <!-- Native plugin devices -->
         <NbPanel
           v-for="dev in nativeDevices"
@@ -40,11 +49,11 @@
         >
           <span class="device-card__accent" />
           <div class="device-icon native-icon">
-            <NbIcon :name="widgetIcon(dev.widgetType)" :size="22" />
+            <NbIcon :name="widgetIcon(effectiveType(dev))" :size="22" />
           </div>
           <div class="device-info">
             <div class="device-name">{{ dev.name }}</div>
-            <div class="device-type">{{ widgetLabel(dev.widgetType) }}</div>
+            <div class="device-type">{{ widgetLabel(effectiveType(dev)) }}</div>
             <!-- Inline widget summary -->
             <div class="device-summary">
               <!-- Energy meter -->
@@ -141,6 +150,29 @@
           <div class="device-reachability" :class="acc.reachable ? 'online' : 'offline'" />
         </NbPanel>
       </div>
+
+      <NbDataTable
+        v-else
+        :columns="deviceColumns"
+        :rows="deviceRows"
+        row-key="key"
+        size="sm"
+        zebra
+        :sort-state="sortState"
+        @sort="sortState = $event"
+        @row-click="(row: DeviceRow) => row.select()"
+      >
+        <template #cell-name="{ row }">
+          <div class="cell-name">
+            <NbIcon :name="row.icon" :size="16" />
+            <span>{{ row.name }}</span>
+          </div>
+        </template>
+        <template #cell-state="{ row }">
+          <NbBadge v-if="row.state" :variant="row.stateOn ? 'green' : 'grey'">{{ row.state }}</NbBadge>
+          <span v-else>—</span>
+        </template>
+      </NbDataTable>
     </div>
 
     <!-- Confirmation dialog for safety-critical controls -->
@@ -163,6 +195,7 @@
 
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, computed } from 'vue'
+import type { IDataTableColumn, IDataTableSortState } from '@nubisco/ui'
 import { useRouter } from 'vue-router'
 import { useDaemonStore } from '@/stores/daemon'
 import { useInspectorStore, type NativeDevice } from '@/stores/inspector'
@@ -188,6 +221,99 @@ const refreshing = ref(false)
 
 // ─── Native devices ──────────────────────────────────────────────────────────
 const nativeDevices = ref<NativeDevice[]>([])
+
+// ─── Card / table presentation ──────────────────────────────────────────────
+// A viewing preference, so it belongs to the user rather than to the session.
+// Kept separate from the plugins view's key: the two lists are browsed for
+// different reasons and a table there does not imply a table here.
+const VIEW_KEY = 'openbridge.devices.view'
+const view = ref<'cards' | 'table'>(localStorage.getItem(VIEW_KEY) === 'table' ? 'table' : 'cards')
+
+function toggleView() {
+  view.value = view.value === 'cards' ? 'table' : 'cards'
+  localStorage.setItem(VIEW_KEY, view.value)
+}
+
+const sortState = ref<IDataTableSortState | null>({ key: 'name', direction: 'asc' })
+
+const deviceColumns: IDataTableColumn[] = [
+  { key: 'name', header: 'Device', sortable: true },
+  { key: 'type', header: 'Type', sortable: true, width: 160 },
+  { key: 'source', header: 'Source', sortable: true, width: 120 },
+  { key: 'state', header: 'State', sortable: true, width: 120 },
+  { key: 'detail', header: 'Reading', sortable: true, width: 160 },
+]
+
+interface DeviceRow {
+  key: string
+  name: string
+  type: string
+  source: string
+  state: string
+  stateOn: boolean
+  detail: string
+  icon: string
+  select: () => void
+}
+
+const deviceRows = computed<DeviceRow[]>(() => {
+  const rows: DeviceRow[] = [
+    ...nativeDevices.value.map((dev) => ({
+      key: 'native:' + dev.id,
+      name: dev.name,
+      type: widgetLabel(effectiveType(dev)),
+      source: 'Native',
+      state: dev.telemetry.active === undefined ? '' : dev.telemetry.active ? 'On' : 'Off',
+      stateOn: !!dev.telemetry.active,
+      detail: nativeSummary(dev),
+      icon: widgetIcon(effectiveType(dev)),
+      select: () => selectNative(dev),
+    })),
+    ...daemon.accessories.map((acc) => {
+      const on = hapOnCharacteristic(acc)
+      return {
+        key: 'hap:' + acc.uuid,
+        name: acc.displayName,
+        type: categoryInfo(acc.category).label,
+        source: 'HomeKit',
+        state: on ? (on.value ? 'On' : 'Off') : '',
+        stateOn: !!on?.value,
+        detail: hapPrimaryValue(acc) ?? '',
+        icon: categoryInfo(acc.category).icon,
+        select: () => selectHap(acc),
+      }
+    }),
+  ]
+
+  const sort = sortState.value
+  if (!sort || sort.direction === 'none') return rows
+  const dir = sort.direction === 'asc' ? 1 : -1
+  return [...rows].sort(
+    (a, b) =>
+      dir * String(a[sort.key as keyof DeviceRow] ?? '').localeCompare(String(b[sort.key as keyof DeviceRow] ?? '')),
+  )
+})
+
+/** The one number worth showing for a device in a single table cell. */
+function nativeSummary(dev: NativeDevice): string {
+  const t = dev.telemetry
+  if (dev.widgetType === 'energy_meter' && t.power !== undefined) return `${fmtNum(t.power, 1)} W`
+  if (dev.widgetType === 'thermostat' && t.currentTemperature !== undefined) {
+    return `${fmtNum(t.currentTemperature, 1)}°C`
+  }
+  if (dev.widgetType === 'dehumidifier' && t.currentHumidity !== undefined) return `${fmtNum(t.currentHumidity, 0)}%`
+  if (t.power !== undefined) return `${fmtNum(t.power, 1)} W`
+  return ''
+}
+
+/**
+ * The type to show for a device: its HomeKit override when one is set,
+ * otherwise the widget type its plugin declared. Without this a relay retyped
+ * to a light would still read "Switch" here while the inspector said Light.
+ */
+function effectiveType(dev: NativeDevice): string {
+  return (dev as unknown as { homekitType?: string }).homekitType || dev.widgetType
+}
 
 // ─── Selection via inspector ─────────────────────────────────────────────────
 const selectedDeviceId = computed(() => {
@@ -455,6 +581,12 @@ onUnmounted(() => {
     font-size: 0.8rem;
     line-height: 1.6;
   }
+}
+
+.cell-name {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .devices-layout {

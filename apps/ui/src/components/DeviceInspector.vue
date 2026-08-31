@@ -4,33 +4,29 @@
     <template v-if="selected.kind === 'native'">
       <div class="detail-header">
         <div class="detail-icon native-icon">
-          <NbIcon :name="widgetIcon((selected as any).dev.widgetType)" :size="26" />
+          <NbIcon :name="widgetIcon(effectiveType((selected as any).dev))" :size="26" />
         </div>
         <div style="flex: 1; min-width: 0">
           <h2
             v-if="!editingName"
             class="detail-name"
-            :title="'Click to rename'"
-            style="cursor: pointer"
+            title="Click to rename"
             @click="startRename((selected as any).dev.name)"
           >
             {{ (selected as any).dev.name }}
-            <NbIcon name="pencil" :size="10" style="opacity: 0.4; margin-left: 4px" />
           </h2>
           <div v-else class="rename-row">
-            <input
-              ref="renameInput"
+            <NbTextInput
               v-model="renameValue"
-              class="rename-input"
+              size="sm"
               @keyup.enter="saveRename((selected as any).dev.id)"
               @keyup.escape="editingName = false"
             />
             <NbButton variant="primary" size="sm" icon="check" @click="saveRename((selected as any).dev.id)" />
             <NbButton variant="ghost" size="sm" icon="x" @click="editingName = false" />
           </div>
-          <div class="detail-type">{{ widgetLabel((selected as any).dev.widgetType) }}</div>
+          <div class="detail-type">{{ widgetLabel(effectiveType((selected as any).dev)) }}</div>
         </div>
-        <NbButton variant="ghost" size="sm" icon="x" @click="inspector.close()" />
       </div>
 
       <!-- Device info -->
@@ -288,18 +284,15 @@
           <h2
             v-if="!editingName"
             class="detail-name"
-            :title="'Click to rename'"
-            style="cursor: pointer"
+            title="Click to rename"
             @click="startRename((selected as any).acc.displayName)"
           >
             {{ (selected as any).acc.displayName }}
-            <NbIcon name="pencil" :size="10" style="opacity: 0.4; margin-left: 4px" />
           </h2>
           <div v-else class="rename-row">
-            <input
-              ref="renameInput"
+            <NbTextInput
               v-model="renameValue"
-              class="rename-input"
+              size="sm"
               @keyup.enter="saveRename((selected as any).acc.uuid)"
               @keyup.escape="editingName = false"
             />
@@ -308,7 +301,6 @@
           </div>
           <div class="detail-type">{{ categoryInfo((selected as any).acc.category).label }}</div>
         </div>
-        <NbButton variant="ghost" size="sm" icon="x" @click="inspector.close()" />
       </div>
 
       <!-- Manufacturer info -->
@@ -393,7 +385,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useInspectorStore, type NativeDevice } from '@/stores/inspector'
 import { api, type Accessory, type InterpolationDescriptor } from '@/api'
 import { onMounted } from 'vue'
@@ -467,6 +459,16 @@ function serviceTypeFor(accessoryUuid: string, serviceUuid: string): string {
 // one thing, but the accessory never reaches /api/accessories, so it is fetched
 // per selection. Null is a normal answer: plenty of devices are telemetry only.
 const nativeAccessory = ref<Accessory | null>(null)
+
+/**
+ * The type to show for a device: its HomeKit override when one is set,
+ * otherwise the widget type its plugin declared. Without this the card and the
+ * inspector would contradict each other, one saying Switch while the picker
+ * right below it says Light.
+ */
+function effectiveType(dev: NativeDevice): string {
+  return (dev as unknown as { homekitType?: string }).homekitType || dev.widgetType
+}
 
 async function loadNativeAccessory(deviceId: string) {
   nativeAccessory.value = null
@@ -609,12 +611,11 @@ function isWritable(ch: { perms: string[] }) {
 // ─── Device rename ───────────────────────────────────────────────────────────
 const editingName = ref(false)
 const renameValue = ref('')
-const renameInput = ref<HTMLInputElement | null>(null)
+// NbTextInput autofocuses when it mounts, so no ref is needed to drive focus.
 
 function startRename(currentName: string) {
   renameValue.value = currentName
   editingName.value = true
-  nextTick(() => renameInput.value?.focus())
 }
 
 async function saveRename(deviceId: string) {
@@ -966,6 +967,7 @@ const historyChartSeries = computed(() => {
 }
 
 .detail-name {
+  cursor: pointer;
   font-weight: 700;
   font-size: 0.95rem;
   color: var(--nb-c-text);
