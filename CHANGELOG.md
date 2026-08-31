@@ -1,3 +1,10 @@
+## [0.23.1](https://github.com/nubisco/openbridge/compare/v0.23.0...v0.23.1) (2026-08-31)
+
+
+### Bug Fixes
+
+* **daemon:** honour disabled state for Homebridge plugins ([e2f9129](https://github.com/nubisco/openbridge/commit/e2f912984d9a747732a82c56454affa5b0c1ce99))
+
 # [0.23.0](https://github.com/nubisco/openbridge/compare/v0.22.1...v0.23.0) (2026-08-31)
 
 
