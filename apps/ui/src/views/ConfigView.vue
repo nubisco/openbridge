@@ -14,6 +14,7 @@
         :icon="saved ? 'check' : 'floppy-disk'"
         :loading="saving"
         :disabled="saving"
+        title="Changes take effect after restarting the daemon"
         @click="save"
       >
         {{ saved ? 'Saved!' : saving ? 'Saving…' : 'Save' }}
@@ -31,11 +32,6 @@
     </div>
 
     <div v-else ref="editorContainer" class="editor-container" />
-
-    <div class="config-footer">
-      <NbIcon name="info" :size="12" />
-      Changes take effect after restarting the daemon
-    </div>
   </div>
 </template>
 
@@ -56,7 +52,7 @@ const error = ref<string | null>(null)
 const loading = ref(true)
 
 onMounted(async () => {
-  layout.setPage('Config')
+  layout.setPage('Config', undefined, { fullBleed: true })
 
   // Load the config content
   let content = '{}'
@@ -189,7 +185,6 @@ function format() {
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  gap: 0.75rem;
 }
 
 // Teleported next to the breadcrumb in the shell topbar.
@@ -202,13 +197,13 @@ function format() {
   border-radius: 6px;
 }
 
+// A full-width strip now that the view runs edge to edge.
 .error-banner {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   background: color-mix(in srgb, var(--nb-c-danger) 12%, var(--nb-c-surface));
-  border: 1px solid color-mix(in srgb, var(--nb-c-danger) 35%, transparent);
-  border-radius: 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--nb-c-danger) 35%, transparent);
   padding: 0.6rem 0.9rem;
   font-size: 0.82rem;
   color: var(--nb-c-danger);
@@ -224,20 +219,10 @@ function format() {
   color: var(--nb-c-text-subtle);
 }
 
+// Edge to edge: an editor should fill its pane, not float in a rounded card.
 .editor-container {
   flex: 1;
   min-height: 0;
-  border-radius: 10px;
   overflow: hidden;
-  border: 1px solid var(--nb-c-border);
-}
-
-.config-footer {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.74rem;
-  color: var(--nb-c-text-subtle);
-  flex-shrink: 0;
 }
 </style>

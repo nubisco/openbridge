@@ -423,6 +423,10 @@ export class Daemon {
         }
 
         // Homebridge-compatible plugins — auto-load if configured in config.plugins
+        // Set when the plugin turns out to be disabled under its platform name,
+        // which is only knowable after the module has registered itself.
+        let disabledByPlatformName = false
+
         if (isHb && homebridgeAPI) {
           const pluginEntry = config.plugins.find((p) => p.name === name)
           const pluginDir = join(pluginsRoot, 'node_modules', pkgName)
@@ -443,25 +447,36 @@ export class Daemon {
                   ? newReg.platformName
                   : ((pluginEntry?.config?.platform as string) ?? name)
 
-              const pluginConfig = pluginEntry?.config ?? {}
-              const platformConfig = {
-                platform: platformName,
-                plugin: mainFile,
-                ...pluginConfig,
+              // Disable entries written before the identifier was canonicalised
+              // hold the platform name ("ShellyDS9") rather than the package
+              // name, so honour both. Checked here rather than above because
+              // the platform name only exists once the module has registered.
+              if (disabledPlugins.includes(platformName)) {
+                log.info(`Skipping disabled Homebridge plugin: ${name} (platform ${platformName})`)
+                disabledByPlatformName = true
+                // Falls through to the pseudo-plugin registration below so the
+                // plugin still appears in the UI and can be re-enabled.
+              } else {
+                const pluginConfig = pluginEntry?.config ?? {}
+                const platformConfig = {
+                  platform: platformName,
+                  plugin: mainFile,
+                  ...pluginConfig,
+                }
+
+                const platformLogger = Logger.create('hap')
+                await homebridgeAPI.launchPlatforms([platformConfig as any], platformLogger, this.registry)
+
+                // launchPlatforms registers the instance under the platform name,
+                // which is all it knows. Record the package name too: this
+                // plugin's config lives in config.plugins[] keyed by it, and
+                // without this the UI has no way back to that entry.
+                const launched = this.registry.get(platformName)
+                if (launched) launched.instance.packageName = name
+
+                log.info(`Loaded Homebridge plugin from marketplace: ${name} v${pkg.version ?? '?'}`)
+                continue
               }
-
-              const platformLogger = Logger.create('hap')
-              await homebridgeAPI.launchPlatforms([platformConfig as any], platformLogger, this.registry)
-
-              // launchPlatforms registers the instance under the platform name,
-              // which is all it knows. Record the package name too: this
-              // plugin's config lives in config.plugins[] keyed by it, and
-              // without this the UI has no way back to that entry.
-              const launched = this.registry.get(platformName)
-              if (launched) launched.instance.packageName = name
-
-              log.info(`Loaded Homebridge plugin from marketplace: ${name} v${pkg.version ?? '?'}`)
-              continue
             } catch (err) {
               log.error(`Failed to load Homebridge plugin ${name}: ${err}`)
             }
@@ -481,8 +496,15 @@ export class Daemon {
         const instance = this.registry.register(pseudoPlugin)
         if (isHb) instance.source = 'homebridge'
         instance.packageName = name
+        // Without this the UI's Disabled switch reads as off for a plugin the
+        // daemon deliberately did not start.
+        if (disabledPlugins.includes(name) || disabledByPlatformName) instance.disabled = true
         this.registry.updateStatus(name, 'stopped')
-        log.info(`Discovered marketplace plugin: ${name} v${pkg.version ?? '?'} (not yet configured)`)
+        log.info(
+          instance.disabled
+            ? `Discovered marketplace plugin: ${name} v${pkg.version ?? '?'} (disabled)`
+            : `Discovered marketplace plugin: ${name} v${pkg.version ?? '?'} (not yet configured)`,
+        )
       } catch (err) {
         log.warn(`Marketplace discovery: skipped ${pkgName}: ${err}`)
       }

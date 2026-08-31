@@ -452,11 +452,15 @@ function generatePin() {
 </script>
 
 <style lang="scss" scoped>
+// A responsive grid rather than a capped single column: the cap made this the
+// only page that ignored the available width, but simply removing it would
+// stretch the form fields across the whole viewport. Columns keep the fields
+// at a readable measure while the page fills the space like every other view.
 .settings-view {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(420px, 100%), 1fr));
+  align-items: start;
   gap: 1.25rem;
-  max-width: 640px;
 }
 
 .settings-card {

@@ -176,6 +176,66 @@ describe('OpenBridge Server API', () => {
       }
     })
 
+    it('persists a Homebridge plugin by package name, not the platform name it registers under', async () => {
+      // The loader looks plugins up by npm package name. A compat plugin is
+      // registered under its *platform* name, so persisting the registry id
+      // wrote a key the loader never matched and the plugin started anyway.
+      writeConfig(baseConfig)
+      const { createServer } = await import('../server.js')
+      const { PluginRegistry } = await import('@nubisco/openbridge-core')
+      const registry = new PluginRegistry()
+
+      const instance = registry.register({ manifest: { name: 'ShellyDS9', version: '?.?.?' } }, 'ShellyDS9')
+      instance.source = 'homebridge'
+      instance.platformName = 'ShellyDS9'
+      instance.packageName = 'homebridge-shelly-ds9'
+
+      const server = await createServer(registry, null, null, [], new Set(), new Map())
+      await listen(server)
+
+      try {
+        await fetch(`${BASE}/api/plugins/ShellyDS9/disabled`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ disabled: true }),
+        })
+
+        const disabled = (readConfig() as any).disabledPlugins
+        expect(disabled).toContain('homebridge-shelly-ds9')
+        expect(disabled).not.toContain('ShellyDS9')
+      } finally {
+        await server.close()
+      }
+    })
+
+    it('clears a stale entry written under the old platform-name key when re-enabling', async () => {
+      writeConfig({ ...baseConfig, disabledPlugins: ['ShellyDS9'] })
+      const { createServer } = await import('../server.js')
+      const { PluginRegistry } = await import('@nubisco/openbridge-core')
+      const registry = new PluginRegistry()
+
+      const instance = registry.register({ manifest: { name: 'ShellyDS9', version: '?.?.?' } }, 'ShellyDS9')
+      instance.source = 'homebridge'
+      instance.platformName = 'ShellyDS9'
+      instance.packageName = 'homebridge-shelly-ds9'
+
+      const server = await createServer(registry, null, null, [], new Set(), new Map())
+      await listen(server)
+
+      try {
+        await fetch(`${BASE}/api/plugins/ShellyDS9/disabled`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ disabled: false }),
+        })
+
+        // Both aliases must go, or the plugin stays off despite the toggle.
+        expect((readConfig() as any).disabledPlugins).toEqual([])
+      } finally {
+        await server.close()
+      }
+    })
+
     it('POST /api/plugins/:id/disabled toggles disabled state', async () => {
       writeConfig(baseConfig)
       const { createServer } = await import('../server.js')

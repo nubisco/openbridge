@@ -53,7 +53,7 @@ function sendResize() {
 }
 
 onMounted(async () => {
-  layout.setPage('Terminal')
+  layout.setPage('Terminal', undefined, { fullBleed: true })
 
   // Ensure fonts are loaded before xterm measures glyph widths
   await document.fonts.ready
@@ -134,7 +134,6 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  gap: 0.5rem;
 }
 
 // Teleported into the shell topbar; scoped styles still apply because the
@@ -168,15 +167,11 @@ onBeforeUnmount(() => {
 .terminal-container {
   flex: 1;
   min-height: 0;
-  border-radius: 10px;
   overflow: hidden;
   background: #0d1117;
 
   :deep(.xterm) {
     height: 100%;
-  }
-  :deep(.xterm-viewport) {
-    border-radius: 10px;
   }
   :deep(.xterm-screen) {
     padding: 0.5rem;

@@ -186,7 +186,10 @@ const tableRows = computed<TableRow[]>(() => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 1rem;
-  align-items: start;
+  // Stretch, not start: only some plugins publish sponsor/docs links, and
+  // letting cards size to their own content made a row ragged wherever one
+  // card happened to have them.
+  align-items: stretch;
 }
 
 // NbPanel supplies the surface, border and layer. Only the things it cannot
@@ -195,6 +198,8 @@ const tableRows = computed<TableRow[]>(() => {
   position: relative;
   overflow: hidden;
   cursor: pointer;
+  display: flex;
+  flex-direction: column;
   transition:
     border-color 0.15s,
     background 0.15s;
@@ -300,21 +305,28 @@ const tableRows = computed<TableRow[]>(() => {
 .plugin-links {
   display: flex;
   gap: 0.4rem;
-  margin-top: 0.5rem;
+  // Pinned to the bottom so the links line up across a row instead of
+  // floating at whatever height the description happens to end.
+  margin-top: auto;
+  padding-top: 0.5rem;
 
+  // Same recipe NbBadge uses for its tinted variants: a 12% fill of the
+  // semantic colour behind that colour as text. The previous outline-only
+  // treatment leaned on --nb-c-border, which is deliberately near-invisible.
   a {
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
     font-size: 0.7rem;
-    padding: 0.1rem 0.45rem;
+    font-weight: 500;
+    padding: 0.15rem 0.5rem;
     border-radius: 99px;
-    border: 1px solid var(--nb-c-border);
+    background: color-mix(in srgb, var(--nb-c-primary) 12%, var(--nb-c-surface));
     color: var(--nb-c-primary);
     text-decoration: none;
 
     &:hover {
-      background: var(--nb-c-surface-hover);
+      background: color-mix(in srgb, var(--nb-c-primary) 22%, var(--nb-c-surface));
     }
   }
 }

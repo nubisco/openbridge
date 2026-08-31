@@ -1,5 +1,5 @@
 <template>
-  <NbShell :inspector-visible="inspector.visible">
+  <NbShell :inspector-visible="inspector.visible" :main-padding="!layout.fullBleed">
     <!-- ═══ Logo ═══ -->
     <template #sidebar-logo>
       <RouterLink to="/dashboard" data-tooltip="OpenBridge" class="sidebar-logo">

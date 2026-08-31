@@ -76,49 +76,35 @@
                 @update:model-value="requestControl(dev, 'active', $event)"
               />
             </div>
-            <!-- Thermostat stepper -->
+            <!-- Thermostat target -->
             <div
               v-if="dev.widgetType === 'thermostat' && dev.telemetry.targetTemperature !== undefined"
               class="card-controls"
               @click.stop
             >
-              <div class="ctrl-stepper">
-                <button
-                  @click.stop="
-                    sendControl(dev.id, 'targetTemperature', (Number(dev.telemetry.targetTemperature) || 20) - 1)
-                  "
-                >
-                  −
-                </button>
-                <span>{{ fmtNum(dev.telemetry.targetTemperature, 0) }}°</span>
-                <button
-                  @click.stop="
-                    sendControl(dev.id, 'targetTemperature', (Number(dev.telemetry.targetTemperature) || 20) + 1)
-                  "
-                >
-                  +
-                </button>
-              </div>
+              <NbNumberInput
+                :model-value="Number(dev.telemetry.targetTemperature)"
+                size="xs"
+                :min="5"
+                :max="35"
+                :step="1"
+                @update:model-value="(v: number | null) => v !== null && sendControl(dev.id, 'targetTemperature', v)"
+              />
             </div>
-            <!-- Dehumidifier stepper -->
+            <!-- Dehumidifier target -->
             <div
               v-if="dev.widgetType === 'dehumidifier' && dev.telemetry.targetHumidity !== undefined"
               class="card-controls"
               @click.stop
             >
-              <div class="ctrl-stepper">
-                <button
-                  @click.stop="sendControl(dev.id, 'targetHumidity', (Number(dev.telemetry.targetHumidity) || 50) - 5)"
-                >
-                  −
-                </button>
-                <span>{{ fmtNum(dev.telemetry.targetHumidity, 0) }}%</span>
-                <button
-                  @click.stop="sendControl(dev.id, 'targetHumidity', (Number(dev.telemetry.targetHumidity) || 50) + 5)"
-                >
-                  +
-                </button>
-              </div>
+              <NbNumberInput
+                :model-value="Number(dev.telemetry.targetHumidity)"
+                size="xs"
+                :min="30"
+                :max="80"
+                :step="5"
+                @update:model-value="(v: number | null) => v !== null && sendControl(dev.id, 'targetHumidity', v)"
+              />
             </div>
           </div>
           <div class="device-reachability" :class="dev.pluginStatus === 'running' ? 'online' : 'offline'" />
@@ -614,35 +600,6 @@ onUnmounted(() => {
   gap: 0.5rem;
   margin-top: 0.5rem;
 }
-.ctrl-stepper {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-  background: var(--nb-c-layer-1);
-  border: 1px solid var(--nb-c-border);
-  border-radius: 6px;
-  padding: 0.1rem 0.25rem;
-  button {
-    background: none;
-    border: none;
-    color: var(--nb-c-text-muted);
-    cursor: pointer;
-    font-size: 1rem;
-    line-height: 1;
-    padding: 0 0.2rem;
-    &:hover {
-      color: var(--nb-c-text);
-    }
-  }
-  span {
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: var(--nb-c-text);
-    min-width: 2.5rem;
-    text-align: center;
-  }
-}
-
 // ─── Confirmation dialog ──────────────────────────────────────────────────────
 .confirm-overlay {
   position: fixed;

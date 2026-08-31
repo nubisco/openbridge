@@ -830,16 +830,22 @@ export async function createServer(
       } catch {
         /* start fresh */
       }
-      const disabledPlugins = cfg.disabledPlugins ?? []
-      if (disabled && !disabledPlugins.includes(id)) {
-        disabledPlugins.push(id)
-      } else if (!disabled) {
-        const idx = disabledPlugins.indexOf(id)
-        if (idx >= 0) disabledPlugins.splice(idx, 1)
-      }
+      // Persist the npm package name when we know it, not the registry id.
+      // A Homebridge-compat plugin is registered under its *platform* name
+      // ("ShellyDS9") while the loader looks plugins up by *package* name
+      // ("homebridge-shelly-ds9"), so writing the id here meant the loader
+      // never matched and the plugin started anyway. For native plugins and
+      // legacy config.platforms[] entries the two are the same value.
+      const key = entry.instance.packageName ?? id
+      // Remove every alias so a stale entry written under the old id cannot
+      // keep a re-enabled plugin switched off.
+      const aliases = new Set([id, key, entry.instance.platformName].filter(Boolean) as string[])
+      const disabledPlugins = (cfg.disabledPlugins ?? []).filter((n: string) => !aliases.has(n))
+      if (disabled) disabledPlugins.push(key)
+
       cfg.disabledPlugins = disabledPlugins
       writeFileSync(configPath, JSON.stringify(cfg, null, 2), 'utf8')
-      log.info(`Plugin disabled state toggled: ${id} -> ${disabled}`)
+      log.info(`Plugin disabled state toggled: ${key} -> ${disabled}`)
     } catch (err) {
       log.warn(`Failed to persist disabled state: ${err}`)
     }

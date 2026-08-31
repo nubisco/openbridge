@@ -1,5 +1,5 @@
 <template>
-  <div v-if="inspector.selectedPlugin" class="inspector">
+  <div v-if="inspector.selectedPlugin" class="inspector nb-inspector">
     <div class="inspector-header">
       <div class="inspector-avatar" :class="inspector.selectedPlugin.status">
         <NbIcon name="puzzle-piece" :size="24" />
@@ -12,62 +12,50 @@
     </div>
 
     <div class="inspector-body">
-      <!-- Status -->
-      <section class="inspector-section">
-        <div class="field-row">
-          <span class="field-label">Status</span>
+      <NbShellPanel v-model:size="sections.status" title="Status" fluid>
+        <NbField label="Status" control="fit">
           <span class="status-badge" :class="inspector.selectedPlugin.status">
             {{ statusLabel[inspector.selectedPlugin.status] }}
           </span>
-        </div>
-        <div v-if="inspector.selectedPlugin.startedAt" class="field-row">
-          <span class="field-label">Started</span>
+        </NbField>
+        <NbField v-if="inspector.selectedPlugin.startedAt" label="Started" control="fit">
           <span class="field-value">{{ new Date(inspector.selectedPlugin.startedAt).toLocaleString() }}</span>
-        </div>
-        <div v-if="inspector.selectedPlugin.stoppedAt" class="field-row">
-          <span class="field-label">Stopped</span>
+        </NbField>
+        <NbField v-if="inspector.selectedPlugin.stoppedAt" label="Stopped" control="fit">
           <span class="field-value">{{ new Date(inspector.selectedPlugin.stoppedAt).toLocaleString() }}</span>
-        </div>
-        <div class="field-row">
-          <span class="field-label">Disabled</span>
+        </NbField>
+        <NbField label="Disabled" control="fit">
           <NbSwitch
             :model-value="inspector.selectedPlugin.disabled ?? false"
             :disabled="togglingDisabled"
             @update:model-value="togglePluginDisabled"
           />
-        </div>
-      </section>
+        </NbField>
+      </NbShellPanel>
 
       <!-- ── HAP Bridge (if plugin publishes its own bridge) ───────────────── -->
-      <section v-if="inspector.selectedPlugin.hapBridge" class="inspector-section">
-        <h3 class="section-heading">
-          <NbIcon name="qr-code" :size="12" />
-          HomeKit Pairing
-        </h3>
+      <NbShellPanel v-if="inspector.selectedPlugin.hapBridge" v-model:size="sections.hap" title="HomeKit pairing" fluid>
         <div class="hap-bridge-info">
           <div class="hap-qr">
             <img v-if="pluginQrUrl" :src="pluginQrUrl" alt="HomeKit QR Code" class="hap-qr-img" />
           </div>
           <div class="hap-details">
-            <div class="field-row">
-              <span class="field-label">PIN</span>
+            <NbField label="PIN" control="fit">
               <span class="field-value mono">{{ inspector.selectedPlugin.hapBridge.pincode }}</span>
-            </div>
-            <div class="field-row">
-              <span class="field-label">Port</span>
+            </NbField>
+            <NbField label="Port" control="fit">
               <span class="field-value">{{ inspector.selectedPlugin.hapBridge.port }}</span>
-            </div>
-            <div class="field-row">
-              <span class="field-label">Bridge</span>
+            </NbField>
+            <NbField label="Bridge" control="fit">
               <span class="field-value">{{ inspector.selectedPlugin.hapBridge.name }}</span>
-            </div>
+            </NbField>
           </div>
         </div>
         <p class="hap-hint">Scan with the Home app or enter the PIN manually to pair this plugin's devices.</p>
-      </section>
+      </NbShellPanel>
 
       <!-- ── Update available ──────────────────────────────────────────────── -->
-      <section v-if="inspector.selectedPlugin.availableUpdate" class="inspector-section">
+      <NbShellPanel v-if="inspector.selectedPlugin.availableUpdate" v-model:size="sections.update" title="Update" fluid>
         <div class="update-banner">
           <div class="update-banner-text">
             <NbIcon name="arrow-circle-up" :size="14" />
@@ -81,10 +69,10 @@
             {{ updating ? 'Updating...' : 'Update' }}
           </NbButton>
         </div>
-      </section>
+      </NbShellPanel>
 
       <!-- ── Remove plugin ─────────────────────────────────────────────────── -->
-      <section class="inspector-section">
+      <NbShellPanel v-model:size="sections.manage" title="Manage" fluid>
         <NbButton
           v-if="!confirmingRemove"
           variant="ghost"
@@ -114,15 +102,10 @@
             </NbButton>
           </div>
         </div>
-      </section>
+      </NbShellPanel>
 
       <!-- ── Platform config editor for all Homebridge-source plugins ───────── -->
-      <section v-if="isHomebridge" class="inspector-section setup-section">
-        <h3 class="section-heading">
-          <NbIcon name="gear" :size="12" />
-          Platform config
-        </h3>
-
+      <NbShellPanel v-if="isHomebridge" v-model:size="sections.config" title="Platform config" fluid>
         <div v-if="loadingInfo" class="setup-loading">
           <NbIcon name="spinner" :size="14" />
           Loading config…
@@ -214,14 +197,10 @@
             </div>
           </template>
         </template>
-      </section>
+      </NbShellPanel>
 
       <!-- ── Plugin config editor for native OpenBridge plugins ───────────── -->
-      <section v-if="isOpenbridge" class="inspector-section setup-section">
-        <h3 class="section-heading">
-          <NbIcon name="gear" :size="12" />
-          Plugin config
-        </h3>
+      <NbShellPanel v-if="isOpenbridge" v-model:size="sections.config" title="Plugin config" fluid>
         <div class="config-editor-wrap" :class="{ invalid: nativeConfigJson && !nativeJsonValid }">
           <MonacoJsonEditor
             :model-value="nativeConfigJson"
@@ -257,63 +236,50 @@
             {{ restarting ? 'Restarting…' : 'Restart OpenBridge' }}
           </NbButton>
         </div>
-      </section>
+      </NbShellPanel>
 
-      <!-- ── Import / Export config ──────────────────────────────────────── -->
-      <section class="inspector-section">
+      <NbShellPanel v-model:size="sections.transfer" title="Import &amp; export" fluid>
         <div class="import-export-row">
           <NbButton variant="ghost" size="sm" icon="download" @click="exportConfig">Export config</NbButton>
           <NbButton variant="ghost" size="sm" icon="upload" @click="triggerImport">Import config</NbButton>
           <input ref="importInput" type="file" accept=".json" style="display: none" @change="importConfig" />
         </div>
-      </section>
+      </NbShellPanel>
 
       <!-- ── Devices registered by this plugin ────────────────────────────── -->
-      <section v-if="pluginDevices.length > 0" class="inspector-section">
-        <h3 class="section-heading">
-          <NbIcon name="devices" :size="12" />
-          Devices ({{ pluginDevices.length }})
-        </h3>
+      <NbShellPanel
+        v-if="pluginDevices.length > 0"
+        v-model:size="sections.devices"
+        :title="`Devices (${pluginDevices.length})`"
+        fluid
+      >
         <div v-for="dev in pluginDevices" :key="dev.id" class="plugin-device-row">
           <NbIcon :name="widgetIcon(dev.widgetType)" :size="14" />
           <span class="plugin-device-name">{{ dev.name }}</span>
           <span class="plugin-device-type">{{ dev.widgetType }}</span>
         </div>
-      </section>
+      </NbShellPanel>
 
-      <!-- Manifest -->
-      <section class="inspector-section">
-        <h3 class="section-heading">Manifest</h3>
-        <div class="field-row">
-          <span class="field-label">Name</span>
+      <NbShellPanel v-model:size="sections.manifest" title="Manifest" fluid>
+        <NbField label="Name" control="fit">
           <span class="field-value">{{ inspector.selectedPlugin.manifest.name }}</span>
-        </div>
-        <div class="field-row">
-          <span class="field-label">Version</span>
+        </NbField>
+        <NbField label="Version" control="fit">
           <span class="field-value">{{ inspector.selectedPlugin.manifest.version }}</span>
-        </div>
-        <div v-if="inspector.selectedPlugin.manifest.description" class="field-row">
-          <span class="field-label">Description</span>
+        </NbField>
+        <NbField v-if="inspector.selectedPlugin.manifest.description" label="Description" control="fit">
           <span class="field-value">{{ inspector.selectedPlugin.manifest.description }}</span>
-        </div>
-        <div v-if="inspector.selectedPlugin.manifest.author" class="field-row">
-          <span class="field-label">Author</span>
+        </NbField>
+        <NbField v-if="inspector.selectedPlugin.manifest.author" label="Author" control="fit">
           <span class="field-value">{{ inspector.selectedPlugin.manifest.author }}</span>
-        </div>
-      </section>
+        </NbField>
+      </NbShellPanel>
 
-      <!-- Error -->
-      <section v-if="inspector.selectedPlugin.error" class="inspector-section">
-        <h3 class="section-heading">Error</h3>
+      <NbShellPanel v-if="inspector.selectedPlugin.error" v-model:size="sections.error" title="Error" fluid>
         <div class="error-box">{{ inspector.selectedPlugin.error }}</div>
-      </section>
+      </NbShellPanel>
 
-      <!-- Per-plugin logs -->
-      <section v-if="pluginLogs.length > 0" class="inspector-section">
-        <h3 class="section-heading">
-          <NbIcon name="terminal" :size="12" />
-          Recent logs
-        </h3>
+      <NbShellPanel v-if="pluginLogs.length > 0" v-model:size="sections.logs" title="Recent logs" fluid>
         <div ref="logsEl" class="plugin-log-terminal">
           <div v-for="(entry, i) in pluginLogs" :key="i" class="plugin-log-line">
             <span class="plog-time">{{ new Date(entry.timestamp).toLocaleTimeString() }}</span>
@@ -321,13 +287,14 @@
             <span class="plog-msg">{{ entry.message }}</span>
           </div>
         </div>
-      </section>
+      </NbShellPanel>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, watch, computed, onMounted, onBeforeUnmount } from 'vue'
+import type { TShellPanelSize } from '@nubisco/ui'
 import { useInspectorStore } from '@/stores/inspector'
 import { useDaemonStore } from '@/stores/daemon'
 import { api, type LogEntry, type DeviceDescriptor } from '@/api'
@@ -365,6 +332,46 @@ async function restartOpenBridge() {
 }
 
 const inspector = useInspectorStore()
+
+// Per-section collapse state for the NbShellPanel stack. Persisted because an
+// inspector this tall is only usable if the sections you never look at stay
+// shut between visits.
+const SECTIONS_KEY = 'openbridge.pluginInspector.sections'
+type SectionKey =
+  | 'status'
+  | 'hap'
+  | 'update'
+  | 'manage'
+  | 'config'
+  | 'transfer'
+  | 'devices'
+  | 'manifest'
+  | 'error'
+  | 'logs'
+
+const DEFAULT_SECTIONS: Record<SectionKey, TShellPanelSize> = {
+  status: 'default',
+  hap: 'default',
+  update: 'default',
+  manage: 'collapsed',
+  config: 'default',
+  transfer: 'collapsed',
+  devices: 'default',
+  manifest: 'collapsed',
+  error: 'default',
+  logs: 'default',
+}
+
+const sections = ref<Record<SectionKey, TShellPanelSize>>({ ...DEFAULT_SECTIONS })
+
+try {
+  const stored = JSON.parse(localStorage.getItem(SECTIONS_KEY) ?? '{}')
+  sections.value = { ...DEFAULT_SECTIONS, ...stored }
+} catch {
+  /* malformed preference — fall back to defaults */
+}
+
+watch(sections, (v) => localStorage.setItem(SECTIONS_KEY, JSON.stringify(v)), { deep: true })
 
 // Generate QR code when plugin has a HAP bridge
 watch(
@@ -897,19 +904,12 @@ async function save() {
   line-height: 1.4;
 }
 
+// The .nb-inspector pattern supplies the panel gutter, gaps and section caps.
 .inspector-body {
   flex: 1;
   overflow-y: auto;
-  padding: 1rem 1.1rem;
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
-}
-
-.inspector-section {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
 }
 
 .update-banner {
@@ -949,33 +949,8 @@ async function save() {
   justify-content: flex-end;
 }
 
-.section-heading {
-  margin: 0 0 0.25rem;
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--nb-c-text-subtle);
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.field-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.75rem;
-  font-size: 0.83rem;
-}
-.field-label {
-  color: var(--nb-c-text-muted);
-  width: 80px;
-  flex-shrink: 0;
-  padding-top: 1px;
-}
 .field-value {
   color: var(--nb-c-text);
-  flex: 1;
   word-break: break-word;
 }
 
@@ -1013,14 +988,6 @@ async function save() {
 }
 
 // ─── Setup / config section ───────────────────────────────────────────────────
-.setup-section {
-  background: var(--nb-c-layer-1);
-  border: 1px solid var(--nb-c-border);
-  border-radius: 10px;
-  padding: 0.9rem;
-  gap: 0.75rem;
-}
-
 .setup-loading,
 .setup-notice {
   display: flex;

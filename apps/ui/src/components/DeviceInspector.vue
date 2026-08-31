@@ -1,5 +1,5 @@
 <template>
-  <div v-if="selected" class="inspector-content">
+  <div v-if="selected" class="inspector-content nb-inspector">
     <!-- Native device detail -->
     <template v-if="selected.kind === 'native'">
       <div class="detail-header">
@@ -34,8 +34,7 @@
       </div>
 
       <!-- Device info -->
-      <div class="detail-section">
-        <div class="section-label">Device info</div>
+      <NbShellPanel title="Device info" fluid>
         <div class="info-grid">
           <span class="info-key">Plugin</span>
           <span class="info-val">{{ (selected as any).dev.pluginId }}</span>
@@ -52,12 +51,10 @@
           <span class="info-key">ID</span>
           <span class="info-val mono">{{ (selected as any).dev.id }}</span>
         </div>
-      </div>
+      </NbShellPanel>
 
       <!-- Widget view -->
-      <div class="detail-section">
-        <div class="section-label">State</div>
-
+      <NbShellPanel title="State" fluid>
         <!-- Energy meter widget -->
         <div v-if="(selected as any).dev.widgetType === 'energy_meter'" class="widget-energy">
           <div class="energy-primary">
@@ -130,12 +127,15 @@
             <span class="char-value">{{ String(v) }}</span>
           </div>
         </div>
-      </div>
+      </NbShellPanel>
 
       <!-- Energy history chart (energy_meter devices only) -->
-      <div v-if="(selected as any).dev.widgetType === 'energy_meter'" class="detail-section energy-history">
-        <div class="section-label">Energy history</div>
-
+      <NbShellPanel
+        v-if="(selected as any).dev.widgetType === 'energy_meter'"
+        title="Energy history"
+        class="energy-history"
+        fluid
+      >
         <!-- Period tabs -->
         <div class="history-tabs">
           <button
@@ -178,11 +178,14 @@
         <div v-if="!historyData && !historyLoading" class="no-history">No data available for this period.</div>
 
         <div v-if="historyLoading" class="no-history">Loading history…</div>
-      </div>
+      </NbShellPanel>
 
       <!-- Interpolation calibration -->
-      <div v-if="(selected as any).dev.interpolation && interpolationPoints.length > 0" class="detail-section">
-        <div class="section-label">Calibration</div>
+      <NbShellPanel
+        v-if="(selected as any).dev.interpolation && interpolationPoints.length > 0"
+        title="Calibration"
+        fluid
+      >
         <NbInterpolationChart
           v-model="interpolationPoints"
           :height="220"
@@ -214,22 +217,20 @@
         <div v-if="interpolationSaved" class="calibration-restart-notice">
           Configuration saved. Restart the plugin to apply the new mapping.
         </div>
-      </div>
-      <div v-else-if="(selected as any).dev.interpolation && interpolationLoading" class="detail-section">
-        <div class="section-label">Calibration</div>
+      </NbShellPanel>
+      <NbShellPanel v-else-if="(selected as any).dev.interpolation && interpolationLoading" title="Calibration" fluid>
         <div class="no-history">Loading calibration data...</div>
-      </div>
+      </NbShellPanel>
 
       <!-- All telemetry data -->
-      <div v-if="telemetryEntries((selected as any).dev).length > 0" class="detail-section">
-        <div class="section-label">All telemetry</div>
+      <NbShellPanel v-if="telemetryEntries((selected as any).dev).length > 0" title="All telemetry" fluid>
         <div class="char-list">
           <div v-for="[k, v] in telemetryEntries((selected as any).dev)" :key="k" class="char-row">
             <span class="char-name">{{ k }}</span>
             <span class="char-value">{{ String(v) }}</span>
           </div>
         </div>
-      </div>
+      </NbShellPanel>
     </template>
 
     <!-- HAP accessory detail (original) -->
@@ -266,20 +267,22 @@
       </div>
 
       <!-- Manufacturer info -->
-      <div v-if="manufacturerInfo((selected as any).acc)" class="detail-section">
-        <div class="section-label">Device info</div>
+      <NbShellPanel v-if="manufacturerInfo((selected as any).acc)" title="Device info" fluid>
         <div class="info-grid">
           <template v-for="[k, v] in Object.entries(manufacturerInfo((selected as any).acc)!)" :key="k">
             <span v-if="v" class="info-key">{{ k }}</span>
             <span v-if="v" class="info-val">{{ v }}</span>
           </template>
         </div>
-      </div>
+      </NbShellPanel>
 
       <!-- Services & characteristics -->
-      <div v-for="svc in mainServices((selected as any).acc)" :key="svc.uuid" class="detail-section">
-        <div class="section-label">{{ svc.displayName || svc.name }}</div>
-
+      <NbShellPanel
+        v-for="svc in mainServices((selected as any).acc)"
+        :key="svc.uuid"
+        :title="svc.displayName || svc.name"
+        fluid
+      >
         <!-- Present-as override. Offered only for the interchangeable on/off
              service types, which is what the daemon will accept. -->
         <div v-if="canRetype(svc.uuid)" class="homekit-row">
@@ -318,11 +321,10 @@
             </span>
           </div>
         </div>
-      </div>
+      </NbShellPanel>
 
       <!-- HomeKit visibility -->
-      <div class="detail-section">
-        <div class="section-label">HomeKit</div>
+      <NbShellPanel title="HomeKit" fluid>
         <div class="homekit-row">
           <div class="homekit-copy">
             <span class="homekit-title">Expose to HomeKit</span>
@@ -338,7 +340,7 @@
           />
         </div>
         <div v-if="homekitNotice" class="homekit-notice">{{ homekitNotice }}</div>
-      </div>
+      </NbShellPanel>
 
       <div class="detail-uuid">UUID: {{ (selected as any).acc.uuid }}</div>
     </template>
@@ -928,20 +930,6 @@ const historyChartSeries = computed(() => {
 .detail-type {
   font-size: 0.75rem;
   color: var(--nb-c-text-subtle);
-}
-
-.detail-section {
-  padding: 0.85rem 1rem 0.5rem;
-  border-bottom: 1px solid var(--nb-c-layer-1);
-}
-
-.section-label {
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--nb-c-text-subtle);
-  margin-bottom: 0.5rem;
 }
 
 .info-grid {
