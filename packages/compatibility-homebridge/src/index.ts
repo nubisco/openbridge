@@ -542,15 +542,19 @@ export class HomebridgeAPI extends EventEmitter {
   }
 
   /**
-   * Drop cached accessories whose owning platform is no longer installed.
+   * Drop cached accessories whose owning platform is not active.
    *
    * `loadCachedAccessories()` restores everything it finds and adds it to the
    * bridge, because a platform has to be able to re-adopt its accessories via
    * configureAccessory() before discovery starts. Nothing ever removed the
-   * accessories of a plugin that had since been uninstalled, so they stayed on
-   * the bridge forever: still in the Home app, still listed in OpenBridge, but
-   * with no plugin behind them to update or control them. They show up as
+   * accessories of a plugin that was no longer active, so they stayed on the
+   * bridge forever: still in the Home app, still listed in OpenBridge, but with
+   * no plugin behind them to update or control them. They show up as
    * "Default-Manufacturer / Default-Model" entries that do nothing.
+   *
+   * "Not active" covers both an uninstalled plugin and a disabled one — the
+   * loader deliberately leaves a disabled plugin out of _platformRegistrations
+   * so it is reclaimed here rather than lingering as dead HomeKit entries.
    *
    * Attribution is by platform registration, not by discovery, so this is safe
    * to call as soon as platforms have been launched: a platform registers at
@@ -584,9 +588,7 @@ export class HomebridgeAPI extends EventEmitter {
       }
       this._onAccessoryRemove?.(acc)
       removed.push(acc.displayName)
-      hapLog.info(
-        `Removed orphaned accessory "${acc.displayName}" (plugin "${acc._associatedPlatform}" is no longer installed)`,
-      )
+      hapLog.info(`Removed orphaned accessory "${acc.displayName}" (plugin "${acc._associatedPlatform}" is not active)`)
     }
 
     this.saveCachedAccessories()

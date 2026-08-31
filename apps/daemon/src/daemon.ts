@@ -249,12 +249,13 @@ export class Daemon {
 
     // Every platform that is going to register has now done so, so anything
     // left in the accessory cache belonging to an unknown platform came from a
-    // plugin that has since been uninstalled. Those accessories would otherwise
-    // stay on the bridge forever with nothing behind them.
+    // plugin that has since been uninstalled *or been disabled* (a disabled one
+    // is deliberately left unregistered above). Those accessories would
+    // otherwise stay on the bridge forever with nothing behind them.
     if (homebridgeAPI) {
       const orphans = homebridgeAPI.pruneOrphanedAccessories()
       if (orphans.length > 0) {
-        log.info(`Removed ${orphans.length} orphaned accessory(ies) from uninstalled plugins: ${orphans.join(', ')}`)
+        log.info(`Removed ${orphans.length} orphaned accessory(ies) from inactive plugins: ${orphans.join(', ')}`)
       }
     }
 
@@ -454,6 +455,16 @@ export class Daemon {
               if (disabledPlugins.includes(platformName)) {
                 log.info(`Skipping disabled Homebridge plugin: ${name} (platform ${platformName})`)
                 disabledByPlatformName = true
+
+                // Undo the registration the module just made. Learning the
+                // platform name requires loading the plugin, but leaving it
+                // registered would make pruneOrphanedAccessories() treat the
+                // platform as installed and spare its cached accessories —
+                // which then sit on the bridge as inert "Default-Manufacturer"
+                // entries with no plugin behind them to drive or control them.
+                const registrations = (homebridgeAPI as any)._platformRegistrations
+                if (Array.isArray(registrations)) registrations.length = regCountBefore
+
                 // Falls through to the pseudo-plugin registration below so the
                 // plugin still appears in the UI and can be re-enabled.
               } else {

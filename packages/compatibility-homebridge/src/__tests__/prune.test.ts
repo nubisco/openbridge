@@ -85,6 +85,24 @@ describe('pruneOrphanedAccessories', () => {
     expect(bridge.removed.map((a) => a.UUID).sort()).toEqual(['u2', 'u3'])
   })
 
+  it('reclaims the accessories of a plugin that loaded but was then unregistered as disabled', () => {
+    // A disabled plugin still has to be loaded before its platform name is
+    // knowable, so the loader registers it and then rolls the registration
+    // back. From here that is indistinguishable from never having registered,
+    // which is the point: its cached accessories must not survive as inert
+    // "Default-Manufacturer" entries in the Home app.
+    const before = (api as any)._platformRegistrations.length
+    api.registerPlatform('ShellyDS9', class {} as any)
+    ;(api as any)._platformRegistrations.length = before
+
+    seed('Pool Switch 1', 'u1', 'ShellyDS9')
+    seed('Pool Switch 2', 'u2', 'ShellyDS9')
+
+    expect(api.pruneOrphanedAccessories().sort()).toEqual(['Pool Switch 1', 'Pool Switch 2'])
+    expect(api.getRawAccessories()).toHaveLength(0)
+    expect(bridge.removed.map((a) => a.UUID).sort()).toEqual(['u1', 'u2'])
+  })
+
   it('keeps accessories belonging to a registered platform', () => {
     api.registerPlatform('WizSmarthome', class {} as any)
     seed('Basement 1', 'u1', 'WizSmarthome')
