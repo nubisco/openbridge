@@ -1,3 +1,10 @@
+## [0.23.2](https://github.com/nubisco/openbridge/compare/v0.23.1...v0.23.2) (2026-08-31)
+
+
+### Bug Fixes
+
+* **daemon:** reclaim cached accessories of disabled plugins ([97cb693](https://github.com/nubisco/openbridge/commit/97cb693f947d7f87076723dc4fd8d28fa89b245b))
+
 ## [0.23.1](https://github.com/nubisco/openbridge/compare/v0.23.0...v0.23.1) (2026-08-31)
 
 
