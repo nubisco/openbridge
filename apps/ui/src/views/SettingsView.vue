@@ -1,7 +1,7 @@
 <template>
   <div class="settings-view">
     <!-- Bridge Settings -->
-    <section class="settings-card">
+    <NbPanel class="settings-card">
       <div class="card-header">
         <div class="card-icon">
           <NbIcon name="bridge" :size="18" />
@@ -12,74 +12,47 @@
         </div>
       </div>
 
-      <div class="field-grid">
-        <label class="field-label">Bridge name</label>
-        <div class="field-control">
-          <input v-model="bridge.name" class="field-input" placeholder="OpenBridge" />
-          <span class="field-hint">Displayed in the Home app</span>
-        </div>
+      <!-- NbField supplies the label column every row lines up on, so the
+           fields need no width or alignment CSS of their own. -->
+      <NbGrid dir="col" gap="sm" class="field-grid">
+        <NbField label="Bridge name" hint="Displayed in the Home app">
+          <NbTextInput v-model="bridge.name" size="sm" placeholder="OpenBridge" />
+        </NbField>
 
-        <label class="field-label">HTTP port</label>
-        <div class="field-control">
-          <input
-            v-model.number="bridge.port"
-            class="field-input field-input--short"
-            type="number"
-            min="1024"
-            max="65535"
-          />
-          <span class="field-hint">OpenBridge web UI &amp; API</span>
-        </div>
+        <NbField label="HTTP port" hint="OpenBridge web UI &amp; API" control="fit">
+          <NbNumberInput v-model="bridge.port" size="sm" :min="1024" :max="65535" />
+        </NbField>
 
-        <label class="field-label">HAP port</label>
-        <div class="field-control">
-          <input
-            v-model.number="bridge.hapPort"
-            class="field-input field-input--short"
-            type="number"
-            min="1024"
-            max="65535"
-          />
-          <span class="field-hint">HomeKit accessory protocol port</span>
-        </div>
+        <NbField label="HAP port" hint="HomeKit accessory protocol port" control="fit">
+          <NbNumberInput v-model="bridge.hapPort" size="sm" :min="1024" :max="65535" />
+        </NbField>
 
-        <label class="field-label">PIN code</label>
-        <div class="field-control">
+        <NbField label="PIN code" hint="Format: XXX-XX-XXX, used to pair with HomeKit">
           <div class="pin-row">
-            <input v-model="bridge.pincode" class="field-input field-input--pin" placeholder="031-45-154" />
-            <button class="btn-generate" title="Generate random PIN" @click="generatePin">
-              <NbIcon name="arrows-clockwise" :size="13" />
-            </button>
+            <NbTextInput v-model="bridge.pincode" size="sm" placeholder="031-45-154" />
+            <NbButton
+              variant="ghost"
+              size="sm"
+              icon="arrows-clockwise"
+              title="Generate random PIN"
+              @click="generatePin"
+            />
           </div>
-          <span class="field-hint">Format: XXX-XX-XXX — used to pair with HomeKit</span>
-        </div>
+        </NbField>
 
-        <label class="field-label">Bridge MAC</label>
-        <div class="field-control">
-          <input
-            v-model="bridge.username"
-            class="field-input"
-            placeholder="AA:BB:CC:DD:EE:FF"
-            style="font-family: monospace"
-          />
-          <span class="field-hint">Leave empty to auto-generate. Change this only if pairing with HomeKit fails.</span>
-        </div>
+        <NbField
+          label="Bridge MAC"
+          hint="Leave empty to auto-generate. Change this only if pairing with HomeKit fails."
+        >
+          <NbTextInput v-model="bridge.username" size="sm" class="mono" placeholder="AA:BB:CC:DD:EE:FF" />
+        </NbField>
 
-        <label class="field-label">Log level</label>
-        <div class="field-control">
-          <select v-model="bridge.logLevel" class="field-select">
-            <option value="debug">Debug</option>
-            <option value="info">Info</option>
-            <option value="warn">Warn</option>
-            <option value="error">Error</option>
-          </select>
-        </div>
-      </div>
+        <NbField label="Log level" control="fit">
+          <NbSelect v-model="bridge.logLevel" size="sm" :options="logLevelOptions" />
+        </NbField>
+      </NbGrid>
 
-      <div v-if="error" class="save-error">
-        <NbIcon name="warning" :size="13" />
-        {{ error }}
-      </div>
+      <NbMessage v-if="error" variant="error">{{ error }}</NbMessage>
 
       <div class="card-actions">
         <NbButton variant="primary" size="sm" :loading="saving" :icon="saved ? 'check' : 'floppy-disk'" @click="save">
@@ -100,10 +73,10 @@
           Restart the daemon for changes to take effect
         </span>
       </div>
-    </section>
+    </NbPanel>
 
     <!-- Updates -->
-    <section class="settings-card">
+    <NbPanel class="settings-card">
       <div class="card-header">
         <div class="card-icon">
           <NbIcon name="arrow-circle-up" :size="18" />
@@ -116,27 +89,13 @@
 
       <div class="update-row">
         <div class="update-versions">
-          <span class="version-chip">
-            <NbIcon name="tag" :size="11" />
-            Current:
-            <strong>v{{ updateStatus?.current ?? '…' }}</strong>
-          </span>
+          <NbBadge variant="grey">Current: v{{ updateStatus?.current ?? '…' }}</NbBadge>
           <template v-if="updateStatus && !checkingUpdate">
-            <span v-if="updateStatus.updateAvailable" class="version-chip version-chip--available">
-              <NbIcon name="arrow-circle-up" :size="11" />
-              Available:
-              <strong>v{{ updateStatus.latest }}</strong>
-            </span>
-            <span v-else-if="updateStatus.latest === null" class="version-chip version-chip--muted">
-              <NbIcon name="warning" :size="11" />
-              Unable to check
-            </span>
-            <span v-else class="version-chip version-chip--ok">
-              <NbIcon name="check-circle" :size="11" />
-              Up to date
-            </span>
+            <NbBadge v-if="updateStatus.updateAvailable" variant="blue">Available: v{{ updateStatus.latest }}</NbBadge>
+            <NbBadge v-else-if="updateStatus.latest === null" variant="orange">Unable to check</NbBadge>
+            <NbBadge v-else variant="green">Up to date</NbBadge>
           </template>
-          <span v-if="checkingUpdate" class="version-chip version-chip--muted">Checking…</span>
+          <NbBadge v-if="checkingUpdate" variant="grey">Checking…</NbBadge>
         </div>
 
         <div class="update-actions">
@@ -163,54 +122,34 @@
         </div>
       </div>
 
-      <!-- Progress bar during self-update -->
-      <div v-if="applying && updateStage" class="update-progress">
-        <div class="update-progress-info">
-          <span class="update-progress-stage">{{ updateMessage }}</span>
-          <span v-if="updateStage === 'downloading' && updateProgressPct > 0" class="update-progress-pct">
-            {{ updateProgressPct }}%
-          </span>
-        </div>
-        <div class="update-progress-bar">
-          <div
-            class="update-progress-fill"
-            :style="{
-              width:
-                updateStage === 'downloading'
-                  ? updateProgressPct + '%'
-                  : updateStage === 'extracting'
-                    ? '80%'
-                    : updateStage === 'swapping'
-                      ? '90%'
-                      : '100%',
-              transition: 'width 0.3s ease',
-            }"
-          />
-        </div>
-      </div>
+      <!-- Only the download stage reports real progress; the later stages are
+           indeterminate, which NbProgressBar shows by omitting `value`. -->
+      <NbProgressBar
+        v-if="applying && updateStage"
+        :label="updateMessage"
+        :value="updateStage === 'downloading' && updateProgressPct > 0 ? updateProgressPct : undefined"
+        :max="100"
+        status="active"
+        size="sm"
+      />
 
-      <p v-if="applying && !updateStage" class="update-notice">
-        <NbIcon name="info" :size="12" />
+      <NbMessage v-if="applying && !updateStage" variant="helper">
         Starting update... This page will reconnect automatically.
-      </p>
+      </NbMessage>
 
-      <p v-if="updateStatus?.updateMethod === 'manual' && updateStatus.updateAvailable" class="update-notice">
-        <NbIcon name="info" :size="12" />
+      <NbMessage v-if="updateStatus?.updateMethod === 'manual' && updateStatus.updateAvailable" variant="helper">
         Self-update is not available. Pull the latest Docker image to update:
         <code>docker pull ghcr.io/nubisco/openbridge:latest</code>
-      </p>
+      </NbMessage>
 
-      <p v-if="updateError" class="update-notice update-notice--error">
-        <NbIcon name="warning" :size="12" />
-        {{ updateError }}
-        <NbButton v-if="updateError" variant="ghost" size="sm" style="margin-left: 0.5rem" @click="rollbackUpdate">
-          Rollback
-        </NbButton>
-      </p>
-    </section>
+      <div v-if="updateError" class="update-error-row">
+        <NbMessage variant="error">{{ updateError }}</NbMessage>
+        <NbButton variant="ghost" size="sm" @click="rollbackUpdate">Rollback</NbButton>
+      </div>
+    </NbPanel>
 
     <!-- HAP pairing info -->
-    <section class="settings-card info-card">
+    <NbPanel class="settings-card info-card">
       <h3 class="info-title">
         <NbIcon name="info" :size="14" />
         How to pair with HomeKit
@@ -234,7 +173,7 @@
         </li>
         <li>If you change the PIN or username, unpair first from the Home app, then re-pair</li>
       </ol>
-    </section>
+    </NbPanel>
   </div>
 </template>
 
@@ -244,6 +183,13 @@ import { api, type BridgeConfig, type UpdateStatus } from '@/api'
 import { useLayoutStore } from '@/stores/layout'
 
 const layout = useLayoutStore()
+
+const logLevelOptions = [
+  { value: 'debug', label: 'Debug' },
+  { value: 'info', label: 'Info' },
+  { value: 'warn', label: 'Warn' },
+  { value: 'error', label: 'Error' },
+]
 const saving = ref(false)
 const saved = ref(false)
 const error = ref<string | null>(null)
@@ -463,189 +409,88 @@ function generatePin() {
   gap: 1.25rem;
 }
 
+// NbPanel supplies the surface, border and radius; only the inner rhythm and
+// the header treatment live here.
 .settings-card {
-  background: var(--nb-c-surface);
-  border: 1px solid var(--nb-c-border);
-  border-radius: 12px;
-  padding: 1.4rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 }
 
 .card-header {
   display: flex;
   align-items: center;
-  gap: 0.85rem;
-  margin-bottom: 1.25rem;
+  gap: 0.75rem;
 }
+
 .card-icon {
-  width: 40px;
-  height: 40px;
-  background: color-mix(in srgb, var(--nb-c-primary) 12%, var(--nb-c-surface));
-  color: var(--nb-c-primary);
-  border-radius: 10px;
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
   display: flex;
   align-items: center;
   justify-content: center;
+  background: color-mix(in srgb, var(--nb-c-primary) 12%, var(--nb-c-surface));
+  color: var(--nb-c-primary);
   flex-shrink: 0;
 }
+
 .card-title {
   margin: 0;
   font-size: 0.95rem;
-  font-weight: 700;
+  font-weight: 600;
   color: var(--nb-c-text);
 }
+
 .card-subtitle {
-  margin: 0.15rem 0 0;
+  margin: 0;
   font-size: 0.78rem;
-  color: var(--nb-c-text-subtle);
+  color: var(--nb-c-text-muted);
 }
 
+// The label column NbField aligns every row on.
 .field-grid {
-  display: grid;
-  grid-template-columns: 130px 1fr;
-  gap: 0.9rem 1rem;
-  align-items: start;
+  --nb-field-label-width: 8rem;
 }
 
-.field-label {
-  font-size: 0.82rem;
-  font-weight: 500;
-  color: var(--nb-c-text);
-  padding-top: 0.45rem;
-}
-
-.field-control {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.field-input {
-  padding: 0.42rem 0.65rem;
-  border: 1px solid var(--nb-c-border);
-  border-radius: 7px;
-  font-size: 0.82rem;
-  outline: none;
-  width: 100%;
-  box-sizing: border-box;
-  transition: border-color 0.15s;
-  &:focus {
-    border-color: var(--nb-c-primary);
-  }
-  &--short {
-    max-width: 110px;
-  }
-  &--pin {
-    max-width: 160px;
-    font-family: monospace;
-    letter-spacing: 0.05em;
-  }
-}
-
-.field-select {
-  padding: 0.42rem 0.65rem;
-  border: 1px solid var(--nb-c-border);
-  border-radius: 7px;
-  font-size: 0.82rem;
-  outline: none;
-  width: fit-content;
-  background: var(--nb-c-surface);
-  cursor: pointer;
-  &:focus {
-    border-color: var(--nb-c-primary);
-  }
-}
-
-.field-hint {
-  font-size: 0.72rem;
-  color: var(--nb-c-text-subtle);
+.mono :deep(input) {
+  font-family: monospace;
 }
 
 .pin-row {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-}
-.btn-generate {
-  width: 30px;
-  height: 30px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--nb-c-border);
-  border-radius: 7px;
-  background: var(--nb-c-surface);
-  color: var(--nb-c-text-muted);
-  cursor: pointer;
-  flex-shrink: 0;
-  &:hover {
-    border-color: var(--nb-c-primary);
-    color: var(--nb-c-primary);
-  }
-}
-
-.save-error {
-  display: flex;
-  align-items: center;
   gap: 0.4rem;
-  font-size: 0.78rem;
-  color: var(--nb-c-danger);
-  margin-top: 0.75rem;
 }
 
 .card-actions {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
-  margin-top: 1.25rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--nb-c-layer-1);
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .action-hint {
   display: flex;
   align-items: center;
   gap: 0.3rem;
-  font-size: 0.72rem;
+  font-size: 0.74rem;
   color: var(--nb-c-text-subtle);
 }
 
-// ─── Updates card ────────────────────────────────────────────────────────────
 .update-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.75rem;
   flex-wrap: wrap;
 }
 
 .update-versions {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
   flex-wrap: wrap;
-}
-
-.version-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.78rem;
-  padding: 0.25rem 0.6rem;
-  border-radius: 20px;
-  background: var(--nb-c-layer-1);
-  color: var(--nb-c-text);
-
-  &--available {
-    background: color-mix(in srgb, var(--nb-c-warning) 30%, var(--nb-c-surface));
-    color: var(--nb-c-warning);
-  }
-  &--ok {
-    background: color-mix(in srgb, var(--nb-c-success) 30%, var(--nb-c-surface));
-    color: var(--nb-c-success);
-  }
-  &--muted {
-    color: var(--nb-c-text-subtle);
-  }
 }
 
 .update-actions {
@@ -653,80 +498,36 @@ function generatePin() {
   gap: 0.5rem;
 }
 
-.update-progress {
-  margin-top: 0.75rem;
-}
-.update-progress-info {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.78rem;
-  color: var(--nb-c-text-muted);
-  margin-bottom: 0.35rem;
-}
-.update-progress-stage {
-  color: var(--nb-c-text);
-  font-weight: 500;
-}
-.update-progress-pct {
-  color: var(--nb-c-primary);
-  font-weight: 600;
-}
-.update-progress-bar {
-  height: 6px;
-  background: var(--nb-c-layer-1);
-  border-radius: 3px;
-  overflow: hidden;
-}
-.update-progress-fill {
-  height: 100%;
-  background: var(--nb-c-primary);
-  border-radius: 3px;
-}
-
-.update-notice {
+.update-error-row {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  font-size: 0.78rem;
-  color: var(--nb-c-text-muted);
-  margin: 0.75rem 0 0;
-
-  code {
-    background: var(--nb-c-layer-1);
-    padding: 0.15rem 0.4rem;
-    border-radius: 4px;
-    font-size: 0.72rem;
-  }
-
-  &--error {
-    color: var(--nb-c-danger);
-  }
+  gap: 0.5rem;
 }
 
-// ─── Info card ───────────────────────────────────────────────────────────────
-.info-card {
-  background: var(--nb-c-layer-1);
-  border-color: var(--nb-c-border);
-}
 .info-title {
+  margin: 0;
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   font-weight: 700;
-  color: var(--nb-c-text-muted);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  margin: 0 0 0.75rem;
+  letter-spacing: 0.07em;
+  color: var(--nb-c-text-subtle);
 }
+
 .info-list {
   margin: 0;
-  padding-left: 1.25rem;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
   font-size: 0.82rem;
-  color: var(--nb-c-text);
-  line-height: 1.7;
-  li {
-    margin-bottom: 0.25rem;
+  line-height: 1.5;
+  color: var(--nb-c-text-muted);
+
+  strong {
+    color: var(--nb-c-text);
   }
 }
 </style>
