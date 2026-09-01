@@ -1,3 +1,10 @@
+## [0.24.1](https://github.com/nubisco/openbridge/compare/v0.24.0...v0.24.1) (2026-09-01)
+
+
+### Bug Fixes
+
+* **ui:** finish moving the remaining views onto NubiscoUI ([e330819](https://github.com/nubisco/openbridge/commit/e330819dbec7549c4178c72c63fcf615b5341d45))
+
 # [0.24.0](https://github.com/nubisco/openbridge/compare/v0.23.3...v0.24.0) (2026-08-31)
 
 
