@@ -1,6 +1,6 @@
 <!--
   Renders a single field from a Homebridge config.schema.json schema entry.
-  Recursive — nested objects call back into this component.
+  Recursive: nested objects call back into this component.
 -->
 <template>
   <!-- Nested object → section with children -->

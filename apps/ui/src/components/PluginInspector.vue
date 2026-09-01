@@ -365,7 +365,7 @@ try {
   const stored = JSON.parse(localStorage.getItem(SECTIONS_KEY) ?? '{}')
   sections.value = { ...DEFAULT_SECTIONS, ...stored }
 } catch {
-  /* malformed preference — fall back to defaults */
+  /* malformed preference: fall back to defaults */
 }
 
 watch(sections, (v) => localStorage.setItem(SECTIONS_KEY, JSON.stringify(v)), { deep: true })
@@ -589,7 +589,7 @@ async function saveNativeConfig() {
   try {
     parsed = JSON.parse(nativeConfigJson.value)
   } catch {
-    nativeSaveError.value = 'Invalid JSON — fix the syntax first'
+    nativeSaveError.value = 'Invalid JSON: fix the syntax first'
     return
   }
   nativeSaving.value = true
@@ -630,7 +630,7 @@ watch(
     try {
       // Config can live in config.platforms[] (keyed by platform name) or in
       // config.plugins[] (keyed by npm package name) depending on how the
-      // plugin was loaded — the endpoint resolves across both.
+      // plugin was loaded: the endpoint resolves across both.
       const existing = await api.config.getHbPlugin(selectedHomebridgePlatformName.value, plugin.packageName)
       if (existing.config) {
         selectedPlatform.value = selectedHomebridgePlatformName.value
@@ -640,7 +640,7 @@ watch(
         return
       }
 
-      // Nothing stored yet — probe the package to discover its platform name so
+      // Nothing stored yet: probe the package to discover its platform name so
       // the editor can be seeded. (This used to bail out for anything that was
       // not 'stopped', which skipped the probe for every running plugin.)
       const info = await api.pluginInfo(plugin.packageName ?? plugin.manifest.name)
@@ -650,7 +650,7 @@ watch(
       }
       await loadSchema(plugin.manifest.name)
     } catch {
-      // Probe failed (e.g. plugin not in marketplace dir) — try by name as fallback
+      // Probe failed (e.g. plugin not in marketplace dir): try by name as fallback
       try {
         const existing = await api.config.getHbPlugin(selectedHomebridgePlatformName.value, plugin.packageName)
         if (existing.config) {
@@ -793,7 +793,7 @@ async function save() {
   if (saving.value || !inspector.selectedPlugin) return
   const parsed = parseJson()
   if (!parsed) {
-    saveError.value = 'Invalid JSON — fix the syntax first'
+    saveError.value = 'Invalid JSON: fix the syntax first'
     return
   }
   saving.value = true

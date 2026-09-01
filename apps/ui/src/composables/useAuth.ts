@@ -38,7 +38,7 @@ const EXPECTED_SUB_KEY = 'openbridge_platform_expected_sub'
 // whatever identity the platform would otherwise pick.
 const LAST_ACCOUNT_KEY = 'openbridge_last_account'
 
-// Module-level singletons — all callers share the same state.
+// Module-level singletons: all callers share the same state.
 const user = ref<AuthUser | null>(null)
 const config = ref<PlatformAuthConfig | null>(null)
 const ready = ref(false)
@@ -185,7 +185,7 @@ export function useAuth() {
 
   /**
    * Sign out of THIS app only. The platform browser session (and any other
-   * signed-in products) is left untouched — in the multi-account model an
+   * signed-in products) is left untouched: in the multi-account model an
    * app-level sign-out must not destroy other apps' identities.
    */
   /**
@@ -220,7 +220,7 @@ export function useAuth() {
   /**
    * Sign out of the platform entirely: destroys the platform browser session
    * (all identities, all apps) in addition to the local one. Explicit and
-   * destructive — only for the dedicated menu action.
+   * destructive: only for the dedicated menu action.
    */
   async function logoutEverywhere(): Promise<void> {
     await fetch('/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => null)

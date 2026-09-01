@@ -17,7 +17,7 @@ const hapLog = Logger.create('hap-compat')
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
-// Synchronous load — hap-nodejs is CJS
+// Synchronous load: hap-nodejs is CJS
 export function loadHapSync(): any {
   const req = createRequire(import.meta.url)
   const candidates = [
@@ -59,7 +59,7 @@ export interface AccessoryRegistration {
  * Plugins call: module.exports = function(homebridge) { homebridge.registerPlatform(...) }
  */
 /**
- * PlatformAccessory — Homebridge-compatible wrapper around a hap.Accessory.
+ * PlatformAccessory: Homebridge-compatible wrapper around a hap.Accessory.
  *
  * hap-nodejs does NOT export PlatformAccessory; it is a Homebridge construct.
  * Plugins call `new PlatformAccessory(displayName, uuid, category?)` and then
@@ -321,7 +321,7 @@ export class HomebridgeAPI extends EventEmitter {
   }
 
   getAccessories(): SerializedAccessory[] {
-    hapLog.debug(`getAccessories called — map has ${this._accessories.size} entries`)
+    hapLog.debug(`getAccessories called: map has ${this._accessories.size} entries`)
     return Array.from(this._accessories.values()).map(serializeAccessory)
   }
 
@@ -347,7 +347,7 @@ export class HomebridgeAPI extends EventEmitter {
 
   /**
    * Instantiate all registered platforms with the given config entries.
-   * registry is optional — if provided, each platform is registered as a
+   * registry is optional: if provided, each platform is registered as a
    * PluginInstance so it appears in the OpenBridge UI plugins page.
    */
   async launchPlatforms(configs: PlatformConfig[], log: any, registry?: any): Promise<void> {
@@ -413,8 +413,8 @@ export class HomebridgeAPI extends EventEmitter {
       }
     }
 
-    // Signal that all plugins have loaded — platforms listen for this
-    hapLog.info('Emitting didFinishLaunching — platforms should start device discovery')
+    // Signal that all plugins have loaded: platforms listen for this
+    hapLog.info('Emitting didFinishLaunching: platforms should start device discovery')
     this.emit('didFinishLaunching')
   }
 
@@ -552,7 +552,7 @@ export class HomebridgeAPI extends EventEmitter {
    * no plugin behind them to update or control them. They show up as
    * "Default-Manufacturer / Default-Model" entries that do nothing.
    *
-   * "Not active" covers both an uninstalled plugin and a disabled one — the
+   * "Not active" covers both an uninstalled plugin and a disabled one: the
    * loader deliberately leaves a disabled plugin out of _platformRegistrations
    * so it is reclaimed here rather than lingering as dead HomeKit entries.
    *
@@ -646,7 +646,7 @@ function createPlatformLogger(baseLog: any, platformName: string) {
   fn.warn = (message: string, ...args: unknown[]) => baseLog.warn(`${prefix} ${message}`, ...args)
   fn.error = (message: string, ...args: unknown[]) => baseLog.error(`${prefix} ${message}`, ...args)
   fn.debug = (message: string, ...args: unknown[]) => baseLog.debug(`${prefix} ${message}`, ...args)
-  // Generic log(level, message, ...args) — used by some plugins (e.g. homebridge-shelly-ds9)
+  // Generic log(level, message, ...args): used by some plugins (e.g. homebridge-shelly-ds9)
   fn.log = (level: string, message: string, ...args: unknown[]) => {
     const method = (fn as any)[level] ?? fn.info
     method(message, ...args)

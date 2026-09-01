@@ -164,12 +164,12 @@ export async function createServer(
           })
           if (res.ok) notes = ((await res.json()) as { body: string }).body
         } catch {
-          /* notes are cosmetic — never fail the check over them */
+          /* notes are cosmetic: never fail the check over them */
         }
         lastKnownLatest = { version: found.version, url: found.url, notes }
       }
     } catch {
-      // Network error, timeout, etc. — fall through to use lastKnownLatest
+      // Network error, timeout, etc.: fall through to use lastKnownLatest
     }
 
     const latest = lastKnownLatest?.version ?? null
@@ -184,7 +184,7 @@ export async function createServer(
       unlinkSync(testFile)
       updateMethod = 'self'
     } catch {
-      /* volume not writable — manual update only */
+      /* volume not writable: manual update only */
     }
 
     return {
@@ -236,10 +236,10 @@ export async function createServer(
       for (const listener of updateListeners) listener(msg)
     }
 
-    // Run update async — respond immediately
+    // Run update async: respond immediately
     ;(async () => {
       try {
-        // 1. Resolve latest version (github.com redirect — not rate-limited like the API)
+        // 1. Resolve latest version (github.com redirect, not rate-limited like the API)
         log.info('Self-update: fetching release info...')
         broadcast({ stage: 'downloading', progress: 0, message: 'Fetching release info...' })
         const found = await fetchLatestVersion()
@@ -339,10 +339,10 @@ export async function createServer(
           ),
         )
 
-        log.info(`Update to v${version} installed successfully — restarting...`)
+        log.info(`Update to v${version} installed successfully: restarting...`)
         broadcast({ stage: 'restarting', message: `Restarting with v${version}...`, version })
 
-        // 6. Restart — just exit; Docker's restart policy will bring us back
+        // 6. Restart: just exit; Docker's restart policy will bring us back
         // The entrypoint will see source:"self-update" in version.json and keep the updated files
         setTimeout(() => {
           process.exit(0)
@@ -404,7 +404,7 @@ export async function createServer(
       ),
     )
 
-    log.info(`Rolled back to v${rolledBackVersion} — restarting...`)
+    log.info(`Rolled back to v${rolledBackVersion}: restarting...`)
 
     // Restart
     setTimeout(() => {
@@ -682,7 +682,7 @@ export async function createServer(
               try {
                 ch.setValue(name.trim())
               } catch {
-                /* ignore — some characteristics may not accept setValue */
+                /* ignore: some characteristics may not accept setValue */
               }
             }
           }
@@ -889,7 +889,7 @@ export async function createServer(
     return { accessories: hapAPI ? hapAPI.getAccessories() : [] }
   })
 
-  // Write a characteristic value — triggers the platform's onSet handler
+  // Write a characteristic value: triggers the platform's onSet handler
   app.post('/api/accessories/:uuid/characteristics', async (req) => {
     if (!hapAPI) throw { statusCode: 503, message: 'HAP not available' }
     const { uuid } = req.params as { uuid: string }
@@ -1039,13 +1039,13 @@ export async function createServer(
   // A Homebridge-compat plugin's config can sit in either of two places, and
   // which one depends on how it was loaded:
   //
-  //   - config.platforms[], keyed by *platform* name — the legacy form, for
+  //   - config.platforms[], keyed by *platform* name: the legacy form, for
   //     entries with an explicit `plugin` file path (daemon.ts, "Legacy").
-  //   - config.plugins[], keyed by npm *package* name — what auto-discovered
+  //   - config.plugins[], keyed by npm *package* name: what auto-discovered
   //     marketplace plugins actually read (daemon.ts, marketplace discovery).
   //
   // The UI only knows the platform name it is inspecting, so looking in one
-  // place found nothing for the other kind and showed an empty editor — worse,
+  // place found nothing for the other kind and showed an empty editor: worse,
   // saving then wrote to a location the loader never reads. Both endpoints
   // below resolve across the two and report which one won, so a save round
   // trips back to where the config was found.
@@ -1068,7 +1068,7 @@ export async function createServer(
     if (platformEntry) return { config: platformEntry, location: 'platforms' }
 
     // Match on the package name when the UI knows it, else fall back to the
-    // platform name — some entries are keyed that way.
+    // platform name: some entries are keyed that way.
     const pluginEntry = (cfg.plugins ?? []).find((p: any) => p.name === (packageName ?? platformName))
     if (pluginEntry) return { config: pluginEntry.config ?? {}, location: 'plugins' }
 
@@ -1270,7 +1270,7 @@ export async function createServer(
       }
     }
 
-    // 1. Canonical install location (highest priority — shows installed native plugins)
+    // 1. Canonical install location (highest priority: shows installed native plugins)
     scanDir(OB_PLUGINS_DIR)
 
     // 2. Extra dev/test directories from config
@@ -1563,7 +1563,7 @@ export async function createServer(
 
   // ─── Daemon restart ───────────────────────────────────────────────────────
   app.post('/api/daemon/restart', async (_req, reply) => {
-    log.info('Restart requested via API — respawning...')
+    log.info('Restart requested via API: respawning...')
     await reply.send({ restarting: true })
     setTimeout(() => {
       // In dev mode (OPENBRIDGE_DEV=true set by the dev script), tsx watch detects the exit and restarts.
@@ -1849,7 +1849,7 @@ export async function createServer(
     })
   })
 
-  // Terminal WebSocket — streams ANSI-formatted log lines for xterm.js
+  // Terminal WebSocket: streams ANSI-formatted log lines for xterm.js
   app.get('/ws/terminal', { websocket: true }, (connection: SocketStream) => {
     const ws = connection.socket
 
@@ -1890,7 +1890,7 @@ export async function createServer(
     app.get('/', async () => ({
       name: 'OpenBridge Daemon',
       version: OPENBRIDGE_VERSION,
-      ui: 'not built — run: cd apps/ui && pnpm build',
+      ui: 'not built: run: cd apps/ui && pnpm build',
     }))
   }
 

@@ -11,7 +11,7 @@ import PluginConfigField from './components/PluginConfigField.vue'
 const app = createApp(App)
 app.use(createPinia())
 app.use(router)
-// Global i18n catalog — NbUserMenu (and future NbUI components) resolve their
+// Global i18n catalog: NbUserMenu (and future NbUI components) resolve their
 // strings through it, falling back to their built-in en/pt defaults.
 app.use(createI18n({ legacy: false, locale: navigator.language, fallbackLocale: 'en' }))
 app.use(NubiscoUI)

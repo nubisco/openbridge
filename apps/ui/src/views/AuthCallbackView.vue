@@ -57,7 +57,7 @@ onMounted(async () => {
   if (!res.ok) {
     const data = (await res.json().catch(() => null)) as { error?: string } | null
     if (data?.error === 'subject_mismatch') {
-      // The renewal came back as a different account. Never adopt it —
+      // The renewal came back as a different account. Never adopt it:
       // forget the expectation and restart an interactive login.
       clearLastAccount()
       router.replace({ path: '/login', query: { error: 'account_changed' } })

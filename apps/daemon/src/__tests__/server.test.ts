@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync, readFileSync, rmSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 
-// Test config in a temp directory — mirrors ~/.openbridge structure
+// Test config in a temp directory: mirrors ~/.openbridge structure
 const TEST_HOME = join(tmpdir(), `openbridge-test-${Date.now()}`)
 const TEST_DIR = join(TEST_HOME, '.openbridge')
 const CONFIG_PATH = join(TEST_DIR, 'config.json')
@@ -12,7 +12,7 @@ const HB_PLUGINS_DIR = join(PLUGINS_DIR, 'homebridge')
 const OB_PLUGINS_DIR = join(PLUGINS_DIR, 'openbridge')
 
 // The port written into the test config.json. Distinct from the port a test
-// server actually binds — see listen() below.
+// server actually binds: see listen() below.
 const TEST_PORT = 19582
 
 // Set by listen() to whatever port the OS handed the current test server.
@@ -23,7 +23,7 @@ let BASE = ''
  *
  * Every server here used to bind one hardcoded port. When an instance was slow
  * to release it the next listen() blocked until the test timed out, and the
- * test after that reached the *previous* server — which no longer had this
+ * test after that reached the *previous* server, which no longer had this
  * test's mocks installed, so it failed with a confusing wrong-status assertion
  * rather than anything resembling the real cause. Letting the OS pick the port
  * removes the contention entirely.
@@ -898,7 +898,7 @@ describe('OpenBridge Server API', () => {
             : {
                 objects: [
                   { package: { name: 'homebridge-shelly-ds9' }, searchScore: 0.5 },
-                  // Also returned by the native query — must not appear twice.
+                  // Also returned by the native query: must not appear twice.
                   { package: { name: '@nubisco/openbridge-shelly-platform' }, searchScore: 0.9 },
                 ],
                 total: 5651,

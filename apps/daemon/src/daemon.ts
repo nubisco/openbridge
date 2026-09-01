@@ -19,7 +19,7 @@ const log = Logger.create('system')
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const req = createRequire(import.meta.url)
 
-// Canonical storage root — every file OpenBridge owns lives here
+// Canonical storage root: every file OpenBridge owns lives here
 export const OPENBRIDGE_HOME = resolve(os.homedir(), '.openbridge')
 export const OB_PLUGINS_DIR = join(OPENBRIDGE_HOME, 'plugins', 'openbridge')
 export const HB_PLUGINS_DIR = join(OPENBRIDGE_HOME, 'plugins', 'homebridge')
@@ -39,7 +39,7 @@ export class Daemon {
   private registry = new PluginRegistry()
   private lifecycle = new PluginLifecycle(this.registry)
   private loadedPlugins: Plugin[] = []
-  /** npm package names of HB plugins already running via config.platforms — skip in discovery */
+  /** npm package names of HB plugins already running via config.platforms: skip in discovery */
   private knownHbPackageNames = new Set<string>()
   private controls = new Map<string, ControlHandler>()
   private restrictedControls = new Set<string>()
@@ -115,13 +115,13 @@ export class Daemon {
     log.info(`OpenBridge home: ${OPENBRIDGE_HOME}`)
 
     // ── HAP Bridge (HomeKit) ──────────────────────────────────────────────────
-    // The default bridge is ALWAYS created — it advertises all accessories
+    // The default bridge is ALWAYS created: it advertises all accessories
     // from both native plugins and Homebridge-compatible platforms.
     let hapBridge: any = null
     let homebridgeAPI: HomebridgeAPI | null = null
     let hapInfo: HapInfo | null = null
 
-    // Load disabled plugins list early — applies to both Homebridge platforms and native plugins
+    // Load disabled plugins list early: applies to both Homebridge platforms and native plugins
     let disabledPlugins: string[] = []
     try {
       const rawCfg = JSON.parse(readFileSync(configPath, 'utf8'))
@@ -131,7 +131,7 @@ export class Daemon {
     }
 
     try {
-      // Load hap-nodejs — look in daemon or workspace node_modules
+      // Load hap-nodejs: look in daemon or workspace node_modules
       const hapCandidates = [
         resolve(__dirname, '../node_modules/hap-nodejs'), // apps/daemon/node_modules (from dist/)
         resolve(__dirname, '../../node_modules/hap-nodejs'), // apps/node_modules
@@ -244,7 +244,7 @@ export class Daemon {
       })
 
       hapInfo = { setupURI: hapBridge.setupURI(), pincode }
-      log.info(`HAP bridge published — PIN: ${pincode}`)
+      log.info(`HAP bridge published: PIN: ${pincode}`)
       printPairingInfo(hapInfo.setupURI, pincode)
     } catch (err) {
       log.error(`HAP bridge setup failed: ${err}`)
@@ -413,7 +413,7 @@ export class Daemon {
         const isHb =
           name.startsWith('homebridge-') || (Array.isArray(pkg.keywords) && pkg.keywords.includes('homebridge-plugin'))
 
-        // Native OpenBridge plugins — load via the plugin loader and start them
+        // Native OpenBridge plugins: load via the plugin loader and start them
         if (isNative) {
           // Ensure the plugin can resolve peer dependencies (like hap-nodejs) from the daemon's node_modules
           const daemonModules = resolve(__dirname, '../node_modules')
@@ -453,7 +453,7 @@ export class Daemon {
           if (loaded) continue
         }
 
-        // Homebridge-compatible plugins — auto-load if configured in config.plugins
+        // Homebridge-compatible plugins: auto-load if configured in config.plugins
         // Set when the plugin turns out to be disabled under its platform name,
         // which is only knowable after the module has registered itself.
         let disabledByPlatformName = false
@@ -489,7 +489,7 @@ export class Daemon {
                 // Undo the registration the module just made. Learning the
                 // platform name requires loading the plugin, but leaving it
                 // registered would make pruneOrphanedAccessories() treat the
-                // platform as installed and spare its cached accessories —
+                // platform as installed and spare its cached accessories,
                 // which then sit on the bridge as inert "Default-Manufacturer"
                 // entries with no plugin behind them to drive or control them.
                 const registrations = (homebridgeAPI as any)._platformRegistrations
@@ -524,7 +524,7 @@ export class Daemon {
           }
         }
 
-        // Unconfigured or failed plugins — register as pseudo-plugin (stopped)
+        // Unconfigured or failed plugins: register as pseudo-plugin (stopped)
         const pseudoPlugin: Plugin = {
           manifest: {
             name,
@@ -715,7 +715,7 @@ function printPairingInfo(setupURI: string, pincode: string): void {
       console.log(`\x1b[35m└${border}┘\x1b[0m\n`)
     })
   } catch {
-    // qrcode-terminal not available — fall back to text
+    // qrcode-terminal not available: fall back to text
     console.log(`\n  HomeKit PIN: \x1b[1;33m${pincode}\x1b[0m`)
     console.log(`  Setup URI:   ${setupURI}\n`)
   }

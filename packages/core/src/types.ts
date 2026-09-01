@@ -83,7 +83,7 @@ export interface DeviceDescriptor {
 export interface PluginContext {
   config: Record<string, unknown>
   log: PluginLogger
-  /** Report live telemetry for a device — data appears in the OpenBridge UI */
+  /** Report live telemetry for a device: data appears in the OpenBridge UI */
   reportTelemetry(deviceId: string, data: Record<string, unknown>): void
   /** Register a device so it appears in the OpenBridge devices view */
   registerDevice(device: Omit<DeviceDescriptor, 'pluginId'>): void

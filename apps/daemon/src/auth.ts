@@ -103,7 +103,7 @@ function isProductionLike(): boolean {
 }
 
 export async function registerAuthRoutes(app: FastifyInstance, config: TAuthConfig): Promise<void> {
-  // Public config — always available so the UI can decide whether to
+  // Public config: always available so the UI can decide whether to
   // show a login screen or boot straight into the app.
   app.get('/auth/platform/config', async () => ({
     enabled: config.enabled,

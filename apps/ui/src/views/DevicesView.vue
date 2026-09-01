@@ -29,7 +29,7 @@
       <p class="empty-hint">
         Devices appear here once a platform plugin registers accessories.
         <br />
-        This page auto-refreshes every 3 seconds — discovery can take up to 60s.
+        This page auto-refreshes every 3 seconds: discovery can take up to 60s.
       </p>
     </div>
 
@@ -602,7 +602,7 @@ onUnmounted(() => {
   align-content: start;
 }
 
-// NbPanel supplies the surface, border and layer — the same primitive the
+// NbPanel supplies the surface, border and layer: the same primitive the
 // plugin cards use, so the two pages read as one system. Only selection,
 // the native/HAP accent and the inner rhythm live here.
 .device-card {

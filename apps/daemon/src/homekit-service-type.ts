@@ -18,7 +18,7 @@ const log = Logger.create('homekit')
  * Plugins can offer their own setting for this (the Shelly plugin has a
  * per-channel `type`), but only for plugins that implement it. Enforcing it
  * here covers every plugin, including Homebridge-compat ones, because both
- * paths reach the bridge through `addBridgedAccessory` — the same reasoning as
+ * paths reach the bridge through `addBridgedAccessory`: the same reasoning as
  * {@link HomeKitVisibility}, and applied at the same interception point.
  *
  * Scope is deliberately narrow: only services built around the `On`
@@ -116,7 +116,7 @@ export class HomeKitServiceTypes {
    * Record an override. Passing the service's own type (or null) clears it.
    *
    * Not applied live: an accessory already published to HomeKit cannot change
-   * service type in place — controllers cache the shape at pairing. The caller
+   * service type in place: controllers cache the shape at pairing. The caller
    * is expected to tell the user a restart is needed, as the visibility toggle
    * does when it cannot apply immediately.
    */

@@ -59,7 +59,7 @@ async function pickAccount() {
 onMounted(async () => {
   const cfg = await loadConfig()
 
-  // Auth disabled — nobody should be on /login, send them home.
+  // Auth disabled: nobody should be on /login, send them home.
   if (!cfg.enabled) {
     router.replace('/')
     return

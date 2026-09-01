@@ -203,7 +203,7 @@ const justInstalled = ref<{ name: string; mainFile: string } | null>(null)
 const page = ref(0)
 const PAGE_SIZE = 20
 const localPlugins = ref<LocalPlugin[]>([])
-// Marketplace API — enriched data (stars, sponsors, reviews) is already in the response
+// Marketplace API: enriched data (stars, sponsors, reviews) is already in the response
 const MARKETPLACE_API = 'https://marketplace.openbridge.nubisco.io/api'
 
 interface MarketplacePlugin {

@@ -40,21 +40,21 @@
 
 Homebridge works, but it was designed for a different era. OpenBridge is built from scratch with a developer-first philosophy:
 
-- **No cloud, no accounts** — the HAP bridge is published directly on your local network
-- **Clean plugin SDK** — `setup / start / stop` lifecycle, one exported object, full TypeScript types
-- **Drop-in Homebridge compatibility** — existing `platform` plugins work with zero modification
-- **Built-in dashboard** — Vue 3 UI included; no separate install needed
-- **Full HTTP API** — everything the UI does, your scripts can do too
-- **MIT licensed** — no paid tiers, no telemetry, no gatekeeping
+- **No cloud, no accounts**: the HAP bridge is published directly on your local network
+- **Clean plugin SDK**: `setup / start / stop` lifecycle, one exported object, full TypeScript types
+- **Drop-in Homebridge compatibility**: existing `platform` plugins work with zero modification
+- **Built-in dashboard**: Vue 3 UI included; no separate install needed
+- **Full HTTP API**: everything the UI does, your scripts can do too
+- **MIT licensed**: no paid tiers, no telemetry, no gatekeeping
 
 ---
 
 ## Features
 
 - Plugin lifecycle management (load, start, stop, reload)
-- HAP bridge via hap-nodejs — exposes accessories to Apple Home
+- HAP bridge via hap-nodejs: exposes accessories to Apple Home
 - Homebridge platform plugin compatibility shim
-- Vue 3 dashboard — accessories, plugins, logs, config editor, terminal
+- Vue 3 dashboard: accessories, plugins, logs, config editor, terminal
 - REST API + WebSocket streams for logs and metrics
 - Zod-validated JSON config
 - Structured logger with in-memory buffer
@@ -76,7 +76,7 @@ pnpm build
 node apps/daemon/dist/index.js
 ```
 
-Open **http://localhost:8582** — the dashboard loads immediately.
+Open **http://localhost:8582**: the dashboard loads immediately.
 
 ---
 
@@ -116,16 +116,16 @@ export default definePlugin({
   },
 
   async setup(ctx) {
-    ctx.log.info('Setup — runs once at load time')
+    ctx.log.info('Setup: runs once at load time')
   },
 
   async start(ctx) {
-    ctx.log.info('Start — begin plugin operation')
+    ctx.log.info('Start: begin plugin operation')
     // ctx.config has values from config.json
   },
 
   async stop(ctx) {
-    ctx.log.info('Stop — clean up resources')
+    ctx.log.info('Stop: clean up resources')
   },
 })
 ```
@@ -186,9 +186,9 @@ Full reference: [HTTP API docs](apps/docs/docs/guide/api-reference.md).
 ```
 openbridge/
   apps/
-    daemon/     Node.js runtime — plugin loader + Fastify HTTP API + HAP bridge
-    ui/         Vue 3 dashboard — accessories, plugins, logs, config, terminal
-    cli/        CLI — openbridge start / plugins list / logs
+    daemon/     Node.js runtime: plugin loader + Fastify HTTP API + HAP bridge
+    ui/         Vue 3 dashboard: accessories, plugins, logs, config, terminal
+    cli/        CLI: openbridge start / plugins list / logs
     docs/       VitePress documentation site
   packages/
     core/       Plugin types, registry, lifecycle, loader
@@ -220,6 +220,6 @@ If OpenBridge is useful to you, consider [sponsoring the maintainer](https://git
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT: see [LICENSE](LICENSE).
 
 Part of the [Nubisco](https://nubisco.io) ecosystem.

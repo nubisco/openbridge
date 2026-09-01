@@ -30,7 +30,7 @@ import { useDaemonStore } from '@/stores/daemon'
 const daemon = useDaemonStore()
 
 // The panel is app-wide, so its size is a user preference rather than view
-// state — without persisting it the console springs back open on every
+// state: without persisting it the console springs back open on every
 // navigation and reload.
 const SIZE_KEY = 'openbridge.logs.panelSize'
 const VALID_SIZES: TShellPanelSize[] = ['collapsed', 'default', 'full']
@@ -61,7 +61,7 @@ function clearLogs() {
   daemon.logs.length = 0
 }
 
-// Follow the tail, but only when the user is already at the bottom — otherwise
+// Follow the tail, but only when the user is already at the bottom: otherwise
 // scrolling back to read an older entry gets yanked away by the next line.
 watch(
   () => filteredLogs.value.length,

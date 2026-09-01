@@ -186,7 +186,7 @@ async function checkForUpdate() {
     const data = (await res.json()) as { updateAvailable: boolean; latest: string }
     if (data.updateAvailable && data.latest) updateAvailable.value = data.latest
   } catch {
-    // network unavailable — silently ignore
+    // network unavailable: silently ignore
   }
 }
 
@@ -208,7 +208,7 @@ watch(
 onMounted(async () => {
   await daemon.fetchHealth()
   await daemon.fetchPlugins()
-  // Preload recent history — the socket only delivers entries from now on, and
+  // Preload recent history: the socket only delivers entries from now on, and
   // the logs panel is mounted app-wide.
   daemon.fetchLogs()
   daemon.connectLiveLogs()
@@ -251,7 +251,7 @@ onUnmounted(() => daemon.disconnectLiveLogs())
   }
 }
 
-// Sidebar logo — local tooltip (NbShell slot can't use NbSidebarLink's scoped tooltip)
+// Sidebar logo: local tooltip (NbShell slot can't use NbSidebarLink's scoped tooltip)
 .sidebar-logo {
   display: flex;
   align-items: center;
@@ -299,7 +299,7 @@ onUnmounted(() => daemon.disconnectLiveLogs())
   gap: 0.5rem;
 }
 
-// Update banner — rendered in the #notification slot above the topbar
+// Update banner: rendered in the #notification slot above the topbar
 .update-banner {
   display: flex;
   align-items: center;

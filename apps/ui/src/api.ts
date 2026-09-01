@@ -16,7 +16,7 @@ export interface PluginInstance {
   source?: 'native' | 'homebridge'
   disabled?: boolean
   platformName?: string
-  /** npm package name — how config.plugins[] keys this plugin's config. */
+  /** npm package name: how config.plugins[] keys this plugin's config. */
   packageName?: string
   enrichedMetadata?: Record<string, unknown> // Cached npm metadata (downloads, stars, sponsors, docs url)
   hapBridge?: { setupURI: string; pincode: string; port: number; name: string }
@@ -269,7 +269,7 @@ export const api = {
     }),
 
   /**
-   * Per-service HomeKit type overrides — what a service is *presented* as,
+   * Per-service HomeKit type overrides: what a service is *presented* as,
    * regardless of what the plugin published. `available` is served by the
    * daemon so the picker can't drift from what it will accept.
    */

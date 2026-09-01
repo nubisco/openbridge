@@ -132,7 +132,7 @@ export class DeviceSeries {
         const existing = JSON.parse(readFileSync(path, 'utf8'))
         if (JSON.stringify(existing) === JSON.stringify(layout)) return
       } catch {
-        /* unreadable layout — treat as a mismatch */
+        /* unreadable layout: treat as a mismatch */
       }
       const stamp = Math.floor(nowSeconds())
       for (const tier of this.tiers) {

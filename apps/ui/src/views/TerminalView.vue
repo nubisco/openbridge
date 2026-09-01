@@ -41,7 +41,7 @@ function connect() {
 
   ws.onclose = () => {
     connected.value = false
-    terminal.value?.write('\r\n\x1b[90m— disconnected —\x1b[0m\r\n')
+    terminal.value?.write('\r\n\x1b[90m- disconnected -\x1b[0m\r\n')
   }
 
   ws.onerror = () => ws?.close()

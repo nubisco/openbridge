@@ -228,7 +228,7 @@ function connectUpdateWs() {
       updateMessage.value = msg.message ?? ''
 
       if (msg.stage === 'restarting') {
-        // Daemon will restart — poll health
+        // Daemon will restart: poll health
         pollAfterRestart()
       }
       if (msg.stage === 'error') {
@@ -281,7 +281,7 @@ async function applyUpdate() {
 
   try {
     await api.updates.apply()
-    // The async update runs in the background — WS will report progress
+    // The async update runs in the background: WS will report progress
   } catch (e) {
     updateError.value = String(e)
     applying.value = false

@@ -22,7 +22,7 @@ export interface TJwtClaims {
   role: string
   /** App id (uuid) the token was issued to. */
   app_id?: string
-  /** App slug the token was issued to — matches the app_id used in the SSO request. */
+  /** App slug the token was issued to: matches the app_id used in the SSO request. */
   app?: string
   plan?: string
   plan_status?: string

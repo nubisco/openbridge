@@ -47,7 +47,7 @@ router.beforeEach(async (to) => {
 
   // The platform launchpad opens our launch URL with ?login_hint=<email>
   // appended. Forward it into the login flow so the user lands as the
-  // account they clicked — even if a different account is signed in here.
+  // account they clicked, even if a different account is signed in here.
   const loginHint = typeof to.query.login_hint === 'string' ? to.query.login_hint : ''
 
   if (!authChecked) {
@@ -62,7 +62,7 @@ router.beforeEach(async (to) => {
     if (user.value && user.value.email.toLowerCase() !== loginHint.toLowerCase()) {
       return { path: '/login', query: { login_hint: loginHint } }
     }
-    // Hint matches the signed-in account — drop the param and continue.
+    // Hint matches the signed-in account: drop the param and continue.
     const query = { ...to.query }
     delete query.login_hint
     return { path: to.path, query }

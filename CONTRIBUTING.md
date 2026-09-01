@@ -24,7 +24,7 @@ To work on a specific package in watch mode:
 
 ```bash
 pnpm --filter @nubisco/openbridge-daemon dev
-pnpm --filter @nubisco/openbridge-ui dev        # Vue dashboard — dev server at :5174
+pnpm --filter @nubisco/openbridge-ui dev        # Vue dashboard: dev server at :5174
 pnpm --filter @nubisco/openbridge-core dev
 pnpm --filter @nubisco/openbridge-logger dev
 ```
@@ -32,7 +32,7 @@ pnpm --filter @nubisco/openbridge-logger dev
 **Notes:**
 
 - Minimum supported Node.js version is `20`
-- Package manager is `pnpm 9` — do not use npm or yarn
+- Package manager is `pnpm 9`: do not use npm or yarn
 - Run `pnpm build` at least once before starting watch mode so workspace dependencies are resolved
 
 ## Contributor License Agreement (CLA)
@@ -67,23 +67,23 @@ By opening a pull request, you must explicitly confirm you agree to the CLA in t
 ```
 openbridge/
   apps/
-    daemon/     Node.js runtime — plugin loader, Fastify HTTP API, HAP bridge
-    ui/         Vue 3 dashboard (private — not published)
+    daemon/     Node.js runtime: plugin loader, Fastify HTTP API, HAP bridge
+    ui/         Vue 3 dashboard (private, not published)
     cli/        Command-line interface
-    docs/       VitePress documentation site (private — not published)
+    docs/       VitePress documentation site (private, not published)
   packages/
-    core/       @nubisco/openbridge-core — plugin types, registry, lifecycle
-    logger/     @nubisco/openbridge-logger — structured logging
-    config/     @nubisco/openbridge-config — Zod-validated config schema
-    sdk/        @nubisco/openbridge-sdk — definePlugin() helper for plugin authors
-    compatibility-homebridge/  @nubisco/openbridge-compatibility-homebridge — Homebridge adapter
+    core/       @nubisco/openbridge-core: plugin types, registry, lifecycle
+    logger/     @nubisco/openbridge-logger: structured logging
+    config/     @nubisco/openbridge-config: Zod-validated config schema
+    sdk/        @nubisco/openbridge-sdk: definePlugin() helper for plugin authors
+    compatibility-homebridge/  @nubisco/openbridge-compatibility-homebridge: Homebridge adapter
 ```
 
 Published npm packages: `openbridge` (daemon), `@nubisco/openbridge-core`, `@nubisco/openbridge-logger`, `@nubisco/openbridge-config`, `@nubisco/openbridge-sdk`, `@nubisco/openbridge-compatibility-homebridge`.
 
 ## Writing a Plugin vs. Contributing to Core
 
-If you are **writing a plugin**, you do not need to fork this repo — use the `@nubisco/openbridge-sdk` package directly. See the [Plugin Development guide](apps/docs/docs/guide/creating-a-plugin.md).
+If you are **writing a plugin**, you do not need to fork this repo: use the `@nubisco/openbridge-sdk` package directly. See the [Plugin Development guide](apps/docs/docs/guide/creating-a-plugin.md).
 
 If you are **contributing to core** (daemon, packages, UI, docs), follow this guide.
 
@@ -97,11 +97,11 @@ If you are **contributing to core** (daemon, packages, UI, docs), follow this gu
 
 ## Coding Style
 
-- TypeScript strict mode throughout — no `any` unless absolutely unavoidable
+- TypeScript strict mode throughout: no `any` unless absolutely unavoidable
 - 2-space indentation, LF line endings, no semicolons, single quotes
-- Vue 3 Composition API with `<script setup>` — no Options API
+- Vue 3 Composition API with `<script setup>`: no Options API
 - Keep plugin lifecycle contracts (`setup / start / stop`) clean and predictable
-- Do not import `apps/*` packages from `packages/*` — packages must be self-contained
+- Do not import `apps/*` packages from `packages/*`: packages must be self-contained
 
 ## Issue Routing
 

@@ -123,7 +123,7 @@ describe('rollup', () => {
     expect(power.points[0].value).toBeCloseTo(125, 5)
 
     const energy = s.query('totalForwardEnergy', 600, 660, 1)
-    // last value in the window, not the mean — it is a counter
+    // last value in the window, not the mean: it is a counter
     expect(energy.points[0].value).toBeCloseTo(55, 5)
   })
 
