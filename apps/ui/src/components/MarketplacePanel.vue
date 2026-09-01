@@ -3,7 +3,6 @@
     <!-- Header -->
     <div class="mp-header">
       <span class="mp-title">Browse Plugins</span>
-      <NbButton variant="ghost" size="sm" icon="x" @click="inspector.close()" />
     </div>
 
     <!-- Search -->
@@ -20,13 +19,10 @@
         <strong>{{ justInstalled.name }}</strong>
         installed. Click it in your plugins list to configure it.
       </div>
-      <button class="mp-dismiss" @click="justInstalled = null"><NbIcon name="x" :size="12" /></button>
+      <NbButton variant="ghost" size="xs" icon="x" title="Dismiss" @click="justInstalled = null" />
     </div>
 
-    <div v-if="error" class="mp-error">
-      <NbIcon name="warning" :size="13" />
-      {{ error }}
-    </div>
+    <NbMessage v-if="error" variant="error">{{ error }}</NbMessage>
 
     <!-- Local plugins (from configured sources) -->
     <div v-if="localPlugins.length > 0" class="mp-local-section">
@@ -34,7 +30,7 @@
         <NbIcon name="diamond" :size="11" />
         Local plugins
       </div>
-      <div v-for="local in localPlugins" :key="local.name" class="mp-row mp-row--ob mp-row--local">
+      <NbPanel v-for="local in localPlugins" :key="local.name" class="mp-row mp-row--ob mp-row--local">
         <div class="mp-avatar mp-avatar--ob">
           <NbIcon name="diamond" :size="16" />
         </div>
@@ -70,7 +66,7 @@
             Activate
           </NbButton>
         </div>
-      </div>
+      </NbPanel>
     </div>
 
     <!-- Results -->
@@ -80,7 +76,7 @@
         <span>Searching npm…</span>
       </div>
 
-      <div v-for="pkg in results" :key="pkg.name" class="mp-row" :class="{ 'mp-row--ob': isOpenBridge(pkg) }">
+      <NbPanel v-for="pkg in results" :key="pkg.name" class="mp-row" :class="{ 'mp-row--ob': isOpenBridge(pkg) }">
         <!-- Avatar -->
         <div class="mp-avatar" :class="{ 'mp-avatar--ob': isOpenBridge(pkg) }">
           <img
@@ -174,7 +170,7 @@
             Install
           </NbButton>
         </div>
-      </div>
+      </NbPanel>
 
       <!-- Load more -->
       <div v-if="results.length > 0 && results.length < total" class="mp-load-more-wrap">
@@ -188,12 +184,10 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { useInspectorStore } from '@/stores/inspector'
 import { useDaemonStore } from '@/stores/daemon'
 import { api, type NpmPackage, type LocalPlugin } from '@/api'
 import { useNotifications } from '@/composables/useNotifications'
 
-const inspector = useInspectorStore()
 const daemon = useDaemonStore()
 const notify = useNotifications()
 const uninstalling = ref<string | null>(null)
@@ -442,28 +436,11 @@ onMounted(async () => {
   .mp-installed-body {
     flex: 1;
   }
-  .mp-dismiss {
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: var(--nb-c-text-muted);
-    padding: 0;
-    display: flex;
-  }
-}
 
-.mp-error {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin: 0.5rem 1.1rem 0;
-  font-size: 0.78rem;
-  color: var(--nb-c-danger);
-  background: color-mix(in srgb, var(--nb-c-danger) 10%, var(--nb-c-surface));
-  border: 1px solid color-mix(in srgb, var(--nb-c-danger) 30%, var(--nb-c-surface));
-  border-radius: 8px;
-  padding: 0.5rem 0.7rem;
-  flex-shrink: 0;
+  // Pushes the dismiss control to the far edge without a spacer element.
+  :last-child {
+    margin-left: auto;
+  }
 }
 
 .mp-list {
@@ -486,25 +463,11 @@ onMounted(async () => {
 .mp-row {
   display: flex;
   align-items: flex-start;
-  gap: 0.7rem;
-  padding: 0.65rem 1.1rem;
-  transition: background 0.1s;
-  border-left: 3px solid transparent;
-  &:hover {
-    background: var(--nb-c-layer-1);
-  }
+  gap: 0.6rem;
 
-  // OpenBridge native plugin highlight
-  &.mp-row--ob {
-    border-left-color: var(--nb-c-primary);
-    background: linear-gradient(90deg, color-mix(in srgb, var(--nb-c-primary) 4%, transparent) 0%, transparent 100%);
-    &:hover {
-      background: linear-gradient(
-        90deg,
-        color-mix(in srgb, var(--nb-c-primary) 8%, transparent) 0%,
-        var(--nb-c-layer-1) 100%
-      );
-    }
+  // Marks a native OpenBridge plugin, mirroring the accent on the plugin cards.
+  &--ob {
+    border-left: 3px solid var(--nb-c-primary);
   }
 }
 

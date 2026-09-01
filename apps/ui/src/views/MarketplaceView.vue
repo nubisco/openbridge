@@ -1,19 +1,24 @@
 <template>
   <div class="marketplace-view">
-    <div class="marketplace-toolbar">
-      <div class="search-wrap">
-        <NbIcon name="magnifying-glass" :size="15" class="search-icon" />
-        <input v-model="query" placeholder="Search Homebridge plugins..." class="search-input" @input="onInput" />
-      </div>
-      <span v-if="total > 0" class="result-count">{{ total.toLocaleString() }} plugins</span>
-    </div>
+    <Teleport defer to="#ob-topbar-right">
+      <NbTextInput
+        v-model="query"
+        size="sm"
+        placeholder="Search Homebridge plugins..."
+        style="width: 260px"
+        @input="onInput"
+      />
+    </Teleport>
+    <Teleport v-if="total > 0" defer to="#ob-topbar-left">
+      <span class="result-count">{{ total.toLocaleString() }} plugins</span>
+    </Teleport>
 
     <!-- Post-install guidance -->
-    <div v-if="justInstalled" class="install-success">
+    <NbPanel v-if="justInstalled" class="install-success">
       <div class="install-success-header">
         <NbIcon name="check-circle" :size="16" />
         <strong>{{ justInstalled.name }} installed</strong>
-        <button class="dismiss-btn" @click="justInstalled = null"><NbIcon name="x" :size="13" /></button>
+        <NbButton variant="ghost" size="xs" icon="x" title="Dismiss" @click="justInstalled = null" />
       </div>
       <p>To use this plugin, add a platform entry to your config and restart the daemon:</p>
       <pre class="config-snippet">
@@ -22,16 +27,10 @@
   "plugin": "{{ justInstalled.mainFile }}"
 }</pre
       >
-      <button class="btn-open-config" @click="goToConfig">
-        <NbIcon name="gear" :size="13" />
-        Open Config Editor
-      </button>
-    </div>
+      <NbButton variant="secondary" size="sm" outlined icon="gear" @click="goToConfig">Open Config Editor</NbButton>
+    </NbPanel>
 
-    <div v-if="error" class="error-banner">
-      <NbIcon name="warning" :size="14" />
-      {{ error }}
-    </div>
+    <NbMessage v-if="error" variant="error">{{ error }}</NbMessage>
 
     <div v-if="loading && results.length === 0" class="loading-state">
       <NbIcon name="spinner" :size="28" />
@@ -43,8 +42,8 @@
       <p>No plugins found for "{{ query }}"</p>
     </div>
 
-    <div v-else class="plugin-list">
-      <div v-for="pkg in results" :key="pkg.name" class="plugin-row">
+    <NbGrid v-else dir="col" gap="sm" class="plugin-list">
+      <NbPanel v-for="pkg in results" :key="pkg.name" class="plugin-row">
         <div class="plugin-row-icon">
           <NbIcon name="puzzle-piece" :size="18" />
         </div>
@@ -52,10 +51,7 @@
           <div class="plugin-row-header">
             <span class="plugin-name">{{ pkg.name }}</span>
             <span class="plugin-version">v{{ pkg.version }}</span>
-            <span class="hb-badge">
-              <NbIcon name="intersect" :size="10" />
-              Homebridge
-            </span>
+            <NbBadge variant="purple" size="sm">Homebridge</NbBadge>
           </div>
           <p v-if="pkg.description" class="plugin-desc">{{ pkg.description }}</p>
           <div class="plugin-meta">
@@ -67,25 +63,26 @@
           </div>
         </div>
         <div class="plugin-row-actions">
-          <button v-if="installed.has(pkg.name)" class="btn-installed" disabled>
-            <NbIcon name="check" :size="13" />
-            Installed
-          </button>
-          <!-- fallthrough to installing/install -->
-          <button v-else-if="installing === pkg.name" class="btn-installing" disabled>
-            <NbIcon name="spinner" :size="13" />
-            Installing...
-          </button>
-          <button v-else class="btn-install" :disabled="!!installing" @click="install(pkg)">Install</button>
+          <NbButton v-if="installed.has(pkg.name)" variant="ghost" size="sm" icon="check" disabled>Installed</NbButton>
+          <NbButton
+            v-else
+            variant="primary"
+            size="sm"
+            :loading="installing === pkg.name"
+            :disabled="!!installing"
+            @click="install(pkg)"
+          >
+            {{ installing === pkg.name ? 'Installing…' : 'Install' }}
+          </NbButton>
         </div>
-      </div>
+      </NbPanel>
 
       <div v-if="results.length < total" class="load-more">
-        <button class="btn-load-more" :disabled="loading" @click="loadMore">
-          {{ loading ? 'Loading...' : `Load more (${total - results.length} remaining)` }}
-        </button>
+        <NbButton variant="secondary" size="sm" outlined :loading="loading" @click="loadMore">
+          {{ loading ? 'Loading…' : `Load more (${total - results.length} remaining)` }}
+        </NbButton>
       </div>
-    </div>
+    </NbGrid>
   </div>
 </template>
 
@@ -189,130 +186,51 @@ onMounted(async () => {
 .marketplace-view {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  flex: 1;
-  min-height: 0;
+  gap: 0.75rem;
 }
 
-.marketplace-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.search-wrap {
-  position: relative;
-  flex: 1;
-  max-width: 420px;
-
-  .search-icon {
-    position: absolute;
-    left: 0.6rem;
-    top: 50%;
-    transform: translateY(-50%);
-    color: var(--nb-c-text-subtle);
-    pointer-events: none;
-  }
-}
-
-.search-input {
-  width: 100%;
-  padding: 0.45rem 0.75rem 0.45rem 2rem;
-  border: 1px solid var(--nb-c-border);
-  border-radius: 8px;
-  font-size: 0.875rem;
-  outline: none;
-  transition: border-color 0.15s;
-  &:focus {
-    border-color: var(--nb-c-primary);
-  }
-}
-
+// Teleported next to the breadcrumb.
 .result-count {
-  font-size: 0.78rem;
-  color: var(--nb-c-text-subtle);
+  font-size: 0.8rem;
+  color: var(--nb-c-text-muted);
 }
 
 .install-success {
-  background: color-mix(in srgb, var(--nb-c-success) 10%, var(--nb-c-surface));
-  border: 1px solid color-mix(in srgb, var(--nb-c-success) 30%, var(--nb-c-surface));
-  border-radius: 10px;
-  padding: 0.85rem 1rem;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  font-size: 0.82rem;
-
-  .install-success-header {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    color: var(--nb-c-success);
-    font-size: 0.875rem;
-    strong {
-      flex: 1;
-    }
-  }
+  border-color: color-mix(in srgb, var(--nb-c-success) 35%, transparent);
 
   p {
     margin: 0;
-    color: var(--nb-c-text);
-  }
-
-  .config-snippet {
-    background: color-mix(in srgb, var(--nb-c-success) 10%, var(--nb-c-surface));
-    border: 1px solid color-mix(in srgb, var(--nb-c-success) 30%, var(--nb-c-surface));
-    border-radius: 6px;
-    padding: 0.6rem 0.8rem;
-    font-size: 0.75rem;
-    font-family: monospace;
-    color: var(--nb-c-text);
-    margin: 0;
-    white-space: pre-wrap;
-    word-break: break-all;
-  }
-
-  .btn-open-config {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.35rem;
-    background: var(--nb-c-success);
-    color: var(--nb-c-success-a11y);
-    border: none;
-    border-radius: 7px;
-    padding: 0.4rem 0.9rem;
-    font-size: 0.8rem;
-    font-weight: 600;
-    cursor: pointer;
-    align-self: flex-start;
-    &:hover {
-      background: var(--nb-c-success);
-    }
-  }
-
-  .dismiss-btn {
-    background: none;
-    border: none;
-    cursor: pointer;
+    font-size: 0.82rem;
     color: var(--nb-c-text-muted);
-    padding: 2px;
-    display: flex;
-    &:hover {
-      color: var(--nb-c-text);
-    }
   }
 }
 
-.error-banner {
+.install-success-header {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  background: color-mix(in srgb, var(--nb-c-danger) 10%, var(--nb-c-surface));
-  border: 1px solid color-mix(in srgb, var(--nb-c-danger) 30%, var(--nb-c-surface));
+  font-size: 0.86rem;
+  color: var(--nb-c-success);
+
+  // Pushes the dismiss control to the far edge without a spacer element.
+  :last-child {
+    margin-left: auto;
+  }
+}
+
+.config-snippet {
+  margin: 0;
+  padding: 0.6rem 0.75rem;
   border-radius: 8px;
-  padding: 0.6rem 0.9rem;
-  font-size: 0.82rem;
-  color: var(--nb-c-danger);
+  background: var(--nb-c-layer-1);
+  font-family: 'MesloLGS NF', monospace;
+  font-size: 0.74rem;
+  line-height: 1.5;
+  color: var(--nb-c-text-muted);
+  overflow-x: auto;
 }
 
 .loading-state,
@@ -321,46 +239,33 @@ onMounted(async () => {
   flex-direction: column;
   align-items: center;
   gap: 0.75rem;
-  padding: 4rem 2rem;
+  padding: 4rem;
   color: var(--nb-c-text-subtle);
   text-align: center;
+
   p {
     margin: 0;
     font-size: 0.875rem;
   }
 }
 
-.plugin-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
+// NbPanel supplies the surface; this is the row's internal layout only.
 .plugin-row {
   display: flex;
   align-items: flex-start;
   gap: 0.75rem;
-  background: var(--nb-c-surface);
-  border: 1.5px solid var(--nb-c-border);
-  border-radius: 10px;
-  padding: 0.85rem 1rem;
-  transition: border-color 0.12s;
-  &:hover {
-    border-color: var(--nb-c-primary);
-  }
 }
 
 .plugin-row-icon {
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
   flex-shrink: 0;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--nb-c-primary) 12%, var(--nb-c-surface));
-  color: var(--nb-c-primary);
+  border-radius: 9px;
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-top: 2px;
+  background: var(--nb-c-layer-2);
+  color: var(--nb-c-text-muted);
 }
 
 .plugin-row-body {
@@ -373,61 +278,44 @@ onMounted(async () => {
   align-items: center;
   gap: 0.5rem;
   flex-wrap: wrap;
-  margin-bottom: 0.25rem;
 }
 
 .plugin-name {
+  font-size: 0.86rem;
   font-weight: 600;
-  font-size: 0.875rem;
   color: var(--nb-c-text);
+  word-break: break-word;
 }
 
 .plugin-version {
-  font-size: 0.72rem;
+  font-size: 0.74rem;
   color: var(--nb-c-text-subtle);
-  background: var(--nb-c-layer-1);
-  padding: 0.1rem 0.4rem;
-  border-radius: 4px;
-}
-
-.hb-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-size: 0.67rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--nb-c-warning);
-  background: color-mix(in srgb, var(--nb-c-warning) 30%, var(--nb-c-surface));
-  border: 1px solid var(--nb-c-warning);
-  border-radius: 20px;
-  padding: 0.1rem 0.45rem;
 }
 
 .plugin-desc {
-  font-size: 0.82rem;
+  margin: 0.25rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
   color: var(--nb-c-text-muted);
-  margin: 0 0 0.35rem;
-  line-height: 1.4;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .plugin-meta {
+  margin-top: 0.3rem;
   display: flex;
   align-items: center;
-  gap: 0.35rem;
+  gap: 0.3rem;
+  flex-wrap: wrap;
   font-size: 0.74rem;
   color: var(--nb-c-text-subtle);
 
   .sep {
-    color: var(--nb-c-border);
+    opacity: 0.6;
   }
+
   .npm-link {
     color: var(--nb-c-primary);
     text-decoration: none;
+
     &:hover {
       text-decoration: underline;
     }
@@ -436,72 +324,11 @@ onMounted(async () => {
 
 .plugin-row-actions {
   flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  padding-top: 2px;
-}
-
-%btn-base {
-  font-size: 0.78rem;
-  font-weight: 600;
-  padding: 0.35rem 0.85rem;
-  border-radius: 7px;
-  border: none;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  transition:
-    background 0.15s,
-    opacity 0.15s;
-  &:disabled {
-    opacity: 0.6;
-    cursor: default;
-  }
-}
-
-.btn-install {
-  @extend %btn-base;
-  background: var(--nb-c-primary);
-  color: var(--nb-c-primary-a11y);
-  &:not(:disabled):hover {
-    background: var(--nb-c-primary-hover);
-  }
-}
-
-.btn-installing {
-  @extend %btn-base;
-  background: var(--nb-c-border);
-  color: var(--nb-c-text-muted);
-}
-
-.btn-installed {
-  @extend %btn-base;
-  background: color-mix(in srgb, var(--nb-c-success) 30%, var(--nb-c-surface));
-  color: var(--nb-c-success);
 }
 
 .load-more {
   display: flex;
   justify-content: center;
-  padding: 0.75rem 0;
-}
-
-.btn-load-more {
-  font-size: 0.82rem;
-  color: var(--nb-c-primary);
-  background: none;
-  border: 1.5px solid var(--nb-c-border);
-  border-radius: 8px;
-  padding: 0.45rem 1.25rem;
-  cursor: pointer;
-  transition: border-color 0.15s;
-  &:hover:not(:disabled) {
-    border-color: var(--nb-c-primary);
-  }
-  &:disabled {
-    opacity: 0.5;
-    cursor: default;
-  }
+  padding: 0.5rem 0;
 }
 </style>

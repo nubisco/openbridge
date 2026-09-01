@@ -147,7 +147,7 @@
 
         <!-- Total + navigation -->
         <div v-if="historyData" class="history-nav">
-          <button class="history-nav-btn" @click="navigateHistory(-1)">&#8249;</button>
+          <NbButton variant="ghost" size="xs" icon="caret-left" title="Previous" @click="navigateHistory(-1)" />
           <div class="history-nav-center">
             <span class="history-total">
               {{ historyData.totalKwh.toFixed(2) }}
@@ -155,7 +155,7 @@
             </span>
             <span class="history-date">{{ historyData.date }}</span>
           </div>
-          <button class="history-nav-btn" @click="navigateHistory(1)">&#8250;</button>
+          <NbButton variant="ghost" size="xs" icon="caret-right" title="Next" @click="navigateHistory(1)" />
         </div>
 
         <!-- Bar chart -->
@@ -1185,23 +1185,6 @@ const historyChartSeries = computed(() => {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 0.75rem;
-}
-.history-nav-btn {
-  background: none;
-  border: 1px solid var(--nb-c-border);
-  color: var(--nb-c-text-muted);
-  border-radius: 6px;
-  width: 28px;
-  height: 28px;
-  font-size: 1rem;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  &:hover {
-    color: var(--nb-c-text);
-    border-color: var(--nb-c-text-subtle);
-  }
 }
 .history-nav-center {
   display: flex;

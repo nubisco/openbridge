@@ -13,7 +13,7 @@
         <span v-if="loading">Redirecting…</span>
         <span v-else>Sign in via Nubisco Platform</span>
       </NbButton>
-      <button class="login-alt" :disabled="loading" @click="pickAccount">Use a different account</button>
+      <NbButton variant="ghost" size="sm" :disabled="loading" @click="pickAccount">Use a different account</NbButton>
     </div>
   </div>
 </template>
@@ -146,21 +146,5 @@ onMounted(async () => {
 
 .login-btn {
   margin-top: 0.5rem;
-}
-
-.login-alt {
-  align-self: center;
-  border: none;
-  background: none;
-  padding: 0;
-  cursor: pointer;
-  color: var(--nb-c-text-subtle);
-  font-size: var(--nb-font-size-13, 13px);
-  text-decoration: underline;
-
-  &:disabled {
-    cursor: default;
-    opacity: 0.5;
-  }
 }
 </style>

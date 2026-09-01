@@ -135,16 +135,7 @@
           <!-- Visual / JSON tabs -->
           <template v-if="!pluginInfo || pluginInfo.platforms.length > 0">
             <!-- Tab switcher (only shown when schema is available) -->
-            <div v-if="hasVisualSchema" class="editor-tabs">
-              <button class="editor-tab" :class="{ active: editorMode === 'visual' }" @click="editorMode = 'visual'">
-                <NbIcon name="sliders" :size="11" />
-                Visual
-              </button>
-              <button class="editor-tab" :class="{ active: editorMode === 'json' }" @click="editorMode = 'json'">
-                <NbIcon name="brackets-curly" :size="11" />
-                JSON
-              </button>
-            </div>
+            <NbTabs v-if="hasVisualSchema" v-model="editorMode" :tabs="editorTabs" variant="contained" size="sm" />
 
             <!-- Visual form -->
             <div v-if="editorMode === 'visual' && hasVisualSchema" class="visual-editor-wrap">
@@ -331,6 +322,13 @@ async function restartOpenBridge() {
 }
 
 const inspector = useInspectorStore()
+
+// "contained" is the library's segmented control, which is what a mode switch
+// between two editors of the same thing wants.
+const editorTabs = [
+  { id: 'visual', label: 'Visual', icon: 'sliders' },
+  { id: 'json', label: 'JSON', icon: 'brackets-curly' },
+]
 
 // Per-section collapse state for the NbShellPanel stack. Persisted because an
 // inspector this tall is only usable if the sections you never look at stay
@@ -1001,37 +999,6 @@ async function save() {
     font-size: 0.76rem;
   }
 }
-
-.editor-tabs {
-  display: flex;
-  gap: 2px;
-  background: var(--nb-c-layer-1);
-  border-radius: 7px;
-  padding: 2px;
-}
-.editor-tab {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.72rem;
-  font-weight: 600;
-  padding: 0.25rem 0.6rem;
-  border-radius: 5px;
-  border: none;
-  cursor: pointer;
-  background: transparent;
-  color: var(--nb-c-text-muted);
-  transition: all 0.12s;
-  &.active {
-    background: var(--nb-c-surface);
-    color: var(--nb-c-primary);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
-  }
-  &:hover:not(.active) {
-    color: var(--nb-c-text);
-  }
-}
-
 .visual-editor-wrap {
   max-height: 340px;
   overflow-y: auto;

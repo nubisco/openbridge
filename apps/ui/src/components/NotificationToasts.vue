@@ -5,9 +5,7 @@
         <div v-if="n.title" class="toast-title">{{ n.title }}</div>
         <div class="toast-message">{{ n.message }}</div>
       </div>
-      <button class="toast-close" @click="dismiss(n.id)">
-        <NbIcon name="x" :size="12" />
-      </button>
+      <NbButton variant="ghost" size="xs" icon="x" title="Dismiss" @click="dismiss(n.id)" />
     </div>
   </div>
 </template>
@@ -104,18 +102,5 @@ function dismiss(id: string) {
   font-size: 0.78rem;
   color: var(--nb-c-text);
   line-height: 1.35;
-}
-
-.toast-close {
-  border: none;
-  background: transparent;
-  color: var(--nb-c-text-muted);
-  padding: 0.15rem;
-  cursor: pointer;
-  border-radius: 6px;
-
-  &:hover {
-    background: var(--nb-c-surface-hover);
-  }
 }
 </style>

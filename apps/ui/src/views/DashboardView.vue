@@ -3,7 +3,7 @@
     <!-- ─── Row 1: HomeKit + System Info + Plugins ────────────────────────── -->
     <div class="top-row">
       <!-- HomeKit pairing card -->
-      <div class="card hk-card">
+      <NbPanel class="hk-card">
         <div class="card-title">HomeKit Pairing</div>
         <div class="hk-body">
           <div v-if="qrDataUrl" class="qr-wrap">
@@ -22,10 +22,10 @@
             </div>
           </div>
         </div>
-      </div>
+      </NbPanel>
 
       <!-- System information card -->
-      <div class="card sys-card">
+      <NbPanel class="sys-card">
         <div class="card-title">System Information</div>
         <div v-if="sysInfo" class="sys-grid">
           <span class="sys-key">OS</span>
@@ -53,14 +53,14 @@
           <NbIcon name="spinner" :size="16" />
           Loading...
         </div>
-      </div>
+      </NbPanel>
 
       <!-- Plugins mini-list card -->
-      <div class="card plugins-card">
+      <NbPanel class="plugins-card">
         <div class="card-title">
           Plugins
           <span class="plugins-counts">
-            <span class="pill green">{{ daemon.runningCount }} running</span>
+            <NbBadge variant="green">{{ daemon.runningCount }} running</NbBadge>
             <span v-if="daemon.errorCount" class="pill red">{{ daemon.errorCount }} error</span>
           </span>
         </div>
@@ -70,17 +70,17 @@
             <div class="plugin-dot" :class="p.status" />
             <span class="plugin-name">{{ p.manifest.name }}</span>
             <span class="plugin-ver">v{{ p.manifest.version }}</span>
-            <span v-if="p.source === 'homebridge'" class="hb-badge">HB</span>
-            <span class="plugin-status" :class="p.status">{{ p.status }}</span>
+            <NbBadge v-if="p.source === 'homebridge'" variant="orange" size="sm">HB</NbBadge>
+            <NbBadge :variant="statusVariant(p.status)" size="sm">{{ p.status }}</NbBadge>
           </div>
         </div>
-      </div>
+      </NbPanel>
     </div>
 
     <!-- ─── Row 2: Metrics cards ──────────────────────────────────────────── -->
     <div class="metrics-row">
       <!-- CPU -->
-      <div class="card metric-card">
+      <NbPanel class="metric-card">
         <div class="metric-header">
           <div class="metric-icon purple"><NbIcon name="cpu" :size="13" /></div>
           <span class="metric-title">CPU</span>
@@ -95,10 +95,10 @@
         <div class="metric-chart">
           <NbSparkline :data="cpuHistory" color="var(--nb-c-primary)" :height="40" />
         </div>
-      </div>
+      </NbPanel>
 
       <!-- Memory -->
-      <div class="card metric-card">
+      <NbPanel class="metric-card">
         <div class="metric-header">
           <div class="metric-icon blue"><NbIcon name="database" :size="13" /></div>
           <span class="metric-title">Memory</span>
@@ -110,14 +110,14 @@
           </div>
           <div class="metric-sub">{{ memUsed }} / {{ memTotal }}</div>
         </div>
-        <div class="mem-bar-wrap"><div class="mem-bar" :style="{ width: memPct + '%' }" /></div>
+        <NbProgressBar :value="memPct" :max="100" size="sm" />
         <div class="metric-chart">
           <NbSparkline :data="memHistory" color="var(--nb-c-info)" :height="32" />
         </div>
-      </div>
+      </NbPanel>
 
       <!-- Uptime + Restart -->
-      <div class="card metric-card">
+      <NbPanel class="metric-card">
         <div class="metric-header">
           <div class="metric-icon green"><NbIcon name="clock" :size="13" /></div>
           <span class="metric-title">Uptime</span>
@@ -146,10 +146,10 @@
             {{ restartDone ? 'Restarted' : restarting ? 'Restarting…' : 'Restart OpenBridge' }}
           </NbButton>
         </div>
-      </div>
+      </NbPanel>
 
       <!-- Network -->
-      <div class="card metric-card net-card">
+      <NbPanel class="metric-card net-card">
         <div class="metric-header">
           <div class="metric-icon amber"><NbIcon name="activity" :size="13" /></div>
           <span class="metric-title">Network</span>
@@ -168,7 +168,7 @@
           <NbSparkline :data="netRxHistory" color="var(--nb-c-success)" :height="28" />
           <NbSparkline :data="netTxHistory" color="var(--nb-c-warning)" :height="28" />
         </div>
-      </div>
+      </NbPanel>
     </div>
   </div>
 </template>
@@ -183,6 +183,13 @@ import { useLayoutStore } from '@/stores/layout'
 
 const daemon = useDaemonStore()
 const layout = useLayoutStore()
+
+function statusVariant(status: string) {
+  if (status === 'running') return 'green'
+  if (status === 'error') return 'red'
+  if (status === 'loading') return 'blue'
+  return 'grey'
+}
 
 // ─── Restart OpenBridge ───────────────────────────────────────────────────────
 const restarting = ref(false)
@@ -351,13 +358,6 @@ onUnmounted(() => {
 }
 
 // ─── Cards ────────────────────────────────────────────────────────────────────
-.card {
-  background: var(--nb-c-surface);
-  border: 1px solid var(--nb-c-border);
-  border-radius: 12px;
-  padding: 1.1rem 1.25rem;
-}
-
 .card-title {
   font-size: 0.78rem;
   font-weight: 700;
@@ -490,21 +490,6 @@ onUnmounted(() => {
   gap: 0.4rem;
   margin-left: auto;
 }
-.pill {
-  font-size: 0.68rem;
-  font-weight: 700;
-  padding: 0.1rem 0.5rem;
-  border-radius: 20px;
-  text-transform: uppercase;
-  &.green {
-    background: color-mix(in srgb, var(--nb-c-success) 30%, var(--nb-c-surface));
-    color: var(--nb-c-success);
-  }
-  &.red {
-    background: color-mix(in srgb, var(--nb-c-danger) 30%, var(--nb-c-surface));
-    color: var(--nb-c-danger);
-  }
-}
 .empty-inline {
   font-size: 0.82rem;
   color: var(--nb-c-text-subtle);
@@ -557,33 +542,6 @@ onUnmounted(() => {
   color: var(--nb-c-text-subtle);
   flex-shrink: 0;
 }
-.hb-badge {
-  font-size: 0.62rem;
-  font-weight: 700;
-  background: color-mix(in srgb, var(--nb-c-warning) 30%, var(--nb-c-surface));
-  color: var(--nb-c-warning);
-  border: 1px solid var(--nb-c-warning);
-  padding: 0 0.35rem;
-  border-radius: 3px;
-  flex-shrink: 0;
-}
-.plugin-status {
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  flex-shrink: 0;
-  color: var(--nb-c-text-subtle);
-  &.running {
-    color: var(--nb-c-success);
-  }
-  &.error {
-    color: var(--nb-c-danger);
-  }
-  &.loading {
-    color: var(--nb-c-warning);
-  }
-}
-
 // ─── Row 2 ────────────────────────────────────────────────────────────────────
 .metrics-row {
   display: grid;
@@ -658,20 +616,6 @@ onUnmounted(() => {
 }
 .metric-chart {
   margin-top: auto;
-}
-
-.mem-bar-wrap {
-  height: 3px;
-  background: var(--nb-c-layer-1);
-  border-radius: 2px;
-  overflow: hidden;
-}
-.mem-bar {
-  height: 100%;
-  background: var(--nb-c-info);
-  border-radius: 2px;
-  transition: width 0.5s ease;
-  max-width: 100%;
 }
 
 .uptime-rows {

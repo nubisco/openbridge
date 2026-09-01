@@ -89,9 +89,14 @@
         <a href="https://github.com/nubisco/openbridge/releases" target="_blank" rel="noopener" class="update-link">
           See what's new
         </a>
-        <button class="update-dismiss" @click="updateDismissed = true">
-          <NbIcon name="x" :size="12" />
-        </button>
+        <NbButton
+          variant="ghost"
+          size="xs"
+          icon="x"
+          title="Dismiss"
+          class="update-dismiss"
+          @click="updateDismissed = true"
+        />
       </div>
     </template>
 
