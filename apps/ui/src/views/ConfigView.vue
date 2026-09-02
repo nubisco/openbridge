@@ -40,7 +40,7 @@ import { ref, onMounted, onBeforeUnmount, shallowRef, watch } from 'vue'
 import loader from '@monaco-editor/loader'
 import { api } from '@/api'
 import { useLayoutStore } from '@/stores/layout'
-import { useTheme } from '@/composables/useTheme'
+import { useTheme } from '@nubisco/ui'
 
 const layout = useLayoutStore()
 const { resolved } = useTheme()

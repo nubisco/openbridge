@@ -8,7 +8,7 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onBeforeUnmount, shallowRef } from 'vue'
 import loader from '@monaco-editor/loader'
-import { useTheme } from '@/composables/useTheme'
+import { useTheme } from '@nubisco/ui'
 
 const props = defineProps<{
   modelValue: string

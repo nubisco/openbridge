@@ -1,12 +1,17 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
-import NubiscoUI from '@nubisco/ui'
+import NubiscoUI, { configureTheme } from '@nubisco/ui'
 import '@nubisco/ui/dist/ui.css'
 import App from './App.vue'
 import { router } from './router'
 import './styles/main.scss'
 import PluginConfigField from './components/PluginConfigField.vue'
+
+// Keep the key the local composable used, so nobody's stored preference is
+// lost to the upgrade. Namespacing it also stops two Nubisco products served
+// from one origin fighting over the library's default `nubisco.theme`.
+configureTheme({ storageKey: 'openbridge.theme' })
 
 const app = createApp(App)
 app.use(createPinia())

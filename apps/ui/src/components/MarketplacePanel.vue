@@ -13,14 +13,16 @@
     <div v-if="total > 0" class="mp-count">{{ total.toLocaleString() }} plugins found</div>
 
     <!-- Just-installed banner -->
-    <div v-if="justInstalled" class="mp-installed-banner">
-      <NbIcon name="check-circle" :size="14" />
-      <div class="mp-installed-body">
-        <strong>{{ justInstalled.name }}</strong>
-        installed. Click it in your plugins list to configure it.
-      </div>
-      <NbButton variant="ghost" size="xs" icon="x" title="Dismiss" @click="justInstalled = null" />
-    </div>
+    <NbBanner
+      v-if="justInstalled"
+      status="success"
+      dismissible
+      class="mp-installed-banner"
+      :title="`${justInstalled.name} installed`"
+      @dismiss="justInstalled = null"
+    >
+      Click it in your plugins list to configure it.
+    </NbBanner>
 
     <NbMessage v-if="error" variant="error">{{ error }}</NbMessage>
 
@@ -413,34 +415,16 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 
+.mp-installed-banner {
+  margin: 0.5rem 1.1rem 0;
+  flex-shrink: 0;
+}
+
 .mp-count {
   padding: 0.35rem 1.1rem 0;
   font-size: 0.72rem;
   color: var(--nb-c-text-subtle);
   flex-shrink: 0;
-}
-
-.mp-installed-banner {
-  margin: 0.5rem 1.1rem 0;
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  background: color-mix(in srgb, var(--nb-c-success) 10%, var(--nb-c-surface));
-  border: 1px solid color-mix(in srgb, var(--nb-c-success) 30%, var(--nb-c-surface));
-  border-radius: 8px;
-  padding: 0.55rem 0.7rem;
-  font-size: 0.78rem;
-  color: var(--nb-c-success);
-  flex-shrink: 0;
-
-  .mp-installed-body {
-    flex: 1;
-  }
-
-  // Pushes the dismiss control to the far edge without a spacer element.
-  :last-child {
-    margin-left: auto;
-  }
 }
 
 .mp-list {

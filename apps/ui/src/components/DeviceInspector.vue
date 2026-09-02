@@ -210,9 +210,9 @@
             Reset
           </NbButton>
         </div>
-        <div v-if="interpolationSaved" class="calibration-restart-notice">
-          Configuration saved. Restart the plugin to apply the new mapping.
-        </div>
+        <NbBanner v-if="interpolationSaved" status="success" title="Configuration saved">
+          Restart the plugin to apply the new mapping.
+        </NbBanner>
       </NbShellPanel>
       <NbShellPanel v-else-if="(selected as any).dev.interpolation && interpolationLoading" title="Calibration" fluid>
         <div class="no-history">Loading calibration data...</div>
@@ -1253,17 +1253,6 @@ const historyChartSeries = computed(() => {
   display: flex;
   gap: 0.5rem;
   justify-content: flex-end;
-}
-
-.calibration-restart-notice {
-  margin-top: 0.5rem;
-  padding: 0.4rem 0.6rem;
-  font-size: 0.75rem;
-  color: var(--nb-c-warning);
-  background: color-mix(in srgb, var(--nb-c-warning) 30%, var(--nb-c-surface));
-  border: 1px solid color-mix(in srgb, var(--nb-c-warning) 30%, var(--nb-c-surface));
-  border-radius: 6px;
-  text-align: center;
 }
 
 .homekit-row {

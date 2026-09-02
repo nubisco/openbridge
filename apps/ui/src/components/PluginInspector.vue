@@ -55,19 +55,18 @@
 
       <!-- ── Update available ──────────────────────────────────────────────── -->
       <NbShellPanel v-if="inspector.selectedPlugin.availableUpdate" v-model:size="sections.update" title="Update" fluid>
-        <div class="update-banner">
-          <div class="update-banner-text">
-            <NbIcon name="arrow-circle-up" :size="14" />
-            <span>
-              Version
-              <strong>{{ inspector.selectedPlugin.availableUpdate }}</strong>
-              is available (current: {{ inspector.selectedPlugin.manifest.version }})
-            </span>
-          </div>
-          <NbButton variant="primary" size="sm" :loading="updating" :disabled="updating" @click="updatePlugin">
-            {{ updating ? 'Updating...' : 'Update' }}
-          </NbButton>
-        </div>
+        <NbBanner
+          status="info"
+          icon="arrow-circle-up"
+          :title="`Version ${inspector.selectedPlugin.availableUpdate} is available`"
+        >
+          Currently on {{ inspector.selectedPlugin.manifest.version }}.
+          <template #action>
+            <NbButton variant="primary" size="sm" :loading="updating" :disabled="updating" @click="updatePlugin">
+              {{ updating ? 'Updating...' : 'Update' }}
+            </NbButton>
+          </template>
+        </NbBanner>
       </NbShellPanel>
 
       <!-- ── Remove plugin ─────────────────────────────────────────────────── -->
@@ -82,13 +81,11 @@
         >
           Remove plugin
         </NbButton>
-        <div v-else class="remove-confirm">
-          <p class="remove-warning">
-            This will uninstall
-            <strong>{{ inspector.selectedPlugin.manifest.name }}</strong>
-            and remove its configuration. A restart is required.
-          </p>
-          <div class="remove-actions">
+        <!-- Title and body are read as one paragraph, so the body continues the
+             sentence rather than restating the plugin the header already names. -->
+        <NbBanner v-else status="error" title="This uninstalls the plugin and removes its configuration">
+          OpenBridge needs a restart afterwards.
+          <template #action>
             <NbButton variant="ghost" size="sm" @click="confirmingRemove = false">Cancel</NbButton>
             <NbButton
               variant="primary"
@@ -99,8 +96,8 @@
             >
               Remove
             </NbButton>
-          </div>
-        </div>
+          </template>
+        </NbBanner>
       </NbShellPanel>
 
       <!-- ── Platform config editor for all Homebridge-source plugins ───────── -->
@@ -125,12 +122,18 @@
           </div>
 
           <!-- No platform detected at all -->
-          <div v-else-if="pluginInfo && pluginInfo.platforms.length === 0" class="setup-notice">
-            <NbIcon name="info" :size="13" />
-            No platform detected. Add a
+          <!-- Callout: true of this plugin for as long as the entry is missing,
+               so dismissing it would not make it any less true. -->
+          <NbBanner
+            v-else-if="pluginInfo && pluginInfo.platforms.length === 0"
+            status="warning"
+            variant="callout"
+            title="No platform detected"
+          >
+            Add a
             <code>platforms[]</code>
             entry manually in Config.
-          </div>
+          </NbBanner>
 
           <!-- Visual / JSON tabs -->
           <template v-if="!pluginInfo || pluginInfo.platforms.length > 0">
@@ -266,7 +269,11 @@
       </NbShellPanel>
 
       <NbShellPanel v-if="inspector.selectedPlugin.error" v-model:size="sections.error" title="Error" fluid>
-        <div class="error-box">{{ inspector.selectedPlugin.error }}</div>
+        <!-- The message is whatever the plugin threw, so it stays monospaced
+             and wrapping: it is output to read, not prose. -->
+        <NbBanner status="error">
+          <code class="error-text">{{ inspector.selectedPlugin.error }}</code>
+        </NbBanner>
       </NbShellPanel>
 
       <NbShellPanel v-if="pluginLogs.length > 0" v-model:size="sections.logs" title="Recent logs" fluid>
@@ -909,43 +916,6 @@ async function save() {
   flex-direction: column;
 }
 
-.update-banner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  background: color-mix(in srgb, var(--nb-c-info) 10%, var(--nb-c-surface));
-  border: 1px solid color-mix(in srgb, var(--nb-c-info) 30%, var(--nb-c-surface));
-  border-radius: 8px;
-  padding: 0.65rem 0.75rem;
-}
-.update-banner-text {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.78rem;
-  color: var(--nb-c-info);
-  line-height: 1.4;
-}
-
-.remove-confirm {
-  background: color-mix(in srgb, var(--nb-c-danger) 10%, var(--nb-c-surface));
-  border: 1px solid color-mix(in srgb, var(--nb-c-danger) 30%, var(--nb-c-surface));
-  border-radius: 8px;
-  padding: 0.75rem;
-}
-.remove-warning {
-  margin: 0 0 0.5rem;
-  font-size: 0.78rem;
-  color: var(--nb-c-danger);
-  line-height: 1.4;
-}
-.remove-actions {
-  display: flex;
-  gap: 0.5rem;
-  justify-content: flex-end;
-}
-
 .field-value {
   color: var(--nb-c-text);
   word-break: break-word;
@@ -974,19 +944,13 @@ async function save() {
   }
 }
 
-.error-box {
-  background: color-mix(in srgb, var(--nb-c-danger) 10%, var(--nb-c-surface));
-  border: 1px solid color-mix(in srgb, var(--nb-c-danger) 30%, var(--nb-c-surface));
-  border-radius: 6px;
-  padding: 0.65rem;
-  font-size: 0.8rem;
-  color: var(--nb-c-danger);
+// ─── Setup / config section ───────────────────────────────────────────────────
+.error-text {
   font-family: monospace;
+  word-break: break-word;
 }
 
-// ─── Setup / config section ───────────────────────────────────────────────────
-.setup-loading,
-.setup-notice {
+.setup-loading {
   display: flex;
   align-items: center;
   gap: 0.4rem;

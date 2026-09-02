@@ -78,26 +78,30 @@
     </template>
 
     <!-- ═══ Notification banner ═══ -->
+    <!-- `flush` spans the slot edge to edge; `inline` rather than `callout`
+         because an available update is an outcome you can acknowledge, and
+         callout ignores `dismissible` by design. -->
     <template v-if="updateAvailable && !updateDismissed" #notification>
-      <div class="update-banner">
-        <NbIcon name="arrow-circle-up" :size="14" />
-        <span>
-          OpenBridge
-          <strong>v{{ updateAvailable }}</strong>
-          is available.
-        </span>
-        <a href="https://github.com/nubisco/openbridge/releases" target="_blank" rel="noopener" class="update-link">
-          See what's new
-        </a>
-        <NbButton
-          variant="ghost"
-          size="xs"
-          icon="x"
-          title="Dismiss"
-          class="update-dismiss"
-          @click="updateDismissed = true"
-        />
-      </div>
+      <NbBanner
+        status="info"
+        icon="arrow-circle-up"
+        flush
+        dismissible
+        :title="`OpenBridge v${updateAvailable} is available`"
+        @dismiss="updateDismissed = true"
+      >
+        <template #action>
+          <NbButton
+            variant="ghost"
+            size="sm"
+            href="https://github.com/nubisco/openbridge/releases"
+            target="_blank"
+            rel="noopener"
+          >
+            See what's new
+          </NbButton>
+        </template>
+      </NbBanner>
     </template>
 
     <!-- ═══ Inspector ═══ -->
@@ -126,7 +130,7 @@ import { useDaemonStore } from '@/stores/daemon'
 import { useInspectorStore } from '@/stores/inspector'
 import { useLayoutStore } from '@/stores/layout'
 import { useAuth, type PlatformIdentity } from '@/composables/useAuth'
-import { useTheme } from '@/composables/useTheme'
+import { useTheme } from '@nubisco/ui'
 import PluginInspector from '@/components/PluginInspector.vue'
 import MarketplacePanel from '@/components/MarketplacePanel.vue'
 import DeviceInspector from '@/components/DeviceInspector.vue'
@@ -297,40 +301,5 @@ onUnmounted(() => daemon.disconnectLiveLogs())
   display: flex;
   align-items: center;
   gap: 0.5rem;
-}
-
-// Update banner: rendered in the #notification slot above the topbar
-.update-banner {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.4rem 1.5rem;
-  background: var(--nb-c-info);
-  color: var(--nb-c-info-a11y);
-  font-size: 0.78rem;
-
-  .update-link {
-    color: inherit;
-    font-weight: 600;
-    text-decoration: underline;
-    text-underline-offset: 2px;
-    margin-left: 0.25rem;
-  }
-
-  .update-dismiss {
-    margin-left: auto;
-    background: transparent;
-    border: none;
-    color: inherit;
-    opacity: 0.8;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    padding: 0.1rem;
-
-    &:hover {
-      opacity: 1;
-    }
-  }
 }
 </style>
