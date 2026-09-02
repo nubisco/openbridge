@@ -68,13 +68,6 @@
     </template>
     <template #topbar-right>
       <div id="ob-topbar-right" class="topbar-slot" />
-      <NbButton
-        variant="ghost"
-        size="sm"
-        :icon="resolved === 'dark' ? 'sun' : 'moon'"
-        :title="resolved === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'"
-        @click="toggle()"
-      />
     </template>
 
     <!-- ═══ Notification banner ═══ -->
@@ -130,7 +123,6 @@ import { useDaemonStore } from '@/stores/daemon'
 import { useInspectorStore } from '@/stores/inspector'
 import { useLayoutStore } from '@/stores/layout'
 import { useAuth, type PlatformIdentity } from '@/composables/useAuth'
-import { useTheme } from '@nubisco/ui'
 import PluginInspector from '@/components/PluginInspector.vue'
 import MarketplacePanel from '@/components/MarketplacePanel.vue'
 import DeviceInspector from '@/components/DeviceInspector.vue'
@@ -142,7 +134,6 @@ const daemon = useDaemonStore()
 const inspector = useInspectorStore()
 const layout = useLayoutStore()
 const auth = useAuth()
-const { resolved, toggle } = useTheme()
 
 async function signOut() {
   await auth.logout()

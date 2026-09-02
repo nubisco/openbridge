@@ -148,6 +148,29 @@
       </div>
     </NbPanel>
 
+    <!-- Appearance -->
+    <NbPanel class="settings-card">
+      <div class="card-header">
+        <div class="card-icon">
+          <NbIcon name="palette" :size="18" />
+        </div>
+        <div>
+          <h2 class="card-title">Appearance</h2>
+          <p class="card-subtitle">Stored in this browser, applied as you pick it</p>
+        </div>
+      </div>
+
+      <!-- Three options rather than a switch: `system` is a preference in its
+           own right, not the absence of one, and radios show that it is the
+           one currently chosen. The panel has no Save button because there is
+           nothing to save to the daemon. -->
+      <NbGrid dir="col" gap="sm" class="field-grid">
+        <NbField label="Theme" :hint="themeHint" control="fit">
+          <NbRadio v-model="theme" name="theme" :options="themeOptions" direction="horizontal" />
+        </NbField>
+      </NbGrid>
+    </NbPanel>
+
     <!-- HAP pairing info -->
     <NbPanel class="settings-card info-card">
       <h3 class="info-title">
@@ -178,11 +201,34 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { useTheme, type TTheme } from '@nubisco/ui'
 import { api, type BridgeConfig, type UpdateStatus } from '@/api'
 import { useLayoutStore } from '@/stores/layout'
 
 const layout = useLayoutStore()
+
+// ─── Appearance ──────────────────────────────────────────────────────────────
+// `theme` from the composable is readonly, so the control writes through
+// setTheme rather than binding to it directly.
+const { theme: currentTheme, resolved, followsSystem, setTheme } = useTheme()
+
+const themeOptions = [
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+  { value: 'system', label: 'System' },
+]
+
+const theme = computed({
+  get: () => currentTheme.value as string,
+  set: (value: string) => setTheme(value as TTheme),
+})
+
+// Naming what `system` currently resolves to, since the choice itself does not
+// say whether the machine is light or dark right now.
+const themeHint = computed(() =>
+  followsSystem.value ? `Following your system, currently ${resolved.value}` : 'Pinned, ignoring your system setting',
+)
 
 const logLevelOptions = [
   { value: 'debug', label: 'Debug' },
