@@ -1,3 +1,10 @@
+# [0.26.0](https://github.com/nubisco/openbridge/compare/v0.25.0...v0.26.0) (2026-09-02)
+
+
+### Features
+
+* **ui:** upgrade NubiscoUI to 3.0.0 and adopt NbBanner ([f692b7f](https://github.com/nubisco/openbridge/commit/f692b7f4789ad31f942c707405e64e417b338e63)), closes [#notification](https://github.com/nubisco/openbridge/issues/notification)
+
 # [0.25.0](https://github.com/nubisco/openbridge/compare/v0.24.1...v0.25.0) (2026-09-01)
 
 
