@@ -1,3 +1,10 @@
+# [0.27.0](https://github.com/nubisco/openbridge/compare/v0.26.0...v0.27.0) (2026-09-02)
+
+
+### Features
+
+* **ui:** move the theme control out of the topbar into Settings ([2030293](https://github.com/nubisco/openbridge/commit/2030293e7a57373a4224a77796ae321991af588f))
+
 # [0.26.0](https://github.com/nubisco/openbridge/compare/v0.25.0...v0.26.0) (2026-09-02)
 
 
