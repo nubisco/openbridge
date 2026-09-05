@@ -1,3 +1,10 @@
+# [0.28.0](https://github.com/nubisco/openbridge/compare/v0.27.0...v0.28.0) (2026-09-05)
+
+
+### Features
+
+* **ui:** upgrade NubiscoUI to 3.3.0 ([580e003](https://github.com/nubisco/openbridge/commit/580e003d8b314f0551d5c6a18fc1327c0972ee4d))
+
 # [0.27.0](https://github.com/nubisco/openbridge/compare/v0.26.0...v0.27.0) (2026-09-02)
 
 
