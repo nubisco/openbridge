@@ -1,3 +1,10 @@
+# [0.30.0](https://github.com/nubisco/openbridge/compare/v0.29.0...v0.30.0) (2026-09-08)
+
+
+### Features
+
+* **npm:** publish packages to npm from CI with provenance ([a2c2dc9](https://github.com/nubisco/openbridge/commit/a2c2dc942ea488a086d57e42ebf2641fffd28eab))
+
 # [0.29.0](https://github.com/nubisco/openbridge/compare/v0.28.0...v0.29.0) (2026-09-08)
 
 
