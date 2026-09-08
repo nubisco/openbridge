@@ -22,23 +22,9 @@ const log = Logger.create('system')
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
-// Version: prefer the volume's version.json (set by entrypoint or self-update),
-// then OPENBRIDGE_VERSION env var, then package.json for local dev.
-const _ownPkg = _req('../package.json') as { version: string }
-const APP_VOLUME = '/opt/openbridge'
-const VERSION_FILE = join(APP_VOLUME, 'version.json')
-
-function resolveVersion(): string {
-  try {
-    const vf = JSON.parse(readFileSync(VERSION_FILE, 'utf8'))
-    if (vf.version) return vf.version
-  } catch {
-    /* not on volume */
-  }
-  return process.env.OPENBRIDGE_VERSION ?? _ownPkg.version
-}
-
-export const OPENBRIDGE_VERSION: string = resolveVersion()
+// Version: resolved in version.ts so the CLI can read it without loading this module.
+import { APP_VOLUME, VERSION_FILE, OPENBRIDGE_VERSION } from './version.js'
+export { OPENBRIDGE_VERSION }
 
 // Self-update state (shared with WebSocket clients)
 type UpdateStage = 'idle' | 'downloading' | 'extracting' | 'swapping' | 'restarting' | 'error'
@@ -57,6 +43,9 @@ const uiDist =
     .filter(Boolean)
     .find((p) => existsSync(p!)) ?? ''
 const uiAvailable = !!uiDist
+
+// Set once the optional node-pty dependency is confirmed loadable (see /ws/shell below).
+let shellAvailable = false
 
 import { OPENBRIDGE_HOME, OB_PLUGINS_DIR, HB_PLUGINS_DIR } from './daemon.js'
 import { DeviceSeries } from './timeseries.js'
@@ -128,7 +117,13 @@ export async function createServer(
 
   // ─── Health ───────────────────────────────────────────────────────────────
   app.get('/api/health', async () => {
-    return { status: 'ok', version: OPENBRIDGE_VERSION, timestamp: new Date().toISOString() }
+    return {
+      status: 'ok',
+      version: OPENBRIDGE_VERSION,
+      timestamp: new Date().toISOString(),
+      // Optional features that may be absent depending on how OpenBridge was installed.
+      capabilities: { shell: shellAvailable, ui: uiAvailable },
+    }
   })
 
   // ─── Update check ─────────────────────────────────────────────────────────
@@ -1792,19 +1787,30 @@ export async function createServer(
   })
 
   // ─── Interactive shell WebSocket (PTY) ───────────────────────────────────
-  // Ensure node-pty's spawn-helper has execute permission (pnpm doesn't preserve +x on prebuilds)
+  // node-pty is an optional dependency: it only powers the interactive shell pane.
+  // Everything else (HAP bridge, plugins, API, logs) works without it.
   try {
     const nodePtyDir = resolve(dirname(_req.resolve('node-pty')), '..')
+    // Ensure node-pty's spawn-helper has execute permission (pnpm doesn't preserve +x on prebuilds)
     const arch = `${process.platform}-${process.arch}`
     const spawnHelper = join(nodePtyDir, 'prebuilds', arch, 'spawn-helper')
     if (existsSync(spawnHelper)) chmodSync(spawnHelper, 0o755)
+    shellAvailable = true
   } catch {
-    /* best-effort */
+    log.info('node-pty is not installed: the interactive shell pane is disabled. Everything else runs normally.')
   }
 
   app.get('/ws/shell', { websocket: true }, (connection: SocketStream) => {
     const ws = connection.socket
     let pty: any = null
+    if (!shellAvailable) {
+      ws.send(
+        `\r\n\x1b[33mInteractive shell unavailable: the optional 'node-pty' dependency is not installed.\x1b[0m\r\n` +
+          `\x1b[2mInstall it to enable this pane, e.g. 'npm i -g node-pty'. All other OpenBridge features are unaffected.\x1b[0m\r\n`,
+      )
+      ws.close()
+      return
+    }
     try {
       const nodePty = _req('node-pty')
       const shell = process.env.SHELL || (process.platform === 'win32' ? 'cmd.exe' : '/bin/sh')

@@ -23,7 +23,7 @@ pnpm format         # Prettier
 To work on a specific package in watch mode:
 
 ```bash
-pnpm --filter @nubisco/openbridge-daemon dev
+pnpm --filter @nubisco/openbridge dev
 pnpm --filter @nubisco/openbridge-ui dev        # Vue dashboard: dev server at :5174
 pnpm --filter @nubisco/openbridge-core dev
 pnpm --filter @nubisco/openbridge-logger dev

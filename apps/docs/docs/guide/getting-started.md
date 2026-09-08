@@ -55,7 +55,7 @@ Open two terminals.
 **Terminal 1 — daemon with hot reload:**
 
 ```bash
-pnpm --filter @nubisco/openbridge-daemon dev
+pnpm --filter @nubisco/openbridge dev
 ```
 
 This uses `tsx watch` to restart the daemon whenever a source file changes. The API and plugin engine run on **port 8582**.

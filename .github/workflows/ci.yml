@@ -30,6 +30,11 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # Built separately: the docs site is memory-hungry and must never be able to
+      # abort the runtime build (see README "Building on low-memory machines").
+      - name: Build docs
+        run: pnpm build:docs
+
       - name: Test
         run: pnpm test
 

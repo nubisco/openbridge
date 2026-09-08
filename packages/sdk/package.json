@@ -1,6 +1,6 @@
 {
   "name": "@nubisco/openbridge-sdk",
-  "version": "0.1.0",
+  "version": "0.29.0",
   "description": "Plugin authoring SDK for OpenBridge — definePlugin() helper with full TypeScript types",
   "author": "José Silva <jose@nubisco.io>",
   "license": "MIT",
@@ -31,8 +31,13 @@
     }
   },
   "files": [
-    "dist/"
+    "dist/",
+    "README.md",
+    "LICENSE"
   ],
+  "engines": {
+    "node": ">=20"
+  },
   "publishConfig": {
     "access": "public"
   },

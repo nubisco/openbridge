@@ -1,6 +1,6 @@
 {
   "name": "@nubisco/openbridge-compatibility-homebridge",
-  "version": "0.1.0",
+  "version": "0.29.0",
   "description": "Homebridge platform plugin compatibility shim for OpenBridge",
   "author": "José Silva <jose@nubisco.io>",
   "license": "MIT",
@@ -31,8 +31,13 @@
     }
   },
   "files": [
-    "dist/"
+    "dist/",
+    "README.md",
+    "LICENSE"
   ],
+  "engines": {
+    "node": ">=20"
+  },
   "publishConfig": {
     "access": "public"
   },

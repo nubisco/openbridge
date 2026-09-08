@@ -1,0 +1,160 @@
+name: Publish to npm
+
+# Tag-triggered. semantic-release (see release.yml) does the version bump, the
+# CHANGELOG entry and the tag; this workflow turns that tag into npm releases.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Build and pack only, do not publish'
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  id-token: write # required for npm trusted publishing (OIDC) and provenance
+
+jobs:
+  publish:
+    name: Build, verify, publish
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      # Trusted publishing needs npm >= 11.5.1; the npm bundled with Node 22 is older.
+      - name: Pin npm
+        run: |
+          npm install -g npm@latest
+          npm --version
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Verify tag matches package version
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          PKG_VERSION="$(node -p "require('./package.json').version")"
+          if [ "${{ github.event_name }}" = "push" ] && [ "$TAG" != "v$PKG_VERSION" ]; then
+            echo "Tag $TAG does not match package.json version $PKG_VERSION" >&2
+            exit 1
+          fi
+          echo "version=$PKG_VERSION" >> "$GITHUB_ENV"
+
+      # Syncs every publishable package to the root version, stages LICENSE/README,
+      # and copies the built dashboard into the daemon tarball as ui-dist/.
+      - name: Stage packages for publish
+        run: pnpm run prepare:publish
+
+      # Asserts, among other things, that pnpm rewrote every `workspace:*` range
+      # to a real version. A tarball that ships `workspace:*` is broken on install.
+      - name: Verify tarballs
+        run: node scripts/pack-check.mjs
+
+      - name: Pack tarballs
+        run: |
+          mkdir -p dist-tarballs
+          for dir in packages/logger packages/core packages/config packages/sdk \
+                     packages/compatibility-homebridge apps/daemon; do
+            ( cd "$dir" && pnpm pack --pack-destination "$GITHUB_WORKSPACE/dist-tarballs" )
+          done
+          ls -la dist-tarballs
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: npm-tarballs-${{ github.ref_name }}
+          path: dist-tarballs/*.tgz
+
+      # Published in dependency order: `@nubisco/openbridge` depends on the scoped packages
+      # at an exact version, so they must exist on the registry first.
+      #
+      # Authentication is npm trusted publishing (OIDC): no NPM_TOKEN, no secret.
+      # Each package must have this workflow registered as a trusted publisher on
+      # npmjs.com, which is why the first release of each was published by hand.
+      #
+      # Provenance is generated automatically under trusted publishing, so
+      # `--provenance` is deliberately absent. The verify step below asserts it
+      # actually landed rather than assuming it did.
+      #
+      # The tarballs come from `pnpm pack`, which rewrites the workspace protocol
+      # to real version ranges. Publishing pre-built tarballs means nothing can
+      # reintroduce `workspace:*` between verification and publish.
+      - name: Publish
+        if: github.event_name == 'push' || inputs.dry_run == false
+        env:
+          VERSION: ${{ env.version }}
+        run: |
+          set -euo pipefail
+          publish() {
+            name="$1"; tarball="$2"
+            if npm view "$name@$VERSION" version >/dev/null 2>&1; then
+              echo "$name@$VERSION already published, skipping"
+              return 0
+            fi
+            npm publish "$tarball" --access public
+          }
+          publish @nubisco/openbridge-logger                    dist-tarballs/nubisco-openbridge-logger-"$VERSION".tgz
+          publish @nubisco/openbridge-core                      dist-tarballs/nubisco-openbridge-core-"$VERSION".tgz
+          publish @nubisco/openbridge-config                    dist-tarballs/nubisco-openbridge-config-"$VERSION".tgz
+          publish @nubisco/openbridge-sdk                       dist-tarballs/nubisco-openbridge-sdk-"$VERSION".tgz
+          publish @nubisco/openbridge-compatibility-homebridge  dist-tarballs/nubisco-openbridge-compatibility-homebridge-"$VERSION".tgz
+          publish @nubisco/openbridge                           dist-tarballs/nubisco-openbridge-"$VERSION".tgz
+
+      # Provenance from a pre-packed tarball is not something npm documents either
+      # way. Rather than trust it, assert every published version carries an
+      # attestation, so a silent no-op fails the release instead of shipping
+      # unattested packages that look fine.
+      - name: Verify provenance attestations
+        if: github.event_name == 'push' || inputs.dry_run == false
+        env:
+          VERSION: ${{ env.version }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in @nubisco/openbridge-logger @nubisco/openbridge-core \
+                      @nubisco/openbridge-config @nubisco/openbridge-sdk \
+                      @nubisco/openbridge-compatibility-homebridge \
+                      @nubisco/openbridge; do
+            url=""
+            # The registry takes a moment to expose a freshly published version.
+            for attempt in 1 2 3 4 5; do
+              url="$(npm view "$name@$VERSION" dist.attestations.url 2>/dev/null || true)"
+              [ -n "$url" ] && break
+              sleep 10
+            done
+            if [ -z "$url" ]; then
+              echo "::error::$name@$VERSION has no provenance attestation"
+              missing=1
+            else
+              echo "$name@$VERSION attested: $url"
+            fi
+          done
+          exit "$missing"
+
+      - name: Summary
+        if: always()
+        env:
+          VERSION: ${{ env.version }}
+        run: |
+          {
+            echo "### npm release \`$VERSION\`"
+            echo
+            ls dist-tarballs/*.tgz 2>/dev/null | while read -r f; do
+              echo "- \`$(basename "$f")\` ($(du -h "$f" | cut -f1))"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"

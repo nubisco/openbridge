@@ -29,9 +29,13 @@
     "docker"
   ],
   "scripts": {
-    "dev": "pnpm --filter @nubisco/openbridge-daemon --filter @nubisco/openbridge-ui --parallel dev",
-    "build": "pnpm -r build",
-    "start": "pnpm --filter @nubisco/openbridge-daemon start",
+    "dev": "pnpm --filter @nubisco/openbridge --filter @nubisco/openbridge-ui --parallel dev",
+    "build": "pnpm --filter=!@nubisco/openbridge-docs -r build",
+    "build:docs": "pnpm --filter @nubisco/openbridge-docs build",
+    "build:all": "pnpm run build && pnpm run build:docs",
+    "prepare:publish": "node scripts/prepare-publish.mjs",
+    "pack:check": "pnpm run build && pnpm run prepare:publish && node scripts/pack-check.mjs",
+    "start": "pnpm --filter @nubisco/openbridge start",
     "test": "pnpm -r --if-present test",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",

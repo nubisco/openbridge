@@ -113,15 +113,16 @@ importers:
       hap-nodejs:
         specifier: ^0.14.3
         version: 0.14.3
-      node-pty:
-        specifier: ^1.1.0
-        version: 1.1.0
       qrcode-terminal:
         specifier: ^0.12.0
         version: 0.12.0
       systeminformation:
         specifier: ^5.31.5
         version: 5.31.5
+    optionalDependencies:
+      node-pty:
+        specifier: ^1.1.0
+        version: 1.1.0
     devDependencies:
       '@types/node':
         specifier: ^20.0.0
@@ -8635,7 +8636,8 @@ snapshots:
 
   nerf-dart@1.0.0: {}
 
-  node-addon-api@7.1.1: {}
+  node-addon-api@7.1.1:
+    optional: true
 
   node-emoji@2.2.0:
     dependencies:
@@ -8652,6 +8654,7 @@ snapshots:
   node-pty@1.1.0:
     dependencies:
       node-addon-api: 7.1.1
+    optional: true
 
   normalize-package-data@6.0.2:
     dependencies:

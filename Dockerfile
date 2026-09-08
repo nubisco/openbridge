@@ -32,11 +32,11 @@ RUN pnpm --filter @nubisco/openbridge-compatibility-homebridge build
 # Build UI (served as static files by the daemon)
 RUN pnpm --filter @nubisco/openbridge-ui build
 # Build daemon last
-RUN pnpm --filter @nubisco/openbridge-daemon build
+RUN pnpm --filter @nubisco/openbridge build
 
 # ─── Stage 3: Prune to production-only node_modules ─────────────────────────
 FROM build AS prune
-RUN pnpm --filter @nubisco/openbridge-daemon deploy --prod /pruned
+RUN pnpm --filter @nubisco/openbridge deploy --prod /pruned
 
 # ─── Stage 4: Minimal runtime image ─────────────────────────────────────────
 FROM node:22-alpine AS runtime

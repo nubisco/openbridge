@@ -12,7 +12,7 @@
 
 [![CI](https://github.com/nubisco/openbridge/actions/workflows/ci.yml/badge.svg)](https://github.com/nubisco/openbridge/actions/workflows/ci.yml)
 [![GitHub release](https://img.shields.io/github/v/release/nubisco/openbridge)](https://github.com/nubisco/openbridge/releases)
-[![npm](https://img.shields.io/npm/v/openbridge)](https://www.npmjs.com/package/openbridge)
+[![npm](https://img.shields.io/npm/v/%40nubisco%2Fopenbridge)](https://www.npmjs.com/package/@nubisco/openbridge)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D20.0.0-339933)](https://nodejs.org/)
 [![pnpm](https://img.shields.io/badge/pnpm-9-f69220)](https://pnpm.io/)
 [![license](https://img.shields.io/github/license/nubisco/openbridge)](LICENSE)
@@ -63,13 +63,33 @@ Homebridge works, but it was designed for a different era. OpenBridge is built f
 
 ## Quick Start
 
-**Requirements:** Node.js 20+, pnpm 9+
+**Requirements:** Node.js 20 or newer.
+
+### Install from npm
+
+```bash
+npm install -g @nubisco/openbridge
+openbridge
+```
+
+Open **http://localhost:8582**: the dashboard is bundled in the package and loads immediately.
+
+```bash
+openbridge --help          # usage
+openbridge --port 9000     # run on a different port
+```
+
+State lives in `~/.openbridge` (config, plugins, HomeKit pairing). Override it with `OPENBRIDGE_HOME`.
+
+### Install from source
+
+**Requirements:** Node.js 20+, pnpm 9+, roughly 1 GB of free disk (`node_modules` lands around 720 MB).
 
 ```bash
 # Install dependencies
 pnpm install
 
-# Build everything
+# Build the runtime packages and the dashboard
 pnpm build
 
 # Start the daemon
@@ -77,6 +97,19 @@ node apps/daemon/dist/index.js
 ```
 
 Open **http://localhost:8582**: the dashboard loads immediately.
+
+### Platform notes
+
+- **Alpine / musl** is a supported target, on x64 and arm64. The only native
+  dependency, `node-pty`, is optional: without it everything runs normally and
+  only the dashboard's interactive shell pane is disabled. `npm install -g @nubisco/openbridge`
+  will try to build it and silently carry on if no compiler is present.
+  To enable the shell pane on Alpine, install `build-base python3 linux-headers`
+  before installing OpenBridge.
+- **Building the docs site needs memory.** `pnpm build` covers the runtime
+  packages and the dashboard only. The VitePress docs site is built separately
+  with `pnpm build:docs` and needs more than 1 GB of RAM, so it is kept out of
+  the default build to keep OpenBridge installable on small SBCs.
 
 ---
 
@@ -87,7 +120,7 @@ Open **http://localhost:8582**: the dashboard loads immediately.
 pnpm build
 
 # Start the daemon in watch mode (terminal 1)
-pnpm --filter @nubisco/openbridge-daemon dev
+pnpm --filter @nubisco/openbridge dev
 
 # Start the UI dev server with HMR (terminal 2)
 pnpm --filter @nubisco/openbridge-ui dev
@@ -165,17 +198,26 @@ See [Configuration Reference](apps/docs/docs/guide/config-reference.md) for all 
 
 The daemon exposes a REST API on port 8582:
 
-| Method | Path                       | Description               |
-| ------ | -------------------------- | ------------------------- |
-| GET    | `/api/health`              | Daemon status and version |
-| GET    | `/api/plugins`             | List all loaded plugins   |
-| GET    | `/api/plugins/:id`         | Get a single plugin       |
-| POST   | `/api/plugins/:id/start`   | Start a plugin            |
-| POST   | `/api/plugins/:id/stop`    | Stop a plugin             |
-| GET    | `/api/accessories`         | List all HAP accessories  |
-| GET    | `/api/logs?plugin=&limit=` | Retrieve log entries      |
-| WS     | `/ws/logs`                 | Stream live logs          |
-| WS     | `/ws/shell`                | Interactive terminal      |
+| Method | Path                       | Description                              |
+| ------ | -------------------------- | ---------------------------------------- |
+| GET    | `/api/health`              | Daemon status, version, and capabilities |
+| GET    | `/api/plugins`             | List all loaded plugins                  |
+| GET    | `/api/plugins/:id`         | Get a single plugin                      |
+| POST   | `/api/plugins/:id/start`   | Start a plugin                           |
+| POST   | `/api/plugins/:id/stop`    | Stop a plugin                            |
+| GET    | `/api/accessories`         | List all HAP accessories                 |
+| GET    | `/api/logs?plugin=&limit=` | Retrieve log entries                     |
+| WS     | `/ws/logs`                 | Stream live logs                         |
+| WS     | `/ws/shell`                | Interactive terminal (requires node-pty) |
+
+`GET /api/health` reports which optional features are present:
+
+```json
+{ "status": "ok", "version": "0.29.0", "capabilities": { "shell": true, "ui": true } }
+```
+
+`capabilities.shell` is `false` when the optional `node-pty` dependency is not
+installed; the interactive terminal is then unavailable and nothing else is affected.
 
 Full reference: [HTTP API docs](apps/docs/docs/guide/api-reference.md).
 
@@ -187,8 +229,9 @@ Full reference: [HTTP API docs](apps/docs/docs/guide/api-reference.md).
 openbridge/
   apps/
     daemon/     Node.js runtime: plugin loader + Fastify HTTP API + HAP bridge
+                (published to npm as `@nubisco/openbridge`, dashboard bundled in)
     ui/         Vue 3 dashboard: accessories, plugins, logs, config, terminal
-    cli/        CLI: openbridge start / plugins list / logs
+    cli/        Standalone CLI scaffold (not published; the daemon provides `openbridge`)
     docs/       VitePress documentation site
   packages/
     core/       Plugin types, registry, lifecycle, loader
@@ -197,6 +240,44 @@ openbridge/
     sdk/        definePlugin() helper for plugin authors
     compatibility-homebridge/  Homebridge platform plugin adapter
 ```
+
+### Published packages
+
+Everything below is released together, under one version, from a single git tag.
+
+| npm package                                    | Source                              |
+| ---------------------------------------------- | ----------------------------------- |
+| `@nubisco/openbridge`                          | `apps/daemon`                       |
+| `@nubisco/openbridge-core`                     | `packages/core`                     |
+| `@nubisco/openbridge-logger`                   | `packages/logger`                   |
+| `@nubisco/openbridge-config`                   | `packages/config`                   |
+| `@nubisco/openbridge-sdk`                      | `packages/sdk`                      |
+| `@nubisco/openbridge-compatibility-homebridge` | `packages/compatibility-homebridge` |
+
+### Releasing
+
+Releases are automated and should not be run by hand.
+
+1. Merging to `master` runs semantic-release, which bumps the version, writes the
+   CHANGELOG entry, commits and pushes a `vX.Y.Z` tag.
+2. That tag triggers [`npm-publish.yml`](.github/workflows/npm-publish.yml), which
+   builds, packs each package with `pnpm pack` and publishes the tarballs to npm.
+
+Authentication uses **npm trusted publishing** (OIDC), so there is no npm token
+stored in the repository. Each package has this workflow registered as a trusted
+publisher on npmjs.com, and npm accepts publishes only from it. Provenance
+attestations are generated automatically, so every release is cryptographically
+attested to the commit and workflow run it was built from, and CI fails the release
+if an attestation is missing.
+
+To inspect exactly what would be published, without publishing anything:
+
+```bash
+pnpm pack:check
+```
+
+That builds, stages the tarballs and asserts each one carries `dist`, a README and
+a LICENSE, and that no `workspace:*` range survived into the published manifest.
 
 ---
 

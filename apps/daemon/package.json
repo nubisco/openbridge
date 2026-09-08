@@ -1,7 +1,7 @@
 {
-  "name": "@nubisco/openbridge-daemon",
-  "version": "0.1.0",
-  "description": "Node.js runtime daemon for OpenBridge — plugin loader, Fastify HTTP API, and HAP bridge",
+  "name": "@nubisco/openbridge",
+  "version": "0.29.0",
+  "description": "Local-first home automation bridge for developers. Plugin-based, TypeScript-first, Homebridge-compatible.",
   "author": "José Silva <jose@nubisco.io>",
   "license": "MIT",
   "homepage": "https://github.com/nubisco/openbridge#readme",
@@ -34,10 +34,15 @@
   },
   "files": [
     "dist/",
-    "scripts/"
+    "ui-dist/",
+    "scripts/",
+    "README.md",
+    "LICENSE"
   ],
+  "engines": {
+    "node": ">=20"
+  },
   "publishConfig": {
-    "name": "openbridge",
     "access": "public"
   },
   "scripts": {
@@ -59,9 +64,11 @@
     "@nubisco/openbridge-logger": "workspace:*",
     "fastify": "^4.26.0",
     "hap-nodejs": "^0.14.3",
-    "node-pty": "^1.1.0",
     "qrcode-terminal": "^0.12.0",
     "systeminformation": "^5.31.5"
+  },
+  "optionalDependencies": {
+    "node-pty": "^1.1.0"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
