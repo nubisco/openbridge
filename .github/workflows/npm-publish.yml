@@ -1,11 +1,15 @@
 name: Publish to npm
 
-# Tag-triggered. semantic-release (see release.yml) does the version bump, the
-# CHANGELOG entry and the tag; this workflow turns that tag into npm releases.
+# semantic-release (see release.yml) does the version bump, the CHANGELOG entry,
+# the tag and the GitHub Release; this workflow turns that into npm releases.
+#
+# The trigger is `release: published`, deliberately not `push: tags`. The tag
+# points at semantic-release's own `chore(release): x.y.z [skip ci]` commit, and
+# GitHub suppresses push-triggered workflows whose head commit says `[skip ci]`.
+# A tag trigger would therefore never fire. `release` events ignore [skip ci].
 on:
-  push:
-    tags:
-      - 'v*'
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       dry_run:
@@ -24,6 +28,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.release.tag_name || github.ref }}
 
       - uses: pnpm/action-setup@v4
 
@@ -47,10 +53,10 @@ jobs:
 
       - name: Verify tag matches package version
         env:
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ github.event.release.tag_name || github.ref_name }}
         run: |
           PKG_VERSION="$(node -p "require('./package.json').version")"
-          if [ "${{ github.event_name }}" = "push" ] && [ "$TAG" != "v$PKG_VERSION" ]; then
+          if [ "${{ github.event_name }}" = "release" ] && [ "$TAG" != "v$PKG_VERSION" ]; then
             echo "Tag $TAG does not match package.json version $PKG_VERSION" >&2
             exit 1
           fi
@@ -77,7 +83,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: npm-tarballs-${{ github.ref_name }}
+          name: npm-tarballs-${{ github.event.release.tag_name || github.ref_name }}
           path: dist-tarballs/*.tgz
 
       # Published in dependency order: `@nubisco/openbridge` depends on the scoped packages
@@ -95,7 +101,7 @@ jobs:
       # to real version ranges. Publishing pre-built tarballs means nothing can
       # reintroduce `workspace:*` between verification and publish.
       - name: Publish
-        if: github.event_name == 'push' || inputs.dry_run == false
+        if: github.event_name == 'release' || inputs.dry_run == false
         env:
           VERSION: ${{ env.version }}
         run: |
@@ -120,7 +126,7 @@ jobs:
       # attestation, so a silent no-op fails the release instead of shipping
       # unattested packages that look fine.
       - name: Verify provenance attestations
-        if: github.event_name == 'push' || inputs.dry_run == false
+        if: github.event_name == 'release' || inputs.dry_run == false
         env:
           VERSION: ${{ env.version }}
         run: |

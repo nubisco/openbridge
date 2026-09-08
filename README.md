@@ -260,8 +260,11 @@ Releases are automated and should not be run by hand.
 
 1. Merging to `master` runs semantic-release, which bumps the version, writes the
    CHANGELOG entry, commits and pushes a `vX.Y.Z` tag.
-2. That tag triggers [`npm-publish.yml`](.github/workflows/npm-publish.yml), which
-   builds, packs each package with `pnpm pack` and publishes the tarballs to npm.
+2. Publishing the resulting GitHub Release triggers
+   [`npm-publish.yml`](.github/workflows/npm-publish.yml), which builds, packs each
+   package with `pnpm pack` and publishes the tarballs to npm. It keys off the
+   release rather than the tag because the tag points at a `[skip ci]` commit,
+   which GitHub uses to suppress push-triggered workflows.
 
 Authentication uses **npm trusted publishing** (OIDC), so there is no npm token
 stored in the repository. Each package has this workflow registered as a trusted
