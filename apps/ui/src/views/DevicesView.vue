@@ -81,6 +81,7 @@
             <!-- On/off toggle for all controllable devices -->
             <div v-if="dev.telemetry.active !== undefined" class="card-controls" @click.stop>
               <NbSwitch
+                :name="`device-active-${dev.id}`"
                 :model-value="!!dev.telemetry.active"
                 @update:model-value="requestControl(dev, 'active', $event)"
               />
@@ -142,8 +143,9 @@
             <!-- On/Off toggle for controllable accessories -->
             <div v-if="hapOnCharacteristic(acc)" class="card-controls" @click.stop>
               <NbSwitch
+                :name="`hap-on-${acc.uuid}`"
                 :model-value="!!hapOnCharacteristic(acc)?.value"
-                @update:model-value="toggleHapCharacteristic(acc, $event)"
+                @update:model-value="toggleHapCharacteristic(acc, !!$event)"
               />
             </div>
           </div>
@@ -244,7 +246,12 @@ const deviceColumns: IDataTableColumn[] = [
   { key: 'detail', header: 'Reading', sortable: true, width: 160 },
 ]
 
+// NbDataTable is generic over `T extends Record<string, unknown>`, so a row
+// interface needs an index signature to be assignable. Without it the rows,
+// the row-click handler and every cell slot fall back to `unknown`.
+// (@nubisco/ui 4.1.2; only visible once the plugin emits components.d.ts.)
 interface DeviceRow {
+  [key: string]: unknown
   key: string
   name: string
   type: string
@@ -351,7 +358,10 @@ const CATEGORY_INFO: Record<number, { label: string; icon: string }> = {
   7: { label: 'Outlet', icon: 'plugs' },
   8: { label: 'Switch', icon: 'toggle-right' },
   9: { label: 'Thermostat', icon: 'thermometer' },
-  10: { label: 'Sensor', icon: 'activity' },
+  // 'activity' is not in the icon catalogue (it never was, in 3.x either):
+  // it silently rendered nothing, and @nubisco/ui 4.x throws on an unresolved
+  // name, so this is now 'pulse'. Registered in src/icons.ts.
+  10: { label: 'Sensor', icon: 'pulse' },
   11: { label: 'Security', icon: 'shield' },
   12: { label: 'Door', icon: 'door' },
   13: { label: 'Window', icon: 'app-window' },
@@ -386,7 +396,10 @@ const WIDGET_ICON: Record<string, string> = {
   thermostat: 'thermometer',
   dehumidifier: 'drop',
   energy_meter: 'lightning',
-  sensor: 'activity',
+  // 'activity' is not in the icon catalogue (it never was, in 3.x either):
+  // it silently rendered nothing, and @nubisco/ui 4.x throws on an unresolved
+  // name, so this is now 'pulse'. Registered in src/icons.ts.
+  sensor: 'pulse',
 }
 
 const WIDGET_LABEL: Record<string, string> = {

@@ -5,7 +5,8 @@
     </NbBreadcrumbs>
 
     <div v-if="loadError" class="detail-message">
-      <NbMessage variant="danger">{{ loadError }}</NbMessage>
+      <!-- was "danger", which NbMessage never accepted (error|warning|success|helper). -->
+      <NbMessage variant="error">{{ loadError }}</NbMessage>
     </div>
 
     <template v-else-if="device">
@@ -27,7 +28,8 @@
       </div>
 
       <div v-if="metrics.length === 0" class="detail-message">
-        <NbMessage variant="info">
+        <!-- was "info", likewise never a valid NbMessage variant. -->
+        <NbMessage variant="helper">
           This device does not declare any metrics, so there is nothing to chart. Plugins opt in by describing their
           series in the device descriptor.
         </NbMessage>
@@ -50,6 +52,7 @@
         </div>
 
         <div class="chart-panel">
+          <!-- curve was "monotone"; TLineCurve is linear|smooth|step. -->
           <NbLineChart
             v-if="chartSeries.length > 0 && chartSeries[0].data.length > 0"
             :series="chartSeries"
@@ -58,7 +61,7 @@
             :show-grid="true"
             :show-tooltip="true"
             :points="false"
-            curve="monotone"
+            curve="smooth"
           />
           <div v-else-if="loading" class="chart-empty">Loading…</div>
           <div v-else class="chart-empty">

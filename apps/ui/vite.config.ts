@@ -4,6 +4,7 @@ import { fileURLToPath, URL } from 'node:url'
 import { defineConfig, type Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import Unfonts from 'unplugin-fonts/vite'
+import { nubiscoUI } from '@nubisco/ui/vite'
 
 /**
  * Appends a content-hash query param (?v=<hash>) to favicon links in index.html
@@ -28,6 +29,19 @@ function faviconCacheBust(): Plugin {
 export default defineConfig({
   plugins: [
     vue(),
+    // @nubisco/ui 4.x resolves components, icons and per-component CSS at build
+    // time; `app.use(NubiscoUI)` no longer registers the components itself.
+    // `glyphs.catalog: 'off'` stops the plugin injecting the whole ~1,500-icon
+    // catalogue into the four files that bind <NbIcon :name> to a runtime
+    // value; src/icons.ts registers exactly the names those can produce.
+    ...nubiscoUI({
+      // `dts` goes under src/ because tsconfig only includes that directory.
+      // It gives vue-tsc real types for library tags for the first time: 3.3.0
+      // shipped a GlobalComponents augmentation that nothing referenced, so
+      // <NbSwitch> and friends were `any`.
+      components: { dts: 'src/components.d.ts' },
+      glyphs: { catalog: 'off' },
+    }),
     faviconCacheBust(),
     Unfonts({
       custom: {

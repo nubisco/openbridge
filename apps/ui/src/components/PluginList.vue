@@ -141,7 +141,12 @@ const columns: IDataTableColumn[] = [
   { key: 'author', header: 'Author', sortable: true },
 ]
 
+// NbDataTable is generic over `T extends Record<string, unknown>`, so a row
+// interface needs an index signature to be assignable. Without it the rows,
+// the row-click handler and every cell slot fall back to `unknown`.
+// (@nubisco/ui 4.1.2; only visible once the plugin emits components.d.ts.)
 interface TableRow {
+  [key: string]: unknown
   id: string
   name: string
   version: string

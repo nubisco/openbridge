@@ -32,11 +32,13 @@
       </span>
       <span v-if="field.description" class="pcf-hint">{{ field.description }}</span>
     </div>
+    <!-- NbSwitch only accepts primary|secondary; the previous "success"
+         was silently ignored, in 3.3.0 too. -->
     <NbSwitch
       :model-value="Boolean(value ?? field.default ?? false)"
       :name="`pcf-${path.join('-')}`"
       size="sm"
-      variant="success"
+      variant="primary"
       @update:model-value="emit('change', $event)"
     />
   </div>

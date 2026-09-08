@@ -251,7 +251,7 @@
             :options="serviceTypeOptions"
             :disabled="homekitBusy"
             size="sm"
-            @update:model-value="(v: string) => setServiceType(nativeAccessory!.uuid, svc.uuid, v)"
+            @update:model-value="(v: TSelectValue) => setServiceType(nativeAccessory!.uuid, svc.uuid, String(v))"
           />
         </div>
         <div v-if="serviceTypeNotice" class="homekit-notice">{{ serviceTypeNotice }}</div>
@@ -265,9 +265,10 @@
             </span>
           </div>
           <NbSwitch
+            :name="`homekit-visible-${nativeAccessory.uuid}`"
             :model-value="isHomekitVisible(nativeAccessory.uuid)"
             :disabled="homekitBusy"
-            @update:model-value="(v: boolean) => setHomekitVisible(nativeAccessory!.uuid, v)"
+            @update:model-value="(v?: boolean) => setHomekitVisible(nativeAccessory!.uuid, !!v)"
           />
         </div>
         <div v-if="homekitNotice" class="homekit-notice">{{ homekitNotice }}</div>
@@ -335,7 +336,7 @@
             :options="serviceTypeOptions"
             :disabled="homekitBusy"
             size="sm"
-            @update:model-value="(v: string) => setServiceType((selected as any).acc.uuid, svc.uuid, v)"
+            @update:model-value="(v: TSelectValue) => setServiceType((selected as any).acc.uuid, svc.uuid, String(v))"
           />
         </div>
         <div v-if="serviceTypeNotice" class="homekit-notice">{{ serviceTypeNotice }}</div>
@@ -346,6 +347,7 @@
             <!-- Writable bool → inline toggle -->
             <template v-if="isWritable(ch) && ch.format === 'bool'">
               <NbSwitch
+                :name="`hap-char-${svc.uuid}-${ch.uuid}`"
                 :model-value="!!ch.value"
                 @update:model-value="
                   setHapCharacteristic((selected as any).acc.uuid, svc.uuid, ch.uuid, $event ? 1 : 0)
@@ -371,9 +373,10 @@
             </span>
           </div>
           <NbSwitch
+            :name="`homekit-visible-${(selected as any).acc.uuid}`"
             :model-value="isHomekitVisible((selected as any).acc.uuid)"
             :disabled="homekitBusy"
-            @update:model-value="(v: boolean) => setHomekitVisible((selected as any).acc.uuid, v)"
+            @update:model-value="(v?: boolean) => setHomekitVisible((selected as any).acc.uuid, !!v)"
           />
         </div>
         <div v-if="homekitNotice" class="homekit-notice">{{ homekitNotice }}</div>
@@ -532,6 +535,11 @@ const currentDeviceId = computed(() => {
 
 // ─── HAP helpers ─────────────────────────────────────────────────────────────
 // HAP accessory categories (from hap-nodejs Categories enum)
+// NbSwitch models `boolean | undefined` and NbSelect
+// `string | number | (string | number)[] | null`. These controls are all
+// single-value, so the handlers narrow at the call site.
+type TSelectValue = string | number | (string | number)[] | null
+
 const CATEGORY_INFO: Record<number, { label: string; icon: string }> = {
   1: { label: 'Other', icon: 'cube' },
   2: { label: 'Bridge', icon: 'intersect' },
@@ -542,7 +550,10 @@ const CATEGORY_INFO: Record<number, { label: string; icon: string }> = {
   7: { label: 'Outlet', icon: 'plugs' },
   8: { label: 'Switch', icon: 'toggle-right' },
   9: { label: 'Thermostat', icon: 'thermometer' },
-  10: { label: 'Sensor', icon: 'activity' },
+  // 'activity' is not in the icon catalogue (it never was, in 3.x either):
+  // it silently rendered nothing, and @nubisco/ui 4.x throws on an unresolved
+  // name, so this is now 'pulse'. Registered in src/icons.ts.
+  10: { label: 'Sensor', icon: 'pulse' },
   11: { label: 'Security', icon: 'shield' },
   12: { label: 'Door', icon: 'door' },
   13: { label: 'Window', icon: 'app-window' },
@@ -660,7 +671,10 @@ const WIDGET_ICON: Record<string, string> = {
   thermostat: 'thermometer',
   dehumidifier: 'drop',
   energy_meter: 'lightning',
-  sensor: 'activity',
+  // 'activity' is not in the icon catalogue (it never was, in 3.x either):
+  // it silently rendered nothing, and @nubisco/ui 4.x throws on an unresolved
+  // name, so this is now 'pulse'. Registered in src/icons.ts.
+  sensor: 'pulse',
 }
 
 const WIDGET_LABEL: Record<string, string> = {

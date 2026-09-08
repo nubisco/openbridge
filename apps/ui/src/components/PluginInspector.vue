@@ -25,6 +25,7 @@
         </NbField>
         <NbField label="Disabled" control="fit">
           <NbSwitch
+            :name="`plugin-disabled-${inspector.selectedPlugin.id}`"
             :model-value="inspector.selectedPlugin.disabled ?? false"
             :disabled="togglingDisabled"
             @update:model-value="togglePluginDisabled"
@@ -138,7 +139,14 @@
           <!-- Visual / JSON tabs -->
           <template v-if="!pluginInfo || pluginInfo.platforms.length > 0">
             <!-- Tab switcher (only shown when schema is available) -->
-            <NbTabs v-if="hasVisualSchema" v-model="editorMode" :tabs="editorTabs" variant="contained" size="sm" />
+            <NbTabs
+              v-if="hasVisualSchema"
+              :model-value="editorMode"
+              :items="editorTabs"
+              variant="contained"
+              size="sm"
+              @update:model-value="(id: string) => (editorMode = id as TEditorMode)"
+            />
 
             <!-- Visual form -->
             <div v-if="editorMode === 'visual' && hasVisualSchema" class="visual-editor-wrap">
@@ -407,7 +415,10 @@ const WIDGET_ICON: Record<string, string> = {
   thermostat: 'thermometer',
   dehumidifier: 'drop',
   energy_meter: 'lightning',
-  sensor: 'activity',
+  // 'activity' is not in the icon catalogue (it never was, in 3.x either):
+  // it silently rendered nothing, and @nubisco/ui 4.x throws on an unresolved
+  // name, so this is now 'pulse'. Registered in src/icons.ts.
+  sensor: 'pulse',
 }
 
 function widgetIcon(widgetType: string): string {
@@ -490,7 +501,10 @@ const saveSuccess = ref(false)
 // Visual form editor
 const configSchema = ref<Record<string, unknown> | null>(null)
 const visualConfig = ref<Record<string, unknown>>({})
-const editorMode = ref<'visual' | 'json'>('visual')
+type TEditorMode = 'visual' | 'json'
+// NbTabs models a plain string (its ids are open-ended), so the narrowing
+// back to the two ids this switcher defines happens at the call site.
+const editorMode = ref<TEditorMode>('visual')
 const hasVisualSchema = computed(() => configSchema.value?.schema != null)
 
 // Show config editor for ANY homebridge-source plugin (running or stopped)
