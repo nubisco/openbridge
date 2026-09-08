@@ -106,20 +106,23 @@ jobs:
           VERSION: ${{ env.version }}
         run: |
           set -euo pipefail
+          # Absolute path, deliberately. npm parses a bare `dir/file.tgz` as the
+          # GitHub shorthand `github:dir/file.tgz` rather than a local tarball.
           publish() {
-            name="$1"; tarball="$2"
+            name="$1"; tarball="$GITHUB_WORKSPACE/dist-tarballs/$2"
             if npm view "$name@$VERSION" version >/dev/null 2>&1; then
               echo "$name@$VERSION already published, skipping"
               return 0
             fi
+            test -f "$tarball" || { echo "::error::missing tarball $tarball"; return 1; }
             npm publish "$tarball" --access public
           }
-          publish @nubisco/openbridge-logger                    dist-tarballs/nubisco-openbridge-logger-"$VERSION".tgz
-          publish @nubisco/openbridge-core                      dist-tarballs/nubisco-openbridge-core-"$VERSION".tgz
-          publish @nubisco/openbridge-config                    dist-tarballs/nubisco-openbridge-config-"$VERSION".tgz
-          publish @nubisco/openbridge-sdk                       dist-tarballs/nubisco-openbridge-sdk-"$VERSION".tgz
-          publish @nubisco/openbridge-compatibility-homebridge  dist-tarballs/nubisco-openbridge-compatibility-homebridge-"$VERSION".tgz
-          publish @nubisco/openbridge                           dist-tarballs/nubisco-openbridge-"$VERSION".tgz
+          publish @nubisco/openbridge-logger                    nubisco-openbridge-logger-"$VERSION".tgz
+          publish @nubisco/openbridge-core                      nubisco-openbridge-core-"$VERSION".tgz
+          publish @nubisco/openbridge-config                    nubisco-openbridge-config-"$VERSION".tgz
+          publish @nubisco/openbridge-sdk                       nubisco-openbridge-sdk-"$VERSION".tgz
+          publish @nubisco/openbridge-compatibility-homebridge  nubisco-openbridge-compatibility-homebridge-"$VERSION".tgz
+          publish @nubisco/openbridge                           nubisco-openbridge-"$VERSION".tgz
 
       # Provenance from a pre-packed tarball is not something npm documents either
       # way. Rather than trust it, assert every published version carries an
