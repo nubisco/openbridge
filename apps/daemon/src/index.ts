@@ -21,9 +21,9 @@ Options:
 
 Environment:
   OPENBRIDGE_PORT     Same as --port
-  OPENBRIDGE_HOME     State directory for config, plugins and HAP pairing
-                      (default: ~/.openbridge)
   OPENBRIDGE_UI_PATH  Override the location of the built dashboard
+
+State (config, plugins, HAP pairing) is stored in ~/.openbridge, following HOME.
 
 Docs: https://github.com/nubisco/openbridge#readme`)
   process.exit(0)

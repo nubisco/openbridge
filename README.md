@@ -63,9 +63,11 @@ Homebridge works, but it was designed for a different era. OpenBridge is built f
 
 ## Quick Start
 
-**Requirements:** Node.js 20 or newer.
+Three ways to install. Full details, including system and network requirements, are in the [Installation guide](apps/docs/docs/guide/installation.md).
 
 ### Install from npm
+
+**Requirements:** Node.js 20 or newer.
 
 ```bash
 npm install -g @nubisco/openbridge
@@ -79,7 +81,23 @@ openbridge --help          # usage
 openbridge --port 9000     # run on a different port
 ```
 
-State lives in `~/.openbridge` (config, plugins, HomeKit pairing). Override it with `OPENBRIDGE_HOME`.
+State lives in `~/.openbridge` (config, plugins, HomeKit pairing), following the `HOME` of the user running the daemon.
+
+### Run with Docker
+
+For servers and NAS boxes. Multi-arch images (`amd64`, `arm64`) are published to GitHub Container Registry.
+
+```bash
+docker run -d \
+  --name openbridge \
+  --restart unless-stopped \
+  --network host \
+  -v openbridge-config:/root/.openbridge \
+  -v openbridge-app:/opt/openbridge \
+  ghcr.io/nubisco/openbridge:latest
+```
+
+Host networking is required: HomeKit needs mDNS on your LAN, which a bridge network cannot provide. For the same reason, HomeKit pairing does not work under Docker Desktop on macOS or Windows; use npm there instead. A `docker-compose.yml` is included in the repository.
 
 ### Install from source
 
@@ -110,6 +128,8 @@ Open **http://localhost:8582**: the dashboard loads immediately.
   packages and the dashboard only. The VitePress docs site is built separately
   with `pnpm build:docs` and needs more than 1 GB of RAM, so it is kept out of
   the default build to keep OpenBridge installable on small SBCs.
+- **There is no authentication by default.** Anyone who can reach port 8582 has
+  full control. Do not expose it to the internet; use a VPN or Tailscale.
 
 ---
 

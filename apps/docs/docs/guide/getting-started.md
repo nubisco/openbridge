@@ -2,17 +2,11 @@
 
 This guide walks you from zero to a running OpenBridge daemon, paired with HomeKit, with a Homebridge plugin installed. It takes about ten minutes on a machine that already has Node.js.
 
-## Prerequisites
+## Install OpenBridge
 
-Node.js 20 or newer is the only hard requirement. Check with `node --version`.
+If you have not installed it yet, follow the [Installation guide](/guide/installation), which covers Docker, npm, and building from source, along with system and network requirements.
 
-> **Tip:** Use [nvm](https://github.com/nvm-sh/nvm) or [fnm](https://github.com/Schniz/fnm) to manage Node.js versions. OpenBridge is developed and tested on Node 20 LTS and runs on current releases.
-
-pnpm 9 and Git are needed only if you install from source (see below).
-
-## Installation from npm
-
-This is the path you want unless you intend to modify OpenBridge itself.
+The short version, for a machine that already has Node.js 20 or newer:
 
 ```bash
 npm install -g @nubisco/openbridge
@@ -21,53 +15,14 @@ openbridge
 
 Open **http://localhost:8582**. The dashboard is bundled in the package, so there is nothing else to build or serve.
 
-```bash
-openbridge --help          # usage
-openbridge --version       # print the version
-openbridge --port 9000     # run on a different port
-```
+The rest of this guide assumes OpenBridge is installed and running, whichever method you used.
 
-State lives in `~/.openbridge` (config, plugins, HomeKit pairing). Override the location with `OPENBRIDGE_HOME`.
+## Working from source
 
-### Platform notes
-
-OpenBridge runs on Linux, macOS, and Alpine/musl, on both x64 and arm64. A Raspberry Pi is a perfectly reasonable host.
-
-The only native dependency, `node-pty`, is an **optional** dependency. If it cannot be built, the install still succeeds and everything works except the dashboard's interactive shell pane. `GET /api/health` reports what is available:
-
-```json
-{ "status": "ok", "version": "0.30.0", "capabilities": { "shell": false, "ui": true } }
-```
-
-To enable the shell pane on Alpine, install a toolchain before OpenBridge:
+Everything below about building and hot reload applies only to a source checkout. Skip to [First-time config](#first-time-config) if you installed from npm or Docker.
 
 ```bash
-apk add build-base python3 linux-headers
-npm install -g @nubisco/openbridge
-```
-
-### Published packages
-
-The daemon is published as `@nubisco/openbridge`. Plugin authors depend on the libraries directly:
-
-| Package                                        | Use                                   |
-| ---------------------------------------------- | ------------------------------------- |
-| `@nubisco/openbridge`                          | The daemon and CLI (what you install) |
-| `@nubisco/openbridge-sdk`                      | `definePlugin()` for plugin authors   |
-| `@nubisco/openbridge-core`                     | Plugin types, registry, lifecycle     |
-| `@nubisco/openbridge-logger`                   | Structured logger                     |
-| `@nubisco/openbridge-config`                   | Zod-validated config schema           |
-| `@nubisco/openbridge-compatibility-homebridge` | Homebridge platform plugin adapter    |
-
-All six are released together under one version, from CI, with [npm provenance](https://docs.npmjs.com/generating-provenance-statements) attestations linking each tarball to the commit and workflow run that produced it.
-
-## Installation from source
-
-Use this if you are contributing to OpenBridge or want to run an unreleased branch.
-
-**Additional requirements:** pnpm 9 (`npm install -g pnpm@9`), Git, and roughly 1 GB of free disk (`node_modules` lands around 720 MB).
-
-```bash
+npm install -g pnpm@9
 git clone https://github.com/nubisco/openbridge
 cd openbridge
 pnpm install

@@ -33,6 +33,7 @@ export default withMermaid(
           text: 'Introduction',
           items: [
             { text: 'What is OpenBridge?', link: '/guide/what-is-openbridge' },
+            { text: 'Installation', link: '/guide/installation' },
             { text: 'Getting Started', link: '/guide/getting-started' },
             { text: 'Core Concepts', link: '/guide/concepts' },
           ],
