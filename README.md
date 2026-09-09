@@ -85,19 +85,14 @@ State lives in `~/.openbridge` (config, plugins, HomeKit pairing), following the
 
 ### Run with Docker
 
-For servers and NAS boxes. Multi-arch images (`amd64`, `arm64`) are published to GitHub Container Registry.
+For servers and NAS boxes. There is no image to pull: the [`docker-compose.yml`](docker-compose.yml) in this repository runs a stock `node:22-alpine` container that installs `@nubisco/openbridge` from npm into a volume on first boot, which is also what the in-app updater replaces.
 
 ```bash
-docker run -d \
-  --name openbridge \
-  --restart unless-stopped \
-  --network host \
-  -v openbridge-config:/root/.openbridge \
-  -v openbridge-app:/opt/openbridge \
-  ghcr.io/nubisco/openbridge:latest
+curl -O https://raw.githubusercontent.com/nubisco/openbridge/master/docker-compose.yml
+docker compose up -d
 ```
 
-Host networking is required: HomeKit needs mDNS on your LAN, which a bridge network cannot provide. For the same reason, HomeKit pairing does not work under Docker Desktop on macOS or Windows; use npm there instead. A `docker-compose.yml` is included in the repository.
+The first start spends a minute or two installing before the dashboard answers on port 8582. Host networking is required: HomeKit needs mDNS on your LAN, which a bridge network cannot provide. For the same reason, HomeKit pairing does not work under Docker Desktop on macOS or Windows; use npm there instead. See the [Installation guide](apps/docs/docs/guide/installation.md#docker) for pinning, upgrades and rollback.
 
 ### Install from source
 

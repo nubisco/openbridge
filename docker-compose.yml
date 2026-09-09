@@ -1,32 +1,59 @@
+# OpenBridge, installed from npm at first boot.
+#
+# There is no custom image and no registry to pull from: a stock Node image
+# installs @nubisco/openbridge into a volume the first time it starts. That
+# volume is also what the in-app updater replaces, so updating is an npm
+# install rather than an image pull.
 services:
   openbridge:
-    image: ghcr.io/nubisco/openbridge:latest
-    pull_policy: always
+    image: node:22-alpine
     container_name: openbridge
     restart: unless-stopped
     # Host networking is required for:
     # - mDNS device discovery (Shelly, Tuya UDP broadcast)
     # - WebSocket connections to smart devices (Shelly gen2)
     # - HomeKit (HAP) bridge advertisement on the local network
+    # Linux hosts only. Docker Desktop on macOS and Windows runs containers in
+    # a VM where this does not reach your LAN, so HomeKit cannot pair there.
     network_mode: host
-    volumes:
-      # Persistent config and pairing data
-      - openbridge-config:/root/.openbridge
-      # Plugin directory — npm packages installed here by the UI marketplace
-      - openbridge-plugins:/plugins
-      # App directory — enables self-updates from the UI
-      - openbridge-app:/opt/openbridge
     environment:
+      # Tells the daemon it may replace itself and restart into the new tree.
+      OPENBRIDGE_INSTALL: docker
+      # `latest` installs the newest release on first boot and lets the in-app
+      # updater move you forward from there. Set a concrete version (e.g.
+      # "0.31.0") to hold this deployment at it; that disables the in-app
+      # updater, because a restart would reinstall the pin and undo it.
+      OPENBRIDGE_VERSION_SPEC: latest
       TZ: Europe/Lisbon
       NODE_ENV: production
+    volumes:
+      # Config, HomeKit pairing, installed plugins, metrics. Back this one up.
+      - openbridge-config:/root/.openbridge
+      # The app itself. Safe to delete: it is reinstalled from npm on next boot.
+      - openbridge-app:/opt/openbridge
+    # Install only when the volume is empty or the pin changed. A plain restart
+    # then needs no network, and cannot undo an update applied from the UI.
+    command: >
+      sh -c '
+        set -eu
+        PREFIX=/opt/openbridge/current
+        SPEC="$${OPENBRIDGE_VERSION_SPEC:-latest}"
+        mkdir -p "$$PREFIX"
+        if [ ! -x "$$PREFIX/node_modules/.bin/openbridge" ] || [ "$$(cat "$$PREFIX/.spec" 2>/dev/null || true)" != "$$SPEC" ]; then
+          echo "Installing @nubisco/openbridge@$$SPEC ..."
+          npm install --prefix "$$PREFIX" --omit=optional --no-audit --no-fund "@nubisco/openbridge@$$SPEC"
+          printf %s "$$SPEC" > "$$PREFIX/.spec"
+        fi
+        exec "$$PREFIX/node_modules/.bin/openbridge"
+      '
     healthcheck:
       test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:8582/api/health']
       interval: 30s
       timeout: 5s
+      # Generous: the very first boot installs from npm before it can answer.
+      start_period: 120s
       retries: 3
-      start_period: 20s
 
 volumes:
   openbridge-config:
-  openbridge-plugins:
   openbridge-app:

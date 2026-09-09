@@ -685,7 +685,7 @@ describe('OpenBridge Server API', () => {
       writeConfig(baseConfig)
     })
 
-    it('GET /api/updates/check resolves latest via releases redirect even when the API is rate-limited', async () => {
+    it('GET /api/updates/check reads the latest version from the npm registry', async () => {
       const { createServer } = await import('../server.js')
       const { PluginRegistry } = await import('@nubisco/openbridge-core')
       const registry = new PluginRegistry()
@@ -693,16 +693,13 @@ describe('OpenBridge Server API', () => {
       const server = await createServer(registry, null, null, [], new Set(), new Map())
       await listen(server)
 
+      // Release notes come from GitHub and are cosmetic, so a rate-limited API
+      // must not stop the check from offering the update.
       const realFetch = globalThis.fetch
       const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
         const url = String(input)
-        if (url === 'https://github.com/nubisco/openbridge/releases/latest') {
-          return Promise.resolve(
-            new Response(null, {
-              status: 302,
-              headers: { location: 'https://github.com/nubisco/openbridge/releases/tag/v9.9.9' },
-            }),
-          )
+        if (url.startsWith('https://registry.npmjs.org/')) {
+          return Promise.resolve(new Response('{"version":"9.9.9"}', { status: 200 }))
         }
         if (url.startsWith('https://api.github.com/')) {
           return Promise.resolve(new Response('{"message":"API rate limit exceeded"}', { status: 403 }))
@@ -726,7 +723,7 @@ describe('OpenBridge Server API', () => {
       }
     })
 
-    it('GET /api/updates/check reports latest null when GitHub is unreachable', async () => {
+    it('GET /api/updates/check reports latest null when the registry is unreachable', async () => {
       const { createServer } = await import('../server.js')
       const { PluginRegistry } = await import('@nubisco/openbridge-core')
       const registry = new PluginRegistry()
@@ -737,7 +734,7 @@ describe('OpenBridge Server API', () => {
       const realFetch = globalThis.fetch
       const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
         const url = String(input)
-        if (url.includes('github.com')) {
+        if (url.startsWith('https://registry.npmjs.org/') || url.includes('github.com')) {
           return Promise.reject(new TypeError('fetch failed'))
         }
         return realFetch(input, init)
@@ -753,6 +750,56 @@ describe('OpenBridge Server API', () => {
         expect(data.updateAvailable).toBe(false)
       } finally {
         fetchSpy.mockRestore()
+        await server.close()
+      }
+    })
+
+    // A test run is a source checkout, which has no supervisor to restart it,
+    // so the check must offer instructions rather than a self-update button.
+    it('GET /api/updates/check reports the install method and its manual command', async () => {
+      const { createServer } = await import('../server.js')
+      const { PluginRegistry } = await import('@nubisco/openbridge-core')
+      const registry = new PluginRegistry()
+
+      const server = await createServer(registry, null, null, [], new Set(), new Map())
+      await listen(server)
+
+      const realFetch = globalThis.fetch
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => {
+        const url = String(input)
+        if (url.startsWith('https://registry.npmjs.org/')) {
+          return Promise.resolve(new Response('{"version":"9.9.9"}', { status: 200 }))
+        }
+        if (url.includes('github.com')) return Promise.reject(new TypeError('fetch failed'))
+        return realFetch(input, init)
+      })
+
+      try {
+        const data = await (await fetch(`${BASE}/api/updates/check`)).json()
+
+        expect(data.updateMethod).toBe('manual')
+        expect(data.installMethod).toBe('source')
+        expect(data.updateCommand).toContain('git pull')
+        expect(data.pinnedTo).toBeNull()
+      } finally {
+        fetchSpy.mockRestore()
+        await server.close()
+      }
+    })
+
+    it('POST /api/updates/apply refuses when the install cannot replace itself', async () => {
+      const { createServer } = await import('../server.js')
+      const { PluginRegistry } = await import('@nubisco/openbridge-core')
+      const registry = new PluginRegistry()
+
+      const server = await createServer(registry, null, null, [], new Set(), new Map())
+      await listen(server)
+
+      try {
+        const res = await fetch(`${BASE}/api/updates/apply`, { method: 'POST' })
+        expect(res.status).toBe(503)
+        expect((await res.json()).message).toContain('cannot update itself')
+      } finally {
         await server.close()
       }
     })
