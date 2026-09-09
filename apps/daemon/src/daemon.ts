@@ -1,4 +1,4 @@
-import { resolve, join } from 'path'
+import { resolve, join, sep, delimiter } from 'path'
 import { createRequire } from 'module'
 import { fileURLToPath } from 'url'
 import { dirname } from 'path'
@@ -28,6 +28,18 @@ export const METRICS_DIR = join(OPENBRIDGE_HOME, 'metrics')
 /** Metric sampling cadence, matched to the finest storage tier. */
 const SAMPLE_INTERVAL_MS = DEFAULT_TIERS[0].interval * 1000
 
+/**
+ * The `node_modules` directory a resolved module lives in, derived from the
+ * module's own entry path so it is correct whichever layout npm or pnpm chose.
+ * Returns null for anything not under a `node_modules` (a source checkout run
+ * straight from `dist/`, for instance).
+ */
+function nodeModulesDirOf(entryPath: string): string | null {
+  const marker = `${sep}node_modules${sep}`
+  const i = entryPath.lastIndexOf(marker)
+  return i === -1 ? null : entryPath.slice(0, i + marker.length - 1)
+}
+
 export interface DaemonOptions {
   configPath?: string
   port?: number
@@ -45,6 +57,8 @@ export class Daemon {
   private restrictedControls = new Set<string>()
   /** Main HAP bridge and hap-nodejs module, shared with native plugins */
   private hapBridgeRef: { bridge: unknown; hap: unknown } | null = null
+  /** The node_modules hap-nodejs was resolved from, so plugins can find it too */
+  private hapModulesDir: string | null = null
   /** Time-series store per device, for devices that declare metrics */
   private metricSeries = new Map<string, DeviceSeries>()
   /** Per-service HomeKit type overrides, applied at the bridge */
@@ -131,27 +145,21 @@ export class Daemon {
     }
 
     try {
-      // Load hap-nodejs: look in daemon or workspace node_modules
-      const hapCandidates = [
-        resolve(__dirname, '../node_modules/hap-nodejs'), // apps/daemon/node_modules (from dist/)
-        resolve(__dirname, '../../node_modules/hap-nodejs'), // apps/node_modules
-        resolve(__dirname, '../../../node_modules/hap-nodejs'), // workspace root node_modules
-        resolve(process.cwd(), 'node_modules/hap-nodejs'),
-      ]
-
+      // Resolve hap-nodejs through Node's own resolver rather than guessing paths.
+      // This handles every layout: the workspace, a global install (dependencies
+      // nested under the package) and a local install (dependencies hoisted to a
+      // sibling node_modules), plus pnpm's symlinked store and Yarn PnP.
       let hapNodeJs: any = null
-      for (const candidate of hapCandidates) {
-        try {
-          hapNodeJs = req(candidate)
-          log.info(`Loaded hap-nodejs from ${candidate}`)
-          break
-        } catch {
-          /* try next */
-        }
-      }
-
-      if (!hapNodeJs) {
-        throw new Error('hap-nodejs not found. Run: pnpm add hap-nodejs --filter @nubisco/openbridge-daemon')
+      try {
+        const entry = req.resolve('hap-nodejs')
+        hapNodeJs = req('hap-nodejs')
+        this.hapModulesDir = nodeModulesDirOf(entry)
+        log.info(`Loaded hap-nodejs from ${entry}`)
+      } catch (err: any) {
+        throw new Error(
+          `hap-nodejs could not be loaded, so the HomeKit bridge cannot start: ${err?.message ?? err}. ` +
+            'Reinstall OpenBridge (npm install -g @nubisco/openbridge) to restore it.',
+        )
       }
 
       // Init HAP storage
@@ -415,10 +423,16 @@ export class Daemon {
 
         // Native OpenBridge plugins: load via the plugin loader and start them
         if (isNative) {
-          // Ensure the plugin can resolve peer dependencies (like hap-nodejs) from the daemon's node_modules
-          const daemonModules = resolve(__dirname, '../node_modules')
-          if (!process.env.NODE_PATH?.includes(daemonModules)) {
-            process.env.NODE_PATH = process.env.NODE_PATH ? `${process.env.NODE_PATH}:${daemonModules}` : daemonModules
+          // Ensure the plugin can resolve peer dependencies (like hap-nodejs) from the
+          // same node_modules the daemon itself resolved them from. Deriving it
+          // from the resolved module keeps this correct on hoisted installs,
+          // where the daemon's own directory holds no dependencies at all.
+          const peerModules = this.hapModulesDir ?? resolve(__dirname, '../node_modules')
+          const onPath = (process.env.NODE_PATH ?? '').split(delimiter).includes(peerModules)
+          if (!onPath) {
+            process.env.NODE_PATH = process.env.NODE_PATH
+              ? `${process.env.NODE_PATH}${delimiter}${peerModules}`
+              : peerModules
             // Re-initialize the module resolution paths (use req since we're in ESM)
             ;(req('module') as any).Module._initPaths()
           }

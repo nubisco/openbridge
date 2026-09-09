@@ -25,6 +25,18 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 // Version: resolved in version.ts so the CLI can read it without loading this module.
 import { APP_VOLUME, VERSION_FILE, OPENBRIDGE_VERSION } from './version.js'
 export { OPENBRIDGE_VERSION }
+import {
+  CURRENT_DIR,
+  PACKAGE_NAME,
+  PREVIOUS_DIR,
+  STAGING_DIR,
+  detectInstall,
+  fetchLatestVersion,
+  fetchReleaseNotes,
+  installedVersionAt,
+  npmInstall,
+  releaseUrl,
+} from './updater.js'
 
 // Self-update state (shared with WebSocket clients)
 type UpdateStage = 'idle' | 'downloading' | 'extracting' | 'swapping' | 'restarting' | 'error'
@@ -127,67 +139,38 @@ export async function createServer(
   })
 
   // ─── Update check ─────────────────────────────────────────────────────────
-  // The latest version is resolved from the github.com releases redirect,
-  // which is NOT subject to the API's 60 req/hour per-IP rate limit
-  // (api.github.com regularly 403s on home networks that share an IP).
-  // Release notes still come from the API, but only best-effort.
-  // Cache the last successful check so failed requests can still report a
-  // known latest version instead of "up to date".
-  let lastKnownLatest: { version: string; url: string; notes: string | null } | null = null
-
-  async function fetchLatestVersion(): Promise<{ version: string; url: string } | null> {
-    const res = await fetch('https://github.com/nubisco/openbridge/releases/latest', {
-      signal: AbortSignal.timeout(8000),
-      redirect: 'manual',
-      headers: { 'User-Agent': 'openbridge-daemon' },
-    })
-    const location = res.headers.get('location') ?? ''
-    const match = location.match(/\/releases\/tag\/v?([^/]+)$/)
-    if (!match) return null
-    return { version: decodeURIComponent(match[1]), url: location }
-  }
+  // The npm registry is the source of truth: it is the only place that knows
+  // what can actually be installed. A git tag can exist while the publish that
+  // followed it failed, and offering that version would promise an update that
+  // cannot complete. Release notes still come from GitHub, best-effort.
+  // The last successful check is cached so a network blip reports the known
+  // latest version rather than a confident "up to date".
+  let lastKnownLatest: { version: string; notes: string | null } | null = null
 
   app.get('/api/updates/check', async () => {
     try {
-      const found = await fetchLatestVersion()
-      if (found && (found.version !== lastKnownLatest?.version || lastKnownLatest.notes === null)) {
-        let notes: string | null = null
-        try {
-          const res = await fetch('https://api.github.com/repos/nubisco/openbridge/releases/latest', {
-            signal: AbortSignal.timeout(8000),
-            headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'openbridge-daemon' },
-          })
-          if (res.ok) notes = ((await res.json()) as { body: string }).body
-        } catch {
-          /* notes are cosmetic: never fail the check over them */
-        }
-        lastKnownLatest = { version: found.version, url: found.url, notes }
+      const version = await fetchLatestVersion()
+      if (version && (version !== lastKnownLatest?.version || lastKnownLatest.notes === null)) {
+        lastKnownLatest = { version, notes: await fetchReleaseNotes(version) }
       }
     } catch {
       // Network error, timeout, etc.: fall through to use lastKnownLatest
     }
 
     const latest = lastKnownLatest?.version ?? null
-    const updateAvailable = latest !== null && latest !== OPENBRIDGE_VERSION
-
-    // Detect if self-update is possible (volume is writable)
-    let updateMethod: 'self' | 'manual' = 'manual'
-    try {
-      const testFile = join(APP_VOLUME, '.write-test')
-      writeFileSync(testFile, 'ok')
-      const { unlinkSync } = await import('fs')
-      unlinkSync(testFile)
-      updateMethod = 'self'
-    } catch {
-      /* volume not writable: manual update only */
-    }
+    const install = detectInstall()
 
     return {
       current: OPENBRIDGE_VERSION,
       latest,
-      updateAvailable,
-      updateMethod,
-      releaseUrl: lastKnownLatest?.url ?? null,
+      updateAvailable: latest !== null && latest !== OPENBRIDGE_VERSION,
+      updateMethod: install.canSelfUpdate ? ('self' as const) : ('manual' as const),
+      // What to run when we cannot do it ourselves, matched to how this
+      // particular deployment was installed.
+      updateCommand: install.command,
+      installMethod: install.method,
+      pinnedTo: install.pinnedTo,
+      releaseUrl: latest ? releaseUrl(latest) : null,
       releaseNotes: lastKnownLatest?.notes ?? null,
     }
   })
@@ -209,19 +192,28 @@ export async function createServer(
   })
 
   // ─── Self-update apply ────────────────────────────────────────────────────
+  // Install the new version into a staging prefix, then swap directories and
+  // exit. Staging first means a failed download or a broken dependency tree
+  // never touches the copy currently running, and the previous tree is kept
+  // for rollback.
   app.post('/api/updates/apply', async () => {
     if (updateProgress.stage !== 'idle' && updateProgress.stage !== 'error') {
       throw { statusCode: 409, message: 'Update already in progress' }
     }
 
-    const arch = os.arch() === 'x64' ? 'amd64' : os.arch() === 'arm64' ? 'arm64' : os.arch()
-    const currentDir = join(APP_VOLUME, 'current')
-    const stagingDir = join(APP_VOLUME, 'staging')
-    const previousDir = join(APP_VOLUME, 'previous')
+    const install = detectInstall()
+    if (!install.canSelfUpdate) {
+      throw {
+        statusCode: 503,
+        message:
+          install.pinnedTo !== null
+            ? `This deployment is pinned to ${install.pinnedTo}. Change the pin and recreate the container to move version.`
+            : `This ${install.method} install cannot update itself. Run: ${install.command}`,
+      }
+    }
 
-    // Check volume is writable
     try {
-      mkdirSync(stagingDir, { recursive: true })
+      mkdirSync(STAGING_DIR, { recursive: true })
     } catch {
       throw { statusCode: 503, message: 'Update volume not available. Mount /opt/openbridge as a Docker volume.' }
     }
@@ -233,98 +225,46 @@ export async function createServer(
 
     // Run update async: respond immediately
     ;(async () => {
+      const { rmSync, renameSync } = await import('fs')
       try {
-        // 1. Resolve latest version (github.com redirect, not rate-limited like the API)
-        log.info('Self-update: fetching release info...')
-        broadcast({ stage: 'downloading', progress: 0, message: 'Fetching release info...' })
-        const found = await fetchLatestVersion()
-        if (!found) throw new Error('Could not resolve the latest release from GitHub')
-        const version = found.version
-        const assetName = `openbridge-v${version}-linux-${arch}.tar.gz`
-        const assetUrl = `https://github.com/nubisco/openbridge/releases/download/v${version}/${assetName}`
+        // 1. Resolve the target version from the registry
+        log.info('Self-update: resolving the latest version from npm...')
+        broadcast({ stage: 'downloading', progress: 0, message: 'Checking npm for the latest version...' })
+        const version = await fetchLatestVersion()
+        if (!version) throw new Error('Could not resolve the latest version from the npm registry')
+        if (version === OPENBRIDGE_VERSION) {
+          broadcast({ stage: 'idle', message: `Already on v${version}` })
+          return
+        }
 
-        // 2. Download tarball
-        log.info(`Self-update: downloading ${assetName}...`)
-        broadcast({ stage: 'downloading', progress: 0.1, message: `Downloading v${version}...`, version })
-        const dlRes = await fetch(assetUrl, {
-          headers: { 'User-Agent': 'openbridge-daemon' },
-          redirect: 'follow',
-        })
-        if (dlRes.status === 404)
-          throw new Error(`Release asset ${assetName} not found. Your architecture (${arch}) may not be supported yet.`)
-        if (!dlRes.ok || !dlRes.body) throw new Error(`Download failed: ${dlRes.status}`)
-
-        const tarballPath = join(APP_VOLUME, 'download.tar.gz')
-        const { createWriteStream } = await import('fs')
-        const { pipeline } = await import('stream/promises')
-        const { Readable } = await import('stream')
-
-        // Stream download with progress (size from response headers; 0 → indeterminate)
-        const totalSize = Number(dlRes.headers.get('content-length') ?? 0)
-        let downloaded = 0
-        const progressStream = new (await import('stream')).Transform({
-          transform(chunk, _encoding, callback) {
-            downloaded += chunk.length
-            if (totalSize > 0) {
-              const pct = Math.round((downloaded / totalSize) * 100) / 100
-              broadcast({
-                stage: 'downloading',
-                progress: pct,
-                message: `Downloading v${version}... ${Math.round(pct * 100)}%`,
-                version,
-              })
-            }
-            callback(null, chunk)
-          },
+        // 2. Install into staging. npm reports no usable progress, so the bar
+        //    stays indeterminate rather than inventing a percentage.
+        log.info(`Self-update: installing ${PACKAGE_NAME}@${version}...`)
+        broadcast({ stage: 'downloading', message: `Installing v${version} from npm...`, version })
+        rmSync(STAGING_DIR, { recursive: true, force: true })
+        mkdirSync(STAGING_DIR, { recursive: true })
+        await npmInstall(STAGING_DIR, version, (line) => {
+          if (line) log.debug(`npm: ${line}`)
         })
 
-        await pipeline(Readable.fromWeb(dlRes.body as any), progressStream, createWriteStream(tarballPath))
-        log.info(`Downloaded ${assetName} (${(downloaded / 1024 / 1024).toFixed(1)} MB)`)
+        const staged = installedVersionAt(STAGING_DIR)
+        if (staged !== version) {
+          throw new Error(`Staged tree reports ${staged ?? 'no version'}, expected ${version}`)
+        }
 
-        // 3. Extract
-        broadcast({ stage: 'extracting', message: `Extracting v${version}...`, version })
-        // Clean staging
-        const { rmSync } = await import('fs')
-        rmSync(stagingDir, { recursive: true, force: true })
-        mkdirSync(stagingDir, { recursive: true })
-
-        await new Promise<void>((resolve, reject) => {
-          const tar = spawn('tar', ['xzf', tarballPath, '-C', stagingDir])
-          tar.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`tar exited with ${code}`))))
-          tar.on('error', reject)
-        })
-
-        // Clean up tarball
-        rmSync(tarballPath, { force: true })
-        log.info(`Extracted to staging directory`)
-
-        // 4. Swap: current → previous, staging → current
+        // 3. Swap: current → previous, staging → current
         broadcast({ stage: 'swapping', message: 'Installing update...', version })
-        rmSync(previousDir, { recursive: true, force: true })
-        if (existsSync(currentDir)) {
-          const { renameSync } = await import('fs')
-          renameSync(currentDir, previousDir)
-        }
-        const { renameSync } = await import('fs')
-        renameSync(stagingDir, currentDir)
+        rmSync(PREVIOUS_DIR, { recursive: true, force: true })
+        if (existsSync(CURRENT_DIR)) renameSync(CURRENT_DIR, PREVIOUS_DIR)
+        renameSync(STAGING_DIR, CURRENT_DIR)
 
-        // Fix node-pty permissions
-        try {
-          const { execSync } = await import('child_process')
-          execSync(`find "${currentDir}/apps/daemon/node_modules" -name "spawn-helper" -exec chmod +x {} \\;`, {
-            stdio: 'ignore',
-          })
-        } catch {
-          /* ignore */
-        }
-
-        // 5. Write version.json
+        // 4. Record what is now on the volume, for version.ts and for rollback
         writeFileSync(
           VERSION_FILE,
           JSON.stringify(
             {
               version,
-              arch,
+              arch: os.arch(),
               source: 'self-update',
               installedAt: new Date().toISOString(),
               previousVersion: OPENBRIDGE_VERSION,
@@ -337,19 +277,15 @@ export async function createServer(
         log.info(`Update to v${version} installed successfully: restarting...`)
         broadcast({ stage: 'restarting', message: `Restarting with v${version}...`, version })
 
-        // 6. Restart: just exit; Docker's restart policy will bring us back
-        // The entrypoint will see source:"self-update" in version.json and keep the updated files
-        setTimeout(() => {
-          process.exit(0)
-        }, 500)
+        // 5. Restart by exiting: the container restart policy brings us back on
+        //    the swapped-in tree. Self-update is only offered where that policy
+        //    exists, so this is not a way to end up stopped.
+        setTimeout(() => process.exit(0), 500)
       } catch (err: any) {
         log.error(`Self-update failed: ${err.message}`)
         broadcast({ stage: 'error', message: err.message })
-        // Clean up staging on failure
         try {
-          const { rmSync } = await import('fs')
-          rmSync(stagingDir, { recursive: true, force: true })
-          rmSync(join(APP_VOLUME, 'download.tar.gz'), { force: true })
+          rmSync(STAGING_DIR, { recursive: true, force: true })
         } catch {
           /* ignore */
         }
@@ -361,36 +297,27 @@ export async function createServer(
 
   // ─── Rollback ─────────────────────────────────────────────────────────────
   app.post('/api/updates/rollback', async () => {
-    const currentDir = join(APP_VOLUME, 'current')
-    const previousDir = join(APP_VOLUME, 'previous')
-
-    if (!existsSync(previousDir)) {
+    if (!existsSync(PREVIOUS_DIR)) {
       throw { statusCode: 404, message: 'No previous version available for rollback' }
     }
 
     const { rmSync, renameSync } = await import('fs')
     const rollbackDir = join(APP_VOLUME, 'rollback-tmp')
 
-    // Swap: current → rollback-tmp, previous → current
-    if (existsSync(currentDir)) renameSync(currentDir, rollbackDir)
-    renameSync(previousDir, currentDir)
-    rmSync(rollbackDir, { recursive: true, force: true })
+    // Read the version we are going back to before the swap destroys the record
+    const rolledBackVersion = installedVersionAt(PREVIOUS_DIR) ?? 'unknown'
 
-    // Read version from rolled-back files
-    let rolledBackVersion = 'unknown'
-    try {
-      const vf = JSON.parse(readFileSync(VERSION_FILE, 'utf8'))
-      rolledBackVersion = vf.previousVersion ?? 'unknown'
-    } catch {
-      /* ignore */
-    }
+    // Swap: current → rollback-tmp, previous → current
+    if (existsSync(CURRENT_DIR)) renameSync(CURRENT_DIR, rollbackDir)
+    renameSync(PREVIOUS_DIR, CURRENT_DIR)
+    rmSync(rollbackDir, { recursive: true, force: true })
 
     writeFileSync(
       VERSION_FILE,
       JSON.stringify(
         {
           version: rolledBackVersion,
-          arch: os.arch() === 'x64' ? 'amd64' : os.arch(),
+          arch: os.arch(),
           source: 'rollback',
           installedAt: new Date().toISOString(),
         },
@@ -401,16 +328,7 @@ export async function createServer(
 
     log.info(`Rolled back to v${rolledBackVersion}: restarting...`)
 
-    // Restart
-    setTimeout(() => {
-      const child = spawn(process.execPath, process.argv.slice(1), {
-        detached: true,
-        stdio: 'inherit',
-        env: process.env,
-      })
-      child.unref()
-      process.exit(0)
-    }, 300)
+    setTimeout(() => process.exit(0), 300)
 
     return { rollingBack: true, version: rolledBackVersion }
   })

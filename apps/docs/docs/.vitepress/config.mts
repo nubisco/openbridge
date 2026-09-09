@@ -1,21 +1,26 @@
 import { defineConfig } from 'vitepress'
 import { withMermaid } from './plugins/mermaid'
 
+// Project page, so the site is served from a subpath. VitePress rewrites links
+// it owns (theme logo, router hrefs, bundled assets) but passes `head` through
+// verbatim, so anything below has to carry the prefix itself.
+const base = '/openbridge/'
+
 export default withMermaid(
   defineConfig({
     title: 'OpenBridge',
     description: 'A modern, local-first home automation bridge built for developers.',
-    base: '/',
+    base,
     cleanUrls: true,
     lastUpdated: true,
     ignoreDeadLinks: true,
 
     head: [
-      ['link', { rel: 'icon', href: '/favicon.ico', sizes: 'any' }],
-      ['link', { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/favicon-32x32.png' }],
-      ['link', { rel: 'icon', type: 'image/png', sizes: '16x16', href: '/favicon-16x16.png' }],
-      ['link', { rel: 'apple-touch-icon', sizes: '180x180', href: '/apple-touch-icon.png' }],
-      ['link', { rel: 'manifest', href: '/site.webmanifest' }],
+      ['link', { rel: 'icon', href: `${base}favicon.ico`, sizes: 'any' }],
+      ['link', { rel: 'icon', type: 'image/png', sizes: '32x32', href: `${base}favicon-32x32.png` }],
+      ['link', { rel: 'icon', type: 'image/png', sizes: '16x16', href: `${base}favicon-16x16.png` }],
+      ['link', { rel: 'apple-touch-icon', sizes: '180x180', href: `${base}apple-touch-icon.png` }],
+      ['link', { rel: 'manifest', href: `${base}site.webmanifest` }],
       ['meta', { name: 'theme-color', content: '#0d0d0f' }],
     ],
 
@@ -73,7 +78,7 @@ export default withMermaid(
       socialLinks: [{ icon: 'github', link: 'https://github.com/nubisco/openbridge' }],
 
       editLink: {
-        pattern: 'https://github.com/nubisco/openbridge/edit/main/apps/docs/docs/:path',
+        pattern: 'https://github.com/nubisco/openbridge/edit/master/apps/docs/docs/:path',
         text: 'Suggest changes to this page',
       },
     },

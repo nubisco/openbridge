@@ -10,6 +10,8 @@ There are three ways to install OpenBridge. Pick one; you do not need the others
 
 If you are unsure: use **Docker** on a machine that is always on, and **npm** everywhere else.
 
+All three install the same npm package. Docker is the only one that can update itself from the dashboard, because its restart policy is what starts the daemon again afterwards; the others tell you the command to run instead.
+
 ## System requirements
 
 |         | Minimum                            | Notes                                                                                 |
@@ -49,7 +51,9 @@ Do not port-forward it or expose it to the internet. Reach it remotely over a VP
 
 ## Docker
 
-The recommended method for anything that runs unattended. Images are published to GitHub Container Registry for `linux/amd64` and `linux/arm64`.
+The recommended method for anything that runs unattended.
+
+There is no OpenBridge image to pull. A stock `node:22-alpine` container installs `@nubisco/openbridge` from npm into a volume the first time it starts, and runs it from there. That is deliberate: it is the same package the npm install uses, on every architecture Node itself supports, and the volume is also what the in-app updater replaces, so updating is an npm install rather than an image pull.
 
 ::: warning Docker on macOS and Windows will not pair with HomeKit
 HomeKit requires the container to share the host's network so it can send and receive mDNS on your LAN. Docker Desktop on macOS and Windows runs containers inside a VM, where `network_mode: host` does not provide real LAN access.
@@ -64,24 +68,45 @@ Create `docker-compose.yml`:
 ```yaml
 services:
   openbridge:
-    image: ghcr.io/nubisco/openbridge:latest
-    pull_policy: always
+    image: node:22-alpine
     container_name: openbridge
     restart: unless-stopped
     # Host networking is required for mDNS discovery, HomeKit advertisement,
     # and direct WebSocket connections to smart devices.
     network_mode: host
+    environment:
+      # Tells the daemon it may replace itself and restart into the new tree.
+      OPENBRIDGE_INSTALL: docker
+      # `latest` installs the newest release on first boot. Set a concrete
+      # version to hold this deployment at it; see Pinning a version below.
+      OPENBRIDGE_VERSION_SPEC: latest
+      TZ: Europe/Lisbon
+      NODE_ENV: production
     volumes:
       - openbridge-config:/root/.openbridge
       - openbridge-app:/opt/openbridge
-    environment:
-      TZ: Europe/Lisbon
+    # Installs only when the volume is empty or the pin changed, so a plain
+    # restart needs no network and cannot undo an update applied from the UI.
+    command: >
+      sh -c '
+        set -eu
+        PREFIX=/opt/openbridge/current
+        SPEC="$${OPENBRIDGE_VERSION_SPEC:-latest}"
+        mkdir -p "$$PREFIX"
+        if [ ! -x "$$PREFIX/node_modules/.bin/openbridge" ] || [ "$$(cat "$$PREFIX/.spec" 2>/dev/null || true)" != "$$SPEC" ]; then
+          echo "Installing @nubisco/openbridge@$$SPEC ..."
+          npm install --prefix "$$PREFIX" --omit=optional --no-audit --no-fund "@nubisco/openbridge@$$SPEC"
+          printf %s "$$SPEC" > "$$PREFIX/.spec"
+        fi
+        exec "$$PREFIX/node_modules/.bin/openbridge"
+      '
     healthcheck:
       test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:8582/api/health']
       interval: 30s
       timeout: 5s
       retries: 3
-      start_period: 20s
+      # Generous: the very first boot installs from npm before it can answer.
+      start_period: 120s
 
 volumes:
   openbridge-config:
@@ -95,45 +120,44 @@ docker compose up -d
 docker compose logs -f
 ```
 
-Open `http://<host-ip>:8582` in a browser, using the IP address of the machine running Docker.
+The first start spends a minute or two on the npm install before the dashboard answers. Later starts skip it. Open `http://<host-ip>:8582` in a browser, using the IP address of the machine running Docker.
 
-### With `docker run`
-
-```bash
-docker run -d \
-  --name openbridge \
-  --restart unless-stopped \
-  --network host \
-  -v openbridge-config:/root/.openbridge \
-  -v openbridge-app:/opt/openbridge \
-  ghcr.io/nubisco/openbridge:latest
-```
+::: tip The terminal pane is disabled under Docker
+The bootstrap passes `--omit=optional`, which skips `node-pty`, because building it would need a C toolchain the Node image does not carry. Everything else works; only the dashboard's interactive shell pane is unavailable.
+:::
 
 ### What the volumes hold
 
-| Volume              | Contents                                                                          | Losing it means                                               |
-| ------------------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| `/root/.openbridge` | `config.json`, HomeKit pairing data, installed plugins, metrics, session key      | Re-pairing with HomeKit and reconfiguring                     |
-| `/opt/openbridge`   | The running copy of the app, so the dashboard can self-update between image pulls | Nothing permanent, it is rebuilt from the image on next start |
+| Volume              | Contents                                                                     | Losing it means                                       |
+| ------------------- | ---------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `/root/.openbridge` | `config.json`, HomeKit pairing data, installed plugins, metrics, session key | Re-pairing with HomeKit and reconfiguring             |
+| `/opt/openbridge`   | The app itself, plus the previous version kept for rollback                  | Nothing permanent, it is reinstalled from npm on boot |
 
 Back up `/root/.openbridge`. That is the one that matters.
 
-### Pinning a version
-
-`:latest` tracks every release. To pin:
-
-```yaml
-image: ghcr.io/nubisco/openbridge:0.30.0
-```
-
 ### Upgrading
 
+Press **Install update** in Settings. The daemon installs the new version into `/opt/openbridge/staging`, swaps it into place, keeps the old tree as `previous`, and exits; the `unless-stopped` restart policy brings it straight back on the new version. If it fails to come up, **Rollback** in Settings puts `previous` back.
+
+To upgrade from the shell instead, delete the installed tree and restart:
+
 ```bash
-docker compose pull
+docker compose down
+docker volume rm openbridge_openbridge-app
 docker compose up -d
 ```
 
-The entrypoint notices the image is newer than the copy on the volume and refreshes it. Your config and pairing survive.
+Your config and pairing live on the other volume and survive either route.
+
+### Pinning a version
+
+Set a concrete version rather than `latest`:
+
+```yaml
+OPENBRIDGE_VERSION_SPEC: 0.30.0
+```
+
+then `docker compose up -d --force-recreate`. While a pin is set the in-app updater is disabled, and Settings shows what to edit instead: a restart would reinstall the pin and silently undo any update applied from the UI.
 
 ## npm
 
@@ -323,9 +347,13 @@ See [Avoid `sudo npm install -g`](#avoid-sudo-npm-install-g).
 
 `node-pty` is not installed. Confirm with `curl http://localhost:8582/api/health` and look for `"shell": false`. Install a build toolchain (`build-base python3 linux-headers` on Alpine, `build-essential python3` on Debian and Ubuntu) and reinstall. Everything except the terminal works without it.
 
+Under Docker this is expected: the bootstrap installs with `--omit=optional`, so the pane is off there by design.
+
 ### The container reports `unhealthy`
 
-Check that the health check targets the same port the daemon listens on. If you changed `bridge.port`, update the `healthcheck` block too.
+On the very first start it is still installing from npm, which is why `start_period` is 120s. Watch `docker compose logs -f` until the daemon reports it is listening.
+
+Otherwise, check that the health check targets the same port the daemon listens on. If you changed `bridge.port`, update the `healthcheck` block too.
 
 ### `JavaScript heap out of memory` when building from source
 

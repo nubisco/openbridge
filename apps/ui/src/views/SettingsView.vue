@@ -138,8 +138,11 @@
       </NbMessage>
 
       <NbMessage v-if="updateStatus?.updateMethod === 'manual' && updateStatus.updateAvailable" variant="helper">
-        Self-update is not available. Pull the latest Docker image to update:
-        <code>docker pull ghcr.io/nubisco/openbridge:latest</code>
+        <template v-if="updateStatus.pinnedTo">
+          This deployment is pinned to {{ updateStatus.pinnedTo }}. To move version:
+        </template>
+        <template v-else>Self-update is not available for this install. To update:</template>
+        <code>{{ updateStatus.updateCommand }}</code>
       </NbMessage>
 
       <div v-if="updateError" class="update-error-row">

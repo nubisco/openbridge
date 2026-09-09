@@ -1,0 +1,69 @@
+name: Deploy Docs
+
+# The VitePress site in apps/docs, published to https://nubisco.github.io/openbridge/.
+#
+# Triggered by CI completing on master rather than by the push itself: the docs
+# build is memory-hungry (see README "Building on low-memory machines") and there
+# is no point spending a Pages deploy on a commit that does not typecheck. It also
+# means semantic-release's `chore(release): x.y.z [skip ci]` commits still publish,
+# since workflow_run events ignore [skip ci].
+on:
+  workflow_run:
+    workflows: [CI]
+    branches: [master]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never cancel a running deploy: Pages serves whatever finished last, and a
+# cancelled deploy can leave the live site on an older build.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build Docs
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # workflow_run defaults to the default branch tip, which is not
+          # necessarily the commit CI just passed on.
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build docs
+        run: pnpm build:docs
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/docs/docs/.vitepress/dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

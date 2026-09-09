@@ -65,6 +65,11 @@ export interface UpdateStatus {
   latest: string | null
   updateAvailable: boolean
   updateMethod: 'self' | 'manual'
+  /** What to run by hand when updateMethod is 'manual', matched to the install. */
+  updateCommand: string
+  installMethod: 'docker' | 'npm' | 'source'
+  /** Set when the deployment holds a fixed version, which disables self-update. */
+  pinnedTo: string | null
   releaseUrl?: string
   releaseNotes?: string
 }
