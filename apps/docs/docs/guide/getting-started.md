@@ -4,23 +4,68 @@ This guide walks you from zero to a running OpenBridge daemon, paired with HomeK
 
 ## Prerequisites
 
-| Requirement | Minimum version | Check            |
-| ----------- | --------------- | ---------------- |
-| Node.js     | 20.x            | `node --version` |
-| pnpm        | 9.x             | `pnpm --version` |
-| Git         | any recent      | `git --version`  |
+Node.js 20 or newer is the only hard requirement. Check with `node --version`.
 
-> **Tip:** Use [nvm](https://github.com/nvm-sh/nvm) or [fnm](https://github.com/Schniz/fnm) to manage Node.js versions. OpenBridge is developed and tested on Node 20 LTS.
+> **Tip:** Use [nvm](https://github.com/nvm-sh/nvm) or [fnm](https://github.com/Schniz/fnm) to manage Node.js versions. OpenBridge is developed and tested on Node 20 LTS and runs on current releases.
 
-pnpm is required — the monorepo uses pnpm workspaces and its lockfile format. Install it if you don't have it:
+pnpm 9 and Git are needed only if you install from source (see below).
+
+## Installation from npm
+
+This is the path you want unless you intend to modify OpenBridge itself.
 
 ```bash
-npm install -g pnpm@9
+npm install -g @nubisco/openbridge
+openbridge
 ```
+
+Open **http://localhost:8582**. The dashboard is bundled in the package, so there is nothing else to build or serve.
+
+```bash
+openbridge --help          # usage
+openbridge --version       # print the version
+openbridge --port 9000     # run on a different port
+```
+
+State lives in `~/.openbridge` (config, plugins, HomeKit pairing). Override the location with `OPENBRIDGE_HOME`.
+
+### Platform notes
+
+OpenBridge runs on Linux, macOS, and Alpine/musl, on both x64 and arm64. A Raspberry Pi is a perfectly reasonable host.
+
+The only native dependency, `node-pty`, is an **optional** dependency. If it cannot be built, the install still succeeds and everything works except the dashboard's interactive shell pane. `GET /api/health` reports what is available:
+
+```json
+{ "status": "ok", "version": "0.30.0", "capabilities": { "shell": false, "ui": true } }
+```
+
+To enable the shell pane on Alpine, install a toolchain before OpenBridge:
+
+```bash
+apk add build-base python3 linux-headers
+npm install -g @nubisco/openbridge
+```
+
+### Published packages
+
+The daemon is published as `@nubisco/openbridge`. Plugin authors depend on the libraries directly:
+
+| Package                                        | Use                                   |
+| ---------------------------------------------- | ------------------------------------- |
+| `@nubisco/openbridge`                          | The daemon and CLI (what you install) |
+| `@nubisco/openbridge-sdk`                      | `definePlugin()` for plugin authors   |
+| `@nubisco/openbridge-core`                     | Plugin types, registry, lifecycle     |
+| `@nubisco/openbridge-logger`                   | Structured logger                     |
+| `@nubisco/openbridge-config`                   | Zod-validated config schema           |
+| `@nubisco/openbridge-compatibility-homebridge` | Homebridge platform plugin adapter    |
+
+All six are released together under one version, from CI, with [npm provenance](https://docs.npmjs.com/generating-provenance-statements) attestations linking each tarball to the commit and workflow run that produced it.
 
 ## Installation from source
 
-OpenBridge is currently distributed as source. Clone the repository and install dependencies:
+Use this if you are contributing to OpenBridge or want to run an unreleased branch.
+
+**Additional requirements:** pnpm 9 (`npm install -g pnpm@9`), Git, and roughly 1 GB of free disk (`node_modules` lands around 720 MB).
 
 ```bash
 git clone https://github.com/nubisco/openbridge
@@ -32,17 +77,19 @@ pnpm install
 
 ## Building
 
-Compile all packages and apps:
+Only relevant when installing from source. The npm package ships prebuilt.
 
 ```bash
 pnpm build
 ```
 
-This runs `tsc` (or `vite build`) in dependency order across the entire monorepo. The output you care about:
+This runs `tsc` (or `vite build`) in dependency order across the runtime packages. The output you care about:
 
 - `apps/daemon/dist/` — the compiled daemon
 - `apps/ui/dist/` — the compiled Vue app (the daemon serves this as static files)
 - `packages/*/dist/` — compiled shared packages
+
+The VitePress documentation site is **not** part of `pnpm build`. It is built separately with `pnpm build:docs` and needs more than 1 GB of RAM, which would otherwise make the whole build fail on small single-board computers.
 
 You must rebuild after any source change when running in production mode. In development mode, the daemon watches for changes automatically.
 
@@ -72,10 +119,14 @@ This starts Vite's development server on **port 5174** with hot module replaceme
 
 ### Production mode
 
+From a source checkout:
+
 ```bash
 pnpm build
 node apps/daemon/dist/index.js
 ```
+
+From a global npm install, just run `openbridge`.
 
 Open [http://localhost:8582](http://localhost:8582) to access the dashboard.
 
