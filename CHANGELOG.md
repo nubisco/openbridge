@@ -1,3 +1,10 @@
+## [0.31.1](https://github.com/nubisco/openbridge/compare/v0.31.0...v0.31.1) (2026-09-11)
+
+
+### Bug Fixes
+
+* **ui:** render the dashboard again, with an icon name that exists ([ca8c9ef](https://github.com/nubisco/openbridge/commit/ca8c9ef0b9bbffe43933e89f44cadabd8c0c6785))
+
 # [0.31.0](https://github.com/nubisco/openbridge/compare/v0.30.0...v0.31.0) (2026-09-10)
 
 
