@@ -151,7 +151,11 @@
       <!-- Network -->
       <NbPanel class="metric-card net-card">
         <div class="metric-header">
-          <div class="metric-icon amber"><NbIcon name="activity" :size="13" /></div>
+          <!-- "activity" is not a name the catalogue has, so the bundler plugin
+               could not link it and NbIcon threw at render, blanking the whole
+               dashboard. "pulse" is the same waveform under the name that
+               exists. Pre-dates the NubiscoUI 5.0.0 upgrade. -->
+          <div class="metric-icon amber"><NbIcon name="pulse" :size="13" /></div>
           <span class="metric-title">Network</span>
         </div>
         <div class="net-values">
