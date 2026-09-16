@@ -1,9 +1,87 @@
+/**
+ * OpenBridge's documentation identity.
+ *
+ * VitePress ships a perfectly good white default, which looks like every other
+ * VitePress site and nothing like the product. This maps --vp-* onto
+ * OpenBridge's palette. See "Documentation sites (VitePress)" in the workspace
+ * AGENTS.md, and acta/docs for the reference implementation.
+ *
+ * The colours come from docs/public/logo.svg. The previous theme was violet
+ * (#7c3aed), which is not in the mark at all: the mark is a blue bridge on a
+ * navy ground. Written out rather than imported from @nubisco/ui, because the
+ * docs build must not depend on a sibling checkout.
+ */
+
 :root {
+  --ob-navy-deep: #131d36;
+  --ob-navy: #22335e;
+  --ob-blue: #2f6fed;
+  --ob-blue-bright: #9fc0f0;
+  --ob-spark: #fed867;
+
+  --vp-c-brand-1: var(--ob-blue);
+  --vp-c-brand-2: #255bc4;
+  --vp-c-brand-3: var(--ob-navy);
+  --vp-c-brand-soft: color-mix(in srgb, var(--ob-blue) 12%, transparent);
+
+  /* Two tones, light. Paper rather than pure white, so the sidebar, code blocks
+     and cards have something to lift off. */
+  --vp-c-bg: #f2f4f8;
+  --vp-c-bg-alt: #ffffff;
+  --vp-c-bg-elv: #ffffff;
+  --vp-c-bg-soft: #ffffff;
+
   --vp-home-hero-name-color: transparent;
-  --vp-home-hero-name-background: linear-gradient(135deg, #7c3aed 0%, #2563eb 100%);
-  --vp-home-hero-image-background-image: linear-gradient(135deg, #7c3aed22 0%, #2563eb22 100%);
-  --vp-c-brand-1: #7c3aed;
-  --vp-c-brand-2: #6d28d9;
-  --vp-c-brand-3: #5b21b6;
-  --vp-c-brand-soft: #7c3aed18;
+  --vp-home-hero-name-background: linear-gradient(120deg, var(--ob-blue) 20%, var(--ob-blue-bright) 100%);
+  --vp-home-hero-image-background-image: linear-gradient(-45deg, var(--ob-blue) 25%, var(--ob-navy) 100%);
+  --vp-home-hero-image-filter: blur(44px);
+}
+
+@media (min-width: 640px) {
+  :root {
+    --vp-home-hero-image-filter: blur(56px);
+  }
+}
+
+@media (min-width: 960px) {
+  :root {
+    --vp-home-hero-image-filter: blur(68px);
+  }
+}
+
+/* The nav keeps VitePress's own treatment. Forcing a dark bar breaks in light
+   mode, where the bar is transparent at the top and the link colours chosen for
+   it land on pale grey. */
+
+.dark {
+  /* Two tones, dark: the mark's navy, one step deeper for the ground. */
+  --vp-c-bg: var(--ob-navy-deep);
+  --vp-c-bg-alt: var(--ob-navy);
+  --vp-c-bg-elv: var(--ob-navy);
+  --vp-c-bg-soft: var(--ob-navy);
+  --vp-c-brand-1: var(--ob-blue-bright);
+  --vp-c-brand-2: var(--ob-blue);
+  --vp-nav-bg-color: var(--ob-navy-deep);
+  --vp-c-gutter: #000000;
+}
+
+/* Screenshots of the dashboard are the argument on several pages, so they get a
+   frame rather than floating in the text as a bare rectangle. */
+.vp-doc img[src^='/openbridge/media/'],
+.vp-doc img[src^='/media/'] {
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 10px;
+  box-shadow: 0 8px 28px rgb(0 0 0 / 12%);
+  margin-block: 1.5rem;
+}
+
+.VPFeature {
+  border-color: var(--vp-c-divider);
+  transition:
+    border-color 0.18s ease,
+    transform 0.18s ease;
+}
+.VPFeature:hover {
+  border-color: var(--vp-c-brand-1);
+  transform: translateY(-2px);
 }
