@@ -1,3 +1,10 @@
+# [0.32.0](https://github.com/nubisco/openbridge/compare/v0.31.1...v0.32.0) (2026-09-17)
+
+
+### Features
+
+* **ui:** recognise the gate widget type ([1e71a01](https://github.com/nubisco/openbridge/commit/1e71a01544a210511994c52602d4e52965d6f4f2))
+
 ## [0.31.1](https://github.com/nubisco/openbridge/compare/v0.31.0...v0.31.1) (2026-09-11)
 
 
