@@ -257,6 +257,25 @@ export class Daemon {
 
       const username = config.bridge.username ?? generateUsername(config.bridge.name)
 
+      // Keep accessory IDs across restarts.
+      //
+      // hap-nodejs assigns AIDs when the bridge publishes, and then expires
+      // every cached id it did not just see. Native plugins register their
+      // accessories after publish, and Tuya-style platforms discover theirs
+      // later still, so those ids are purged a moment before the accessory
+      // that owns them shows up, and a fresh one is allocated instead. The
+      // count climbs by the same handful on every restart.
+      //
+      // HomeKit identifies an accessory by its AID, so to the Home app that is
+      // not the same lamp coming back: it is a new one, with no name, no room
+      // and no group, sitting next to the "No Response" ghost of its previous
+      // id. Rooms and names had to be set again after every restart.
+      //
+      // Purging only saves a few bytes of cache for accessories that really
+      // are gone, which is worth far less than identity that survives a
+      // restart. Homebridge disables it for the same reason.
+      hapBridge.disableUnusedIDPurge?.()
+
       // hap-nodejs listens asynchronously, after `publish()` has returned, so a
       // port conflict surfaces as an uncaught exception rather than a throw
       // that the catch below would see. The daemon then runs on with no
