@@ -134,26 +134,49 @@ jobs:
           VERSION: ${{ env.version }}
         run: |
           set -euo pipefail
-          missing=0
-          for name in @nubisco/openbridge-logger @nubisco/openbridge-core \
-                      @nubisco/openbridge-config @nubisco/openbridge-sdk \
-                      @nubisco/openbridge-compatibility-homebridge \
-                      @nubisco/openbridge; do
-            url=""
-            # The registry takes a moment to expose a freshly published version.
-            for attempt in 1 2 3 4 5; do
-              url="$(npm view "$name@$VERSION" dist.attestations.url 2>/dev/null || true)"
-              [ -n "$url" ] && break
-              sleep 10
+
+          # Asked of the registry directly rather than through `npm view`.
+          # `npm view` answers from npm's HTTP cache, so the first miss on a
+          # just-published version is cached and every retry re-reads it: the
+          # loop cannot see the attestation appear no matter how long it waits.
+          # That is what failed the 0.32.0 release, for two of six packages
+          # that were in fact attested correctly.
+          pending="@nubisco/openbridge-logger @nubisco/openbridge-core
+                   @nubisco/openbridge-config @nubisco/openbridge-sdk
+                   @nubisco/openbridge-compatibility-homebridge
+                   @nubisco/openbridge"
+          pending="$(echo $pending)"
+
+          # npm indexes provenance asynchronously and has taken over two minutes.
+          # Every outstanding package is re-checked on each pass against one
+          # shared deadline, so the wait is the slowest package rather than the
+          # sum of six separate budgets.
+          deadline=$(( $(date +%s) + 420 ))
+
+          while :; do
+            still=""
+            for name in $pending; do
+              # A miss is expected while indexing catches up, and the loop
+              # reports it below, so curl's own 404 line is only noise here.
+              if curl -fsS -o /dev/null --max-time 20 \
+                   "https://registry.npmjs.org/-/npm/v1/attestations/${name/\//%2f}@$VERSION" 2>/dev/null; then
+                echo "$name@$VERSION attested"
+              else
+                still="$still $name"
+              fi
             done
-            if [ -z "$url" ]; then
-              echo "::error::$name@$VERSION has no provenance attestation"
-              missing=1
-            else
-              echo "$name@$VERSION attested: $url"
+            pending="$(echo $still)"
+            [ -z "$pending" ] && break
+
+            if [ "$(date +%s)" -ge "$deadline" ]; then
+              for name in $pending; do
+                echo "::error::$name@$VERSION has no provenance attestation"
+              done
+              exit 1
             fi
+            echo "waiting for provenance on:$still"
+            sleep 15
           done
-          exit "$missing"
 
       - name: Summary
         if: always()
