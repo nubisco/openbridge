@@ -1,3 +1,10 @@
+## [0.32.4](https://github.com/nubisco/openbridge/compare/v0.32.3...v0.32.4) (2026-09-17)
+
+
+### Bug Fixes
+
+* **daemon:** keep HomeKit accessory ids across restarts ([4ffb65d](https://github.com/nubisco/openbridge/commit/4ffb65d85d0f0731480581bcb1e34ad5782c1a2d))
+
 ## [0.32.3](https://github.com/nubisco/openbridge/compare/v0.32.2...v0.32.3) (2026-09-17)
 
 
