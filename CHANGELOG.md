@@ -1,3 +1,10 @@
+## [0.32.3](https://github.com/nubisco/openbridge/compare/v0.32.2...v0.32.3) (2026-09-17)
+
+
+### Bug Fixes
+
+* **daemon:** do not run on silently when HomeKit fails to bind ([a2ddaa0](https://github.com/nubisco/openbridge/commit/a2ddaa00856e58decd3de6864aa406ed236b026c))
+
 ## [0.32.2](https://github.com/nubisco/openbridge/compare/v0.32.1...v0.32.2) (2026-09-17)
 
 
