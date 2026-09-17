@@ -1,3 +1,10 @@
+## [0.32.2](https://github.com/nubisco/openbridge/compare/v0.32.1...v0.32.2) (2026-09-17)
+
+
+### Bug Fixes
+
+* **ui:** stop offering an update this install cannot perform ([65ac221](https://github.com/nubisco/openbridge/commit/65ac221ccda89b7432a5566d4c75cc4ace23a4dc))
+
 ## [0.32.1](https://github.com/nubisco/openbridge/compare/v0.32.0...v0.32.1) (2026-09-17)
 
 
