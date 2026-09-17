@@ -1,3 +1,10 @@
+## [0.32.1](https://github.com/nubisco/openbridge/compare/v0.32.0...v0.32.1) (2026-09-17)
+
+
+### Bug Fixes
+
+* **ci:** check provenance against the registry, not npm's cache ([355a7df](https://github.com/nubisco/openbridge/commit/355a7df64f7620efb935210e0e202993bc94bb22))
+
 # [0.32.0](https://github.com/nubisco/openbridge/compare/v0.31.1...v0.32.0) (2026-09-17)
 
 
