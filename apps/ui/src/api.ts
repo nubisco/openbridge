@@ -196,7 +196,7 @@ export interface DeviceDescriptor {
 export const api = {
   health: () => get<HealthResponse>('/health'),
   system: () => get<SystemInfo>('/system'),
-  qr: () => get<{ setupURI: string | null; pincode: string | null }>('/qr'),
+  qr: () => get<{ setupURI: string | null; pincode: string | null; error?: string }>('/qr'),
   plugins: () => get<{ plugins: PluginInstance[] }>('/plugins'),
   pluginsRefresh: () =>
     fetch('/api/plugins/refresh', { method: 'POST' }).then((r) => r.json() as Promise<{ plugins: PluginInstance[] }>),

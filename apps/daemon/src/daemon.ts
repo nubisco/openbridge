@@ -7,6 +7,7 @@ import os from 'os'
 import { PluginRegistry, PluginLifecycle, loadPluginsFromDirectory, loadPlugin } from '@nubisco/openbridge-core'
 import type { PluginContext, Plugin, DeviceDescriptor } from '@nubisco/openbridge-core'
 import { Logger } from '@nubisco/openbridge-logger'
+import { waitForFreePort } from './port.js'
 import { loadConfig, defaultConfigPath } from '@nubisco/openbridge-config'
 import type { OpenBridgeConfig } from '@nubisco/openbridge-config'
 import { createServer, type HapInfo } from './server.js'
@@ -109,6 +110,18 @@ export class Daemon {
     })
     process.on('uncaughtException', (err) => {
       log.error(`Uncaught exception: ${err.message}\n${err.stack}`)
+
+      // A listen failure reaches here rather than any catch, because both
+      // Fastify and hap-nodejs bind asynchronously. Swallowing it under the
+      // generic message above is how a daemon ends up serving its UI happily
+      // with no HomeKit bridge behind it, so name what it means.
+      if ((err as NodeJS.ErrnoException).code === 'EADDRINUSE') {
+        log.error(
+          'A port this daemon needs is held by something else, most likely a previous instance ' +
+            'that has not exited. HomeKit will be offline until the daemon is restarted.',
+        )
+      }
+
       // Only exit on truly fatal errors (e.g. out of memory)
       if (err.message?.includes('out of memory') || err.message?.includes('ENOMEM')) {
         process.exit(1)
@@ -244,6 +257,17 @@ export class Daemon {
 
       const username = config.bridge.username ?? generateUsername(config.bridge.name)
 
+      // hap-nodejs listens asynchronously, after `publish()` has returned, so a
+      // port conflict surfaces as an uncaught exception rather than a throw
+      // that the catch below would see. The daemon then runs on with no
+      // HomeKit bridge and no other sign of trouble. Waiting for the port
+      // first covers the case that actually happens: a previous instance that
+      // has not finished letting go of its sockets.
+      await waitForFreePort(hapPort, {
+        timeoutMs: 30_000,
+        onWait: () => log.warn(`HomeKit port ${hapPort} is still in use, waiting for it to be released...`),
+      })
+
       hapBridge.publish({
         username,
         pincode,
@@ -251,11 +275,20 @@ export class Daemon {
         category: hapNodeJs.Categories.BRIDGE,
       })
 
-      hapInfo = { setupURI: hapBridge.setupURI(), pincode }
+      const setupURI = hapBridge.setupURI() as string
+      hapInfo = { setupURI, pincode }
       log.info(`HAP bridge published: PIN: ${pincode}`)
-      printPairingInfo(hapInfo.setupURI, pincode)
+      printPairingInfo(setupURI, pincode)
     } catch (err) {
-      log.error(`HAP bridge setup failed: ${err}`)
+      // Deliberately not fatal: the devices view, telemetry and the API are all
+      // still worth serving without HomeKit. But it must not be quiet about it,
+      // because "no HomeKit" is otherwise indistinguishable from "working".
+      const reason = err instanceof Error ? err.message : String(err)
+      // Reported through the same object the QR endpoint serves, so the UI can
+      // show why HomeKit is missing instead of an empty pairing panel.
+      hapInfo = { setupURI: null, pincode: null, error: reason }
+      log.error(`HomeKit bridge unavailable: ${reason}`)
+      log.error('Everything else is running. HomeKit will stay offline until the daemon is restarted.')
     }
 
     // ── OpenBridge native plugins ─────────────────────────────────────────────

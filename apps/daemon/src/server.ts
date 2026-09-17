@@ -70,8 +70,11 @@ import {
 } from './homekit-service-type.js'
 
 export interface HapInfo {
-  setupURI: string
-  pincode: string
+  /** Null when the bridge could not be published. */
+  setupURI: string | null
+  pincode: string | null
+  /** Why HomeKit is unavailable. Absent when the bridge published normally. */
+  error?: string
 }
 
 export interface LocalPlugin {

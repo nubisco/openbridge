@@ -11,15 +11,20 @@
           </div>
           <div v-else class="qr-placeholder">
             <NbIcon name="qr-code" :size="48" />
-            <span>No HAP bridge configured</span>
+            <span>{{ hapError ? 'HomeKit bridge unavailable' : 'No HAP bridge configured' }}</span>
           </div>
           <div class="hk-details">
             <div v-if="pincode" class="pin-display">{{ pincode }}</div>
             <div v-if="pincode" class="pin-label">Scan to add to HomeKit</div>
+            <!-- Reports the HAP bridge, not the browser's connection to the
+                 daemon. Those are not the same thing: the daemon serves this
+                 page perfectly well with no HomeKit bridge behind it, and
+                 reading "Bridge running" in that state is worse than useless. -->
             <div class="hk-status">
-              <span class="dot" :class="daemon.connected ? 'green' : 'gray'" />
-              {{ daemon.connected ? 'Bridge running' : 'Bridge offline' }}
+              <span class="dot" :class="hapDotClass" />
+              {{ hapStatusLabel }}
             </div>
+            <div v-if="hapError" class="hk-error">{{ hapError }}</div>
           </div>
         </div>
       </NbPanel>
@@ -231,6 +236,18 @@ async function restartOpenBridge() {
 const sysInfo = ref<SystemInfo | null>(null)
 const qrDataUrl = ref('')
 const pincode = ref('')
+/** Why HomeKit is unavailable, as reported by the daemon. */
+const hapError = ref('')
+
+const hapDotClass = computed(() => {
+  if (!daemon.connected) return 'gray'
+  return hapError.value ? 'red' : 'green'
+})
+
+const hapStatusLabel = computed(() => {
+  if (!daemon.connected) return 'Daemon offline'
+  return hapError.value ? 'HomeKit offline' : 'Bridge running'
+})
 
 // ─── Live metrics ─────────────────────────────────────────────────────────────
 const cpuHistory = ref<number[]>([])
@@ -327,6 +344,7 @@ onMounted(async () => {
 
   try {
     const qrRes = await api.qr()
+    hapError.value = qrRes.error ?? ''
     if (qrRes.setupURI) {
       pincode.value = qrRes.pincode ?? ''
       qrDataUrl.value = await QRCode.toDataURL(qrRes.setupURI, {
@@ -450,6 +468,17 @@ onUnmounted(() => {
   &.gray {
     background: var(--nb-c-border);
   }
+  &.red {
+    background: var(--nb-c-danger);
+    box-shadow: 0 0 4px color-mix(in srgb, var(--nb-c-danger) 60%, transparent);
+  }
+}
+
+.hk-error {
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: var(--nb-c-danger);
 }
 
 // System info
