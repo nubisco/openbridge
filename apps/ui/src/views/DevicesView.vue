@@ -396,6 +396,9 @@ const WIDGET_ICON: Record<string, string> = {
   thermostat: 'thermometer',
   dehumidifier: 'drop',
   energy_meter: 'lightning',
+  // 'garage' covers gates too: HomeKit has no separate gate service, so a
+  // sliding gate arrives here as a garage door opener and should look like one.
+  gate: 'garage',
   // 'activity' is not in the icon catalogue (it never was, in 3.x either):
   // it silently rendered nothing, and @nubisco/ui 4.x throws on an unresolved
   // name, so this is now 'pulse'. Registered in src/icons.ts.
@@ -408,6 +411,7 @@ const WIDGET_LABEL: Record<string, string> = {
   thermostat: 'Thermostat',
   dehumidifier: 'Dehumidifier',
   energy_meter: 'Energy Meter',
+  gate: 'Gate',
   sensor: 'Sensor',
 }
 

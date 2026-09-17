@@ -65,7 +65,7 @@ export interface MetricDescriptor {
 export interface DeviceDescriptor {
   id: string
   name: string
-  /** Maps to a UI widget: 'switch' | 'light' | 'thermostat' | 'dehumidifier' | 'energy_meter' | 'sensor' */
+  /** Maps to a UI widget: 'switch' | 'light' | 'thermostat' | 'dehumidifier' | 'energy_meter' | 'gate' | 'sensor' */
   widgetType: string
   manufacturer?: string
   model?: string
