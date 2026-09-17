@@ -109,8 +109,11 @@
           >
             Check
           </NbButton>
+          <!-- An npm, source or pinned install cannot update itself, and the
+               daemon refuses with 503. Offering the button anyway turned a
+               documented limitation into what looked like a broken update. -->
           <NbButton
-            v-if="updateStatus?.updateAvailable"
+            v-if="updateStatus?.updateAvailable && updateStatus.updateMethod === 'self'"
             variant="primary"
             size="sm"
             :loading="applying"
@@ -142,12 +145,15 @@
           This deployment is pinned to {{ updateStatus.pinnedTo }}. To move version:
         </template>
         <template v-else>Self-update is not available for this install. To update:</template>
-        <code>{{ updateStatus.updateCommand }}</code>
+        <code class="update-command">{{ updateStatus.updateCommand }}</code>
       </NbMessage>
 
       <div v-if="updateError" class="update-error-row">
         <NbMessage variant="error">{{ updateError }}</NbMessage>
-        <NbButton variant="ghost" size="sm" @click="rollbackUpdate">Rollback</NbButton>
+        <!-- Only once an update actually started. A request the daemon refused
+             outright swapped no directories, so there is nothing to roll back
+             to and offering it invites an unnecessary restart. -->
+        <NbButton v-if="updateStarted" variant="ghost" size="sm" @click="rollbackUpdate">Rollback</NbButton>
       </div>
     </NbPanel>
 
@@ -248,6 +254,8 @@ const restarting = ref(false)
 const updateStatus = ref<UpdateStatus | null>(null)
 const checkingUpdate = ref(false)
 const applying = ref(false)
+/** True once the daemon has accepted an update, which is what rollback undoes. */
+const updateStarted = ref(false)
 const updateError = ref<string | null>(null)
 const updateStage = ref('')
 const updateProgressPct = ref(0)
@@ -320,6 +328,7 @@ function pollAfterRestart() {
 async function applyUpdate() {
   if (applying.value) return
   applying.value = true
+  updateStarted.value = false
   updateError.value = null
   updateStage.value = 'downloading'
   updateMessage.value = 'Starting update...'
@@ -331,8 +340,9 @@ async function applyUpdate() {
   try {
     await api.updates.apply()
     // The async update runs in the background: WS will report progress
+    updateStarted.value = true
   } catch (e) {
-    updateError.value = String(e)
+    updateError.value = e instanceof Error ? e.message : String(e)
     applying.value = false
   }
 }
@@ -346,7 +356,7 @@ async function rollbackUpdate() {
     await api.updates.rollback()
     pollAfterRestart()
   } catch (e) {
-    updateError.value = String(e)
+    updateError.value = e instanceof Error ? e.message : String(e)
     applying.value = false
   }
 }
@@ -551,6 +561,14 @@ function generatePin() {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+/* Spaced with a margin rather than a space in the markup. Vue drops
+   whitespace-only text between elements when it spans a newline, so the command
+   ran straight into the colon ("To update:npm install"), and writing the space
+   into the template does not survive Prettier reformatting the tag. */
+.update-command {
+  margin-left: 0.35em;
 }
 
 .info-title {

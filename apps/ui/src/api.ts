@@ -6,6 +6,24 @@ export async function get<T>(path: string): Promise<T> {
   return res.json() as Promise<T>
 }
 
+/**
+ * The daemon's error message, or a status-code fallback.
+ *
+ * Fastify sends a JSON body with `message` on every error it raises, and those
+ * messages are the useful half: "This npm install cannot update itself. Run:
+ * ..." tells the user what to do, where "503" tells them nothing.
+ */
+async function errorMessage(res: Response, fallback: string): Promise<string> {
+  try {
+    const body = await res.json()
+    const message = (body as { message?: unknown })?.message
+    if (typeof message === 'string' && message.trim() !== '') return message
+  } catch {
+    /* not JSON, or already consumed: fall through */
+  }
+  return `${fallback}: ${res.status}`
+}
+
 export interface PluginInstance {
   id: string
   manifest: { name: string; version: string; description?: string; author?: string }
@@ -381,13 +399,13 @@ export const api = {
   updates: {
     check: () => get<UpdateStatus>('/updates/check'),
     apply: () =>
-      fetch('/api/updates/apply', { method: 'POST' }).then((r) => {
-        if (!r.ok) throw new Error(`Update failed: ${r.status}`)
+      fetch('/api/updates/apply', { method: 'POST' }).then(async (r) => {
+        if (!r.ok) throw new Error(await errorMessage(r, 'Update failed'))
         return r.json() as Promise<{ updating: boolean }>
       }),
     rollback: () =>
-      fetch('/api/updates/rollback', { method: 'POST' }).then((r) => {
-        if (!r.ok) throw new Error(`Rollback failed: ${r.status}`)
+      fetch('/api/updates/rollback', { method: 'POST' }).then(async (r) => {
+        if (!r.ok) throw new Error(await errorMessage(r, 'Rollback failed'))
         return r.json() as Promise<{ rollingBack: boolean; version: string }>
       }),
   },
