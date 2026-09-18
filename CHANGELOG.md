@@ -1,3 +1,10 @@
+# [0.34.0](https://github.com/nubisco/openbridge/compare/v0.33.0...v0.34.0) (2026-09-18)
+
+
+### Features
+
+* **updater:** let an npm install update itself ([a90011c](https://github.com/nubisco/openbridge/commit/a90011c545a73dc863946e6dc6b30a606eeff5e7))
+
 # [0.33.0](https://github.com/nubisco/openbridge/compare/v0.32.4...v0.33.0) (2026-09-18)
 
 
