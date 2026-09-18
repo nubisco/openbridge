@@ -22,8 +22,14 @@
               @keyup.enter="saveRename((selected as any).dev.id)"
               @keyup.escape="editingName = false"
             />
-            <NbButton variant="primary" size="sm" icon="check" @click="saveRename((selected as any).dev.id)" />
-            <NbButton variant="ghost" size="sm" icon="x" @click="editingName = false" />
+            <NbButton
+              variant="primary"
+              size="sm"
+              icon="check"
+              aria-label="Save name"
+              @click="saveRename((selected as any).dev.id)"
+            />
+            <NbButton variant="ghost" size="sm" icon="x" aria-label="Cancel rename" @click="editingName = false" />
           </div>
           <div class="detail-type">{{ widgetLabel(effectiveType((selected as any).dev)) }}</div>
         </div>
@@ -297,8 +303,14 @@
               @keyup.enter="saveRename((selected as any).acc.uuid)"
               @keyup.escape="editingName = false"
             />
-            <NbButton variant="primary" size="sm" icon="check" @click="saveRename((selected as any).acc.uuid)" />
-            <NbButton variant="ghost" size="sm" icon="x" @click="editingName = false" />
+            <NbButton
+              variant="primary"
+              size="sm"
+              icon="check"
+              aria-label="Save name"
+              @click="saveRename((selected as any).acc.uuid)"
+            />
+            <NbButton variant="ghost" size="sm" icon="x" aria-label="Cancel rename" @click="editingName = false" />
           </div>
           <div class="detail-type">{{ categoryInfo((selected as any).acc.category).label }}</div>
         </div>

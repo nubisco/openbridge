@@ -76,7 +76,13 @@
             style="flex: 1"
             @update:model-value="emit('updateArray', path, idx, $event)"
           />
-          <NbButton variant="ghost" size="sm" icon="trash" @click="emit('removeArray', path, idx)" />
+          <NbButton
+            variant="ghost"
+            size="sm"
+            icon="trash"
+            :aria-label="`Remove ${label()} ${idx + 1}`"
+            @click="emit('removeArray', path, idx)"
+          />
         </div>
         <NbButton
           variant="ghost"
