@@ -18,6 +18,11 @@ export interface TPlatformClientOptions {
 export interface TJwtClaims {
   sub: string
   email: string
+  /**
+   * The platform's avatar URL. Absent, never null or empty, when the person
+   * has no avatar, so an absent claim means "no avatar" rather than "unchanged".
+   */
+  picture?: string
   name?: string
   role: string
   /** App id (uuid) the token was issued to. */

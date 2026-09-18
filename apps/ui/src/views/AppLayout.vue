@@ -32,18 +32,28 @@
       </div>
       <NbUserMenu
         v-if="auth.config.value?.enabled && auth.user.value"
-        :user="{ email: auth.user.value.email }"
+        :user="{ email: auth.user.value.email, picture: auth.user.value.picture }"
         :accounts="menuAccounts"
         :accounts-unknown="accountsUnknown"
-        :show-profile="false"
+        :show-account-actions="auth.isNubiscoPlatform.value"
+        :show-profile="auth.isNubiscoPlatform.value"
+        :brand="auth.isNubiscoPlatform.value ? 'footer' : undefined"
         @open="loadIdentities"
         @switch="onSwitchAccount"
         @switch-account="auth.chooseAccount()"
         @add-account="auth.addAccount()"
         @remove="removeAccount"
+        @profile="openProfile"
         @sign-out="signOut"
       >
         <template #default="{ close }">
+          <!-- Appearance first: every product lets a person change theme from
+               here, so it is where people look for it. Three options rather
+               than a switch, because `system` is a preference in its own right
+               and not the absence of one. -->
+          <NbField label="Theme" :hint="themeHint" control="fit" class="menu-theme">
+            <NbRadio v-model="theme" name="theme" :options="themeOptions" direction="horizontal" />
+          </NbField>
           <button
             type="button"
             role="menuitem"
@@ -118,6 +128,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, watch, ref } from 'vue'
+import { useTheme, type TTheme } from '@nubisco/ui'
 import { useRoute, useRouter } from 'vue-router'
 import { useDaemonStore } from '@/stores/daemon'
 import { useInspectorStore } from '@/stores/inspector'
@@ -137,6 +148,41 @@ const auth = useAuth()
 
 async function signOut() {
   await auth.logout()
+}
+
+// ─── Appearance, in the account menu ────────────────────────────────────────
+// Moved here from Settings: the standard puts it first in the menu slot, and
+// having it in two places would give one preference two homes. `theme` from the
+// composable is readonly, so the control writes through setTheme.
+const { theme: currentTheme, resolved, followsSystem, setTheme } = useTheme()
+
+const themeOptions = [
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+  { value: 'system', label: 'System' },
+]
+
+const theme = computed({
+  get: () => currentTheme.value as string,
+  set: (value: string) => setTheme(value as TTheme),
+})
+
+// Naming what `system` currently resolves to, since the choice itself does not
+// say whether the machine is light or dark right now.
+const themeHint = computed(() =>
+  followsSystem.value ? `Following your system, currently ${resolved.value}` : 'Pinned, ignoring your system setting',
+)
+
+/**
+ * The profile is the platform's, not ours.
+ *
+ * Products do not build a profile page or an avatar upload: a person changes
+ * both in one place, and every app picks the change up at the next sign-in.
+ */
+function openProfile() {
+  const issuer = auth.config.value?.issuer
+  if (!issuer) return
+  window.open(`${issuer}/profile`, '_blank', 'noopener')
 }
 
 // ─── Account menu (NbUserMenu) ──────────────────────────────────────────────

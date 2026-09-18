@@ -31,7 +31,40 @@ export interface TAuthConfig {
 interface TSessionPayload {
   userId: string
   email: string
+  /** Platform avatar URL, absent when the person has no avatar. */
+  picture?: string
   exp: number
+}
+
+/**
+ * Keep a `picture` claim only when it is an avatar served by our own issuer.
+ *
+ * The value becomes an `<img src>` on every page, so a token that carried a
+ * URL anywhere else would have this app fetch it, announcing the viewer to
+ * whoever controls it. Restricting it to the issuer's origin under
+ * `/api/avatars/` means the only thing it can point at is the avatar service
+ * the token came from. Credentials in the URL are refused outright: they have
+ * no business in an image source and are a sign the value was built by
+ * something other than the platform.
+ *
+ * An absent or unusable claim returns undefined, which clears any stored value.
+ * The platform omits `picture` entirely for someone with no avatar, so absent
+ * means "no avatar" rather than "unchanged".
+ */
+export function acceptPictureClaim(issuer: string | null, picture: unknown): string | undefined {
+  if (!issuer || typeof picture !== 'string' || picture === '') return undefined
+  let url: URL
+  let base: URL
+  try {
+    url = new URL(picture)
+    base = new URL(issuer)
+  } catch {
+    return undefined
+  }
+  if (url.origin !== base.origin) return undefined
+  if (!url.pathname.startsWith('/api/avatars/')) return undefined
+  if (url.username !== '' || url.password !== '') return undefined
+  return url.toString()
 }
 
 function getConfigDir(): string {
@@ -145,16 +178,20 @@ export async function registerAuthRoutes(app: FastifyInstance, config: TAuthConf
       return reply.code(409).send({ error: 'subject_mismatch' })
     }
 
+    // Re-read at every sign-in, so a changed avatar is picked up and a removed
+    // one disappears. This session is the only user record OpenBridge keeps.
+    const picture = acceptPictureClaim(config.issuer, claims.picture)
     const payload: TSessionPayload = {
       userId: claims.sub,
       email: claims.email,
+      ...(picture ? { picture } : {}),
       exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SEC,
     }
     const cookieValue = signSession(config.secret, payload)
     const parts = [`${COOKIE_NAME}=${cookieValue}`, 'HttpOnly', 'SameSite=Lax', 'Path=/', `Max-Age=${SESSION_TTL_SEC}`]
     if (isProductionLike()) parts.push('Secure')
     reply.header('Set-Cookie', parts.join('; '))
-    return { ok: true, user: { id: claims.sub, email: claims.email } }
+    return { ok: true, user: { id: claims.sub, email: claims.email, picture } }
   })
 
   app.get('/auth/me', async (req, reply) => {
@@ -162,7 +199,7 @@ export async function registerAuthRoutes(app: FastifyInstance, config: TAuthConf
     if (!cookie) return reply.code(401).send({ error: 'unauthenticated' })
     const session = verifySession(config.secret, cookie)
     if (!session) return reply.code(401).send({ error: 'unauthenticated' })
-    return { user: { id: session.userId, email: session.email } }
+    return { user: { id: session.userId, email: session.email, picture: session.picture } }
   })
 
   app.post('/auth/logout', async (_req, reply) => {

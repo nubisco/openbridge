@@ -1,8 +1,15 @@
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 
 export interface AuthUser {
   id: string
   email: string
+  /**
+   * Platform avatar URL, absent when the person has no avatar. The daemon only
+   * ever passes on a URL served by the issuer, and it can go stale between
+   * sign-ins because a replaced avatar's URL returns 404, so anything rendering
+   * it must fall back to initials.
+   */
+  picture?: string
 }
 
 export interface PlatformAuthConfig {
@@ -239,10 +246,27 @@ export function useAuth() {
     window.location.href = '/login?logged_out=1'
   }
 
+  /**
+   * True when the issuer is Nubisco Platform, rather than some other provider a
+   * self-hosted install has been pointed at. The account actions, Profile and
+   * the platform lockup are only meaningful there.
+   */
+  const isNubiscoPlatform = computed(() => {
+    const issuer = config.value?.issuer
+    if (!issuer) return false
+    try {
+      const host = new URL(issuer).hostname
+      return host === 'nubisco.io' || host.endsWith('.nubisco.io')
+    } catch {
+      return false
+    }
+  })
+
   return {
     user,
     config,
     ready,
+    isNubiscoPlatform,
     loadConfig,
     checkAuth,
     startPlatformLogin,
