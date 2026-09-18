@@ -1,3 +1,10 @@
+# [0.33.0](https://github.com/nubisco/openbridge/compare/v0.32.4...v0.33.0) (2026-09-18)
+
+
+### Features
+
+* **auth:** show the platform avatar and complete the account menu ([6bcf80f](https://github.com/nubisco/openbridge/commit/6bcf80f04efcd227df2d9ca1c502cceed54172e8))
+
 ## [0.32.4](https://github.com/nubisco/openbridge/compare/v0.32.3...v0.32.4) (2026-09-17)
 
 
