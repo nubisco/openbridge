@@ -1,3 +1,10 @@
+## [0.34.1](https://github.com/nubisco/openbridge/compare/v0.34.0...v0.34.1) (2026-09-18)
+
+
+### Bug Fixes
+
+* **updater:** install with a fresh packument, not a cached one ([9e241c8](https://github.com/nubisco/openbridge/commit/9e241c8e438690730ccf8027918d08c891e8dab1))
+
 # [0.34.0](https://github.com/nubisco/openbridge/compare/v0.33.0...v0.34.0) (2026-09-18)
 
 
