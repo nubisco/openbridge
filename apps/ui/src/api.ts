@@ -85,6 +85,8 @@ export interface UpdateStatus {
   updateMethod: 'self' | 'manual'
   /** What to run by hand when updateMethod is 'manual', matched to the install. */
   updateCommand: string
+  /** Why self-update is unavailable, when it is. */
+  updateBlockedBy?: string | null
   installMethod: 'docker' | 'npm' | 'source'
   /** Set when the deployment holds a fixed version, which disables self-update. */
   pinnedTo: string | null

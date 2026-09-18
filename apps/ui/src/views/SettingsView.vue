@@ -144,6 +144,9 @@
         <template v-if="updateStatus.pinnedTo">
           This deployment is pinned to {{ updateStatus.pinnedTo }}. To move version:
         </template>
+        <template v-else-if="updateStatus.updateBlockedBy">
+          Self-update is not available here ({{ updateStatus.updateBlockedBy }}). To update:
+        </template>
         <template v-else>Self-update is not available for this install. To update:</template>
         <code class="update-command">{{ updateStatus.updateCommand }}</code>
       </NbMessage>

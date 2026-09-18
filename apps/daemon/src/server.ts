@@ -33,9 +33,13 @@ import {
   detectInstall,
   fetchLatestVersion,
   fetchReleaseNotes,
+  globalPrefix,
   installedVersionAt,
   npmInstall,
+  npmInstallGlobal,
   releaseUrl,
+  restartDaemon,
+  versionOnDisk,
 } from './updater.js'
 
 // Self-update state (shared with WebSocket clients)
@@ -171,6 +175,8 @@ export async function createServer(
       // What to run when we cannot do it ourselves, matched to how this
       // particular deployment was installed.
       updateCommand: install.command,
+      /** Why self-update is unavailable, so the UI can say more than "not available". */
+      updateBlockedBy: install.blockedBy ?? null,
       installMethod: install.method,
       pinnedTo: install.pinnedTo,
       releaseUrl: latest ? releaseUrl(latest) : null,
@@ -210,20 +216,63 @@ export async function createServer(
         statusCode: 503,
         message:
           install.pinnedTo !== null
-            ? `This deployment is pinned to ${install.pinnedTo}. Change the pin and recreate the container to move version.`
-            : `This ${install.method} install cannot update itself. Run: ${install.command}`,
+            ? `This deployment is pinned to ${install.pinnedTo}. Change the pin to move version.`
+            : `This ${install.method} install cannot update itself (${install.blockedBy}). Run: ${install.command}`,
       }
+    }
+
+    function broadcast(msg: UpdateProgress) {
+      updateProgress = msg
+      for (const listener of updateListeners) listener(msg)
+    }
+
+    // An npm install replaces itself in place. There is no staging tree to swap,
+    // because the package directory is the only copy and overwriting it while
+    // the daemon runs is safe: what it is executing is already in memory.
+    if (install.method === 'npm') {
+      const prefix = globalPrefix()
+      if (!prefix) throw { statusCode: 503, message: 'Could not determine the npm prefix to install into' }
+      ;(async () => {
+        try {
+          broadcast({ stage: 'downloading', progress: 0, message: 'Checking npm for the latest version...' })
+          const version = await fetchLatestVersion()
+          if (!version) throw new Error('Could not resolve the latest version from the npm registry')
+          if (version === OPENBRIDGE_VERSION) {
+            broadcast({ stage: 'idle', message: `Already on v${version}` })
+            return
+          }
+
+          log.info(`Self-update: installing ${PACKAGE_NAME}@${version} into ${prefix}...`)
+          broadcast({ stage: 'downloading', message: `Installing v${version} from npm...`, version })
+          await npmInstallGlobal(prefix, version, (line) => {
+            if (line) log.debug(`npm: ${line}`)
+          })
+
+          // Only believe it once the new version is on disk. A failed install
+          // must leave the daemon running the old code, not exit into nothing.
+          const onDisk = versionOnDisk()
+          if (onDisk !== version) {
+            throw new Error(`Install finished but the package reports ${onDisk ?? 'no version'}, expected ${version}`)
+          }
+
+          log.info(`Update to v${version} installed: restarting to pick it up...`)
+          broadcast({ stage: 'restarting', message: `Restarting with v${version}...`, version })
+          restartDaemon(install.restart ?? 'spawn', (m) => log.info(m))
+        } catch (err: any) {
+          // Nothing was swapped, so the running daemon is untouched and the old
+          // version stays installed.
+          log.error(`Self-update failed: ${err.message}`)
+          broadcast({ stage: 'error', message: err.message })
+        }
+      })()
+
+      return { updating: true }
     }
 
     try {
       mkdirSync(STAGING_DIR, { recursive: true })
     } catch {
       throw { statusCode: 503, message: 'Update volume not available. Mount /opt/openbridge as a Docker volume.' }
-    }
-
-    function broadcast(msg: UpdateProgress) {
-      updateProgress = msg
-      for (const listener of updateListeners) listener(msg)
     }
 
     // Run update async: respond immediately
