@@ -269,6 +269,9 @@ export function npmInstall(prefix: string, version: string, onLine?: (line: stri
         '--omit=optional',
         '--no-audit',
         '--no-fund',
+        // See npmInstallGlobal: a just-published version against a stale
+        // packument resolves as ETARGET.
+        '--prefer-online',
         `${PACKAGE_NAME}@${version}`,
       ],
       { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, NODE_ENV: 'production' } },
@@ -315,6 +318,11 @@ export function npmInstallGlobal(prefix: string, version: string, onLine?: (line
       '--omit=optional',
       '--no-audit',
       '--no-fund',
+      // A version published minutes ago is exactly what an update reaches for,
+      // and a cached packument from before it existed makes npm insist it does
+      // not. Seen for real: the daemon's own version resolved while one of its
+      // workspace dependencies came back ETARGET from the same install.
+      '--prefer-online',
       `${PACKAGE_NAME}@${version}`,
     ],
     onLine,
