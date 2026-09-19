@@ -257,7 +257,11 @@ export async function createServer(
 
           log.info(`Update to v${version} installed: restarting to pick it up...`)
           broadcast({ stage: 'restarting', message: `Restarting with v${version}...`, version })
-          restartDaemon(install.restart ?? 'spawn', (m) => log.info(m))
+          // The port Fastify actually bound, so the watchdog checks the right
+          // one rather than a configured value that may have been overridden.
+          const bound = app.server.address()
+          const httpPort = typeof bound === 'object' && bound ? bound.port : 8582
+          restartDaemon(httpPort, (m) => log.info(m))
         } catch (err: any) {
           // Nothing was swapped, so the running daemon is untouched and the old
           // version stays installed.

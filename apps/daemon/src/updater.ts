@@ -342,42 +342,53 @@ export function versionOnDisk(): string | null {
 /**
  * Get the daemon running again on the new code.
  *
- * Under a supervisor, exiting is the entire restart: it is watching for exactly
- * that. Without one, the process has to leave something behind that outlives
- * it, because a child started now would race the parent for the listening port
- * and lose.
+ * A detached process is left behind whose only job is to wait for this one to
+ * exit and then check whether anything came back. If the HTTP port is being
+ * served again, something restarted the daemon and there is nothing to do. If
+ * it is still dead after a grace period, nothing is watching, so the waiter
+ * starts it.
  *
- * So the `spawn` path starts a detached process whose only job is to wait for
- * this pid to disappear and then start the daemon again. Detached and with its
- * streams closed, so it is not killed along with its parent and does not hold
- * the terminal open. It is written inline rather than shipped as a file because
- * the update it is waiting on is, at that moment, replacing every file in the
- * package it would otherwise be loaded from.
+ * This replaces recognising supervisors by name, which was brittle in the worst
+ * direction. `/proc/<pid>/comm` is truncated at fifteen characters and OpenRC's
+ * `supervise-daemon` is sixteen, and reading it as unsupervised produced two
+ * daemons: one from the waiter and one from OpenRC, with the loser crash
+ * looping on the port the winner held. Asking whether the port came back needs
+ * no such knowledge and is right whoever is watching, including nobody.
+ *
+ * The waiter is written inline rather than shipped as a file, because the
+ * update it is waiting on is at that moment replacing every file in the package
+ * it would otherwise load from.
  */
-export function restartDaemon(strategy: RestartStrategy, log?: (message: string) => void): void {
-  if (strategy === 'spawn') {
-    const bin = process.argv[1]
-    const waiter = `
-      const { spawn } = require('child_process')
-      const pid = ${process.pid}
-      let waited = 0
-      const tick = setInterval(() => {
-        let alive = true
-        try { process.kill(pid, 0) } catch { alive = false }
-        // 30s, then start anyway: a parent that has not exited by now is stuck,
-        // and leaving the house without a bridge is the worse outcome.
-        if (alive && (waited += 250) < 30000) return
-        clearInterval(tick)
-        spawn(process.execPath, [${JSON.stringify(bin)}], {
-          detached: true,
-          stdio: 'ignore',
-          env: process.env,
-        }).unref()
-      }, 250)
-    `
-    log?.('No supervisor found, so a detached process will start the new version once this one exits')
-    spawn(process.execPath, ['-e', waiter], { detached: true, stdio: 'ignore' }).unref()
-  }
+export function restartDaemon(port: number, log?: (message: string) => void): void {
+  const waiter = `
+    const { spawn } = require('child_process')
+    const net = require('net')
+    const pid = ${process.pid}
+    const port = ${port}
+    const bin = ${JSON.stringify(process.argv[1])}
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+    const gone = () => { try { process.kill(pid, 0); return false } catch { return true } }
+    const served = () => new Promise((resolve) => {
+      const sock = net.connect({ port, host: '127.0.0.1' })
+      const done = (v) => { sock.destroy(); resolve(v) }
+      sock.once('connect', () => done(true))
+      sock.once('error', () => done(false))
+      sock.setTimeout(2000, () => done(false))
+    })
+    ;(async () => {
+      // The old process letting go. Capped so a stuck one cannot strand us.
+      for (let i = 0; i < 120 && !gone(); i++) await sleep(250)
+      // A supervisor's chance to act. OpenRC waits 5s before respawning, so
+      // this is generous rather than tight.
+      for (let i = 0; i < 20; i++) {
+        await sleep(1000)
+        if (await served()) return
+      }
+      spawn(process.execPath, [bin], { detached: true, stdio: 'ignore', env: process.env }).unref()
+    })()
+  `
+  log?.('Leaving a watchdog behind: it will start the new version only if nothing else does')
+  spawn(process.execPath, ['-e', waiter], { detached: true, stdio: 'ignore' }).unref()
 
   // A moment for the HTTP response and the progress socket to flush, so the
   // page says why it is about to go quiet.

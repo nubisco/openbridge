@@ -66,6 +66,39 @@ describe('detectInstall', () => {
   })
 })
 
+describe('restart after an update', () => {
+  it('decides by asking whether the port came back, not by naming supervisors', async () => {
+    // The previous design recognised supervisors by process name, and
+    // /proc/<pid>/comm is truncated at fifteen characters while OpenRC's
+    // supervise-daemon is sixteen. Reading that as unsupervised produced two
+    // daemons, one from the watchdog and one from OpenRC, with the loser crash
+    // looping on the port the winner held. This is the check that replaced it.
+    const net = await import('net')
+    const served = (port: number) =>
+      new Promise<boolean>((resolve) => {
+        const sock = net.connect({ port, host: '127.0.0.1' })
+        const done = (v: boolean) => {
+          sock.destroy()
+          resolve(v)
+        }
+        sock.once('connect', () => done(true))
+        sock.once('error', () => done(false))
+        sock.setTimeout(2000, () => done(false))
+      })
+
+    const srv = net.createServer(() => {})
+    await new Promise<void>((r) => srv.listen(0, '127.0.0.1', () => r()))
+    const port = (srv.address() as { port: number }).port
+
+    // Something restarted it: the watchdog must keep its hands off.
+    expect(await served(port)).toBe(true)
+
+    // Nothing did: the watchdog is the only thing that will.
+    await new Promise<void>((r) => srv.close(() => r()))
+    expect(await served(port)).toBe(false)
+  })
+})
+
 describe('globalPrefix', () => {
   it('is null when not installed under a node_modules', () => {
     // A source checkout has no prefix to install into, which is exactly why
