@@ -1,3 +1,10 @@
+## [0.34.2](https://github.com/nubisco/openbridge/compare/v0.34.1...v0.34.2) (2026-09-19)
+
+
+### Bug Fixes
+
+* **updater:** restart by checking the port, not by naming supervisors ([59534bf](https://github.com/nubisco/openbridge/commit/59534bf06f73953ff4ce196104f55ef447ae0b7e))
+
 ## [0.34.1](https://github.com/nubisco/openbridge/compare/v0.34.0...v0.34.1) (2026-09-18)
 
 
