@@ -8,6 +8,7 @@ import { PluginRegistry, PluginLifecycle, loadPluginsFromDirectory, loadPlugin }
 import type { PluginContext, Plugin, DeviceDescriptor } from '@nubisco/openbridge-core'
 import { Logger } from '@nubisco/openbridge-logger'
 import { waitForFreePort } from './port.js'
+import { rotateIfLarge } from './log-rotation.js'
 import { loadConfig, defaultConfigPath } from '@nubisco/openbridge-config'
 import type { OpenBridgeConfig } from '@nubisco/openbridge-config'
 import { createServer, type HapInfo } from './server.js'
@@ -103,6 +104,24 @@ export class Daemon {
     const configPath = options.configPath ?? defaultConfigPath()
     log.info('Starting OpenBridge daemon...')
     log.info(`Config: ${configPath}`)
+
+    // Nothing else is going to. OpenBridge does not open this file, it inherits
+    // a redirected descriptor from whatever started it, and a minimal host has
+    // neither logrotate nor cron to tidy up after it. One install reached
+    // 102 MB on an SD card. Checked hourly, which is often enough for a log
+    // that takes days to grow and cheap enough to ignore.
+    const rotateOwnLog = () => {
+      try {
+        const result = rotateIfLarge(1, { onRotate: (message) => log.warn(message) })
+        if (result === 'skipped') {
+          log.warn('The log has grown past its limit but cannot be truncated in place, so it is being left alone')
+        }
+      } catch (err) {
+        log.debug(`Could not check the log size: ${err}`)
+      }
+    }
+    rotateOwnLog()
+    setInterval(rotateOwnLog, 60 * 60 * 1000).unref()
 
     // Prevent unhandled errors from silently killing plugin event loops
     process.on('unhandledRejection', (reason) => {
