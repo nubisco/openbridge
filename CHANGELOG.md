@@ -1,3 +1,10 @@
+## [0.34.3](https://github.com/nubisco/openbridge/compare/v0.34.2...v0.34.3) (2026-09-19)
+
+
+### Bug Fixes
+
+* **daemon:** keep its own log from filling the disk ([6f7c568](https://github.com/nubisco/openbridge/commit/6f7c568efaf69b2d503e6ebb1f25ce495ee82139))
+
 ## [0.34.2](https://github.com/nubisco/openbridge/compare/v0.34.1...v0.34.2) (2026-09-19)
 
 
