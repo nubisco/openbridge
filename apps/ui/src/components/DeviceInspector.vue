@@ -131,6 +131,21 @@
         </div>
       </NbShellPanel>
 
+      <!-- Recent activity: what happened, and what asked for it. Shown only
+           when the device has actually recorded something, so it does not sit
+           empty on every device whose plugin never calls recordEvent. -->
+      <NbShellPanel v-if="deviceEvents.length > 0" title="Recent activity" fluid>
+        <ul class="event-list">
+          <li v-for="(event, i) in deviceEvents" :key="`${event.at}-${i}`" class="event">
+            <span class="event-time" :title="event.at">{{ shortTime(event.at) }}</span>
+            <span class="event-body">
+              <span class="event-message">{{ event.message }}</span>
+              <span v-if="event.source" class="event-source">{{ event.source }}</span>
+            </span>
+          </li>
+        </ul>
+      </NbShellPanel>
+
       <!-- Energy history chart (energy_meter devices only) -->
       <NbShellPanel
         v-if="(selected as any).dev.widgetType === 'energy_meter'"
@@ -402,7 +417,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import { useInspectorStore, type NativeDevice } from '@/stores/inspector'
-import { api, type Accessory, type InterpolationDescriptor } from '@/api'
+import { api, type Accessory, type DeviceEvent, type InterpolationDescriptor } from '@/api'
 import { onMounted } from 'vue'
 
 // ─── HomeKit visibility ─────────────────────────────────────────────────────
@@ -676,6 +691,35 @@ async function setHapCharacteristic(accUuid: string, svcUuid: string, chUuid: st
   }
 }
 
+// ─── Recent activity ─────────────────────────────────────────────────────────
+const deviceEvents = ref<DeviceEvent[]>([])
+
+/** Time of day, with the full timestamp on hover. A timeline is read by when. */
+function shortTime(at: string): string {
+  const d = new Date(at)
+  if (Number.isNaN(d.getTime())) return at
+  const today = new Date().toDateString() === d.toDateString()
+  return today
+    ? d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    : d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+async function loadDeviceEvents() {
+  const current = selected.value
+  if (current?.kind !== 'native') {
+    deviceEvents.value = []
+    return
+  }
+  try {
+    const res = await api.deviceEvents((current as any).dev.id, 100)
+    deviceEvents.value = res.events
+  } catch {
+    // A device whose plugin records nothing, or an older daemon: show no panel
+    // rather than an error for something that is purely additional.
+    deviceEvents.value = []
+  }
+}
+
 // ─── Native device helpers ───────────────────────────────────────────────────
 const WIDGET_ICON: Record<string, string> = {
   switch: 'plugs',
@@ -781,6 +825,8 @@ watch(
     // accessory, so there is nothing to resolve.
     if (val?.kind === 'native') loadNativeAccessory((val as any).dev.id)
     else nativeAccessory.value = null
+
+    void loadDeviceEvents()
 
     if (val?.kind === 'native' && (val as any).dev.widgetType === 'energy_meter') {
       historyDate.value = new Date().toISOString().slice(0, 10)
@@ -962,6 +1008,51 @@ const historyChartSeries = computed(() => {
 </script>
 
 <style lang="scss" scoped>
+.event-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.event {
+  display: flex;
+  gap: 0.6rem;
+  align-items: baseline;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+// Fixed width and tabular figures so the messages line up into a column that
+// can be scanned down, which is the whole point of a timeline.
+.event-time {
+  flex: 0 0 auto;
+  min-width: 5.5rem;
+  color: var(--nb-c-text-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.event-body {
+  display: flex;
+  gap: 0.4rem;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.event-message {
+  color: var(--nb-c-text);
+}
+
+.event-source {
+  color: var(--nb-c-text-muted);
+  font-size: 0.7rem;
+  border: 1px solid var(--nb-c-border);
+  border-radius: 3px;
+  padding: 0 0.3rem;
+}
+
 .inspector-content {
   display: flex;
   flex-direction: column;

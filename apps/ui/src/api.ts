@@ -94,6 +94,15 @@ export interface UpdateStatus {
   releaseNotes?: string
 }
 
+/** One thing that happened to a device, for its timeline. */
+export interface DeviceEvent {
+  at: string
+  type: string
+  message: string
+  source?: string
+  data?: Record<string, unknown>
+}
+
 export interface SystemInfo {
   os: string
   arch: string
@@ -199,6 +208,8 @@ export const api = {
   health: () => get<HealthResponse>('/health'),
   system: () => get<SystemInfo>('/system'),
   qr: () => get<{ setupURI: string | null; pincode: string | null; error?: string }>('/qr'),
+  deviceEvents: (id: string, limit = 100) =>
+    get<{ events: DeviceEvent[] }>(`/devices/${encodeURIComponent(id)}/events?limit=${limit}`),
   plugins: () => get<{ plugins: PluginInstance[] }>('/plugins'),
   pluginsRefresh: () =>
     fetch('/api/plugins/refresh', { method: 'POST' }).then((r) => r.json() as Promise<{ plugins: PluginInstance[] }>),

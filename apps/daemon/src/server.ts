@@ -64,6 +64,7 @@ const uiAvailable = !!uiDist
 let shellAvailable = false
 
 import { OPENBRIDGE_HOME, OB_PLUGINS_DIR, HB_PLUGINS_DIR } from './daemon.js'
+import { DeviceEventLog } from './device-events.js'
 import { DeviceSeries } from './timeseries.js'
 import type { HomeKitVisibility } from './homekit-visibility.js'
 import {
@@ -118,6 +119,8 @@ export async function createServer(
   resolveNativeAccessory: ((deviceId: string) => unknown | null) | null = null,
   /** UUID of the accessory a native plugin published for a device, if any. */
   nativeAccessoryUuid: ((deviceId: string) => string | null) | null = null,
+  /** Per-device event timeline, written by plugins through ctx.recordEvent. */
+  deviceEvents: DeviceEventLog | null = null,
 ) {
   const app = Fastify({ logger: false })
 
@@ -410,6 +413,19 @@ export async function createServer(
       uptimeProcess: process.uptime(),
     }
   })
+
+  // ─── Device event timeline ────────────────────────────────────────────────
+  //
+  // Separate from the metric history: that answers "what was the voltage at
+  // 3am", this answers "what happened, and what asked for it".
+  app.get<{ Params: { id: string }; Querystring: { limit?: string } }>(
+    '/api/devices/:id/events',
+    async (req, reply) => {
+      if (!deviceEvents) return reply.code(503).send({ error: 'event log unavailable' })
+      const limit = Number(req.query.limit ?? 100)
+      return { events: deviceEvents.read(req.params.id, Number.isFinite(limit) ? limit : 100) }
+    },
+  )
 
   // ─── HomeKit QR ───────────────────────────────────────────────────────────
   app.get('/api/qr', async () => {

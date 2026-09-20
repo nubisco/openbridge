@@ -80,6 +80,18 @@ export interface DeviceDescriptor {
   metrics?: MetricDescriptor[]
 }
 
+/** One thing that happened to a device. See {@link PluginContext.recordEvent}. */
+export interface DeviceEventInput {
+  /** Short machine-readable kind, e.g. "opened", "command", "fault". */
+  type: string
+  /** One line, for a person reading a timeline. */
+  message: string
+  /** What caused it, when known: "homekit", "schedule", "device". */
+  source?: string
+  /** Anything structured worth keeping. Keep it small. */
+  data?: Record<string, unknown>
+}
+
 export interface PluginContext {
   config: Record<string, unknown>
   log: PluginLogger
@@ -89,6 +101,19 @@ export interface PluginContext {
   registerDevice(device: Omit<DeviceDescriptor, 'pluginId'>): void
   /** Register a command handler so the UI can control a device */
   registerControl(deviceId: string, controlId: string, handler: (value: unknown) => void | Promise<void>): void
+  /**
+   * Record something that happened to a device, for its timeline in the UI.
+   *
+   * For discrete occurrences with a cause, not for values on a clock: a gate
+   * opening, a command arriving, a fault clearing. Numbers sampled over time
+   * belong in `metrics` and are charted instead.
+   *
+   * Write the message for a person reading the timeline months later, and say
+   * what asked for it in `source` when that is known. Cheap, never throws, and
+   * bounded per device, so it is safe to call from a poll loop, though calling
+   * it on every poll would bury the events that matter.
+   */
+  recordEvent?(deviceId: string, event: DeviceEventInput): void
   /** Register a HAP bridge so its QR/PIN appear in the OpenBridge UI */
   registerHapBridge(info: { setupURI: string; pincode: string; port: number; name: string }): void
   /** Block a device control from being changed via UI or HomeKit */

@@ -6,6 +6,7 @@ export type {
   PluginInstance,
   PluginStatus,
   DeviceDescriptor,
+  DeviceEventInput,
   MetricDescriptor,
   InterpolationDescriptor,
 } from './types.js'

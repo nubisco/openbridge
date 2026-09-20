@@ -5,10 +5,11 @@ import { dirname } from 'path'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import os from 'os'
 import { PluginRegistry, PluginLifecycle, loadPluginsFromDirectory, loadPlugin } from '@nubisco/openbridge-core'
-import type { PluginContext, Plugin, DeviceDescriptor } from '@nubisco/openbridge-core'
+import type { PluginContext, Plugin, DeviceDescriptor, DeviceEventInput } from '@nubisco/openbridge-core'
 import { Logger } from '@nubisco/openbridge-logger'
 import { waitForFreePort } from './port.js'
 import { rotateIfLarge } from './log-rotation.js'
+import { DeviceEventLog } from './device-events.js'
 import { loadConfig, defaultConfigPath } from '@nubisco/openbridge-config'
 import type { OpenBridgeConfig } from '@nubisco/openbridge-config'
 import { createServer, type HapInfo } from './server.js'
@@ -63,6 +64,8 @@ export class Daemon {
   private hapModulesDir: string | null = null
   /** Time-series store per device, for devices that declare metrics */
   private metricSeries = new Map<string, DeviceSeries>()
+  /** Per-device event timeline, written by plugins through ctx.recordEvent */
+  private deviceEvents = new DeviceEventLog(join(OPENBRIDGE_HOME, 'device-events'))
   /** Per-service HomeKit type overrides, applied at the bridge */
   private homekitServiceTypes = new HomeKitServiceTypes(join(OPENBRIDGE_HOME, 'homekit-service-types.json'))
   /** Per-accessory HomeKit visibility, enforced at the bridge */
@@ -380,6 +383,7 @@ export class Daemon {
       this.homekitServiceTypes,
       (deviceId) => this.resolveNativeAccessory(deviceId),
       (deviceId) => this.nativeAccessoryUuid(deviceId),
+      this.deviceEvents,
     )
     await server.listen({ port, host: '0.0.0.0' })
 
@@ -659,6 +663,9 @@ export class Daemon {
       },
       registerControl(deviceId: string, controlId: string, handler: ControlHandler) {
         controls.set(`${deviceId}::${controlId}`, handler)
+      },
+      recordEvent: (deviceId: string, event: DeviceEventInput) => {
+        this.deviceEvents.record(deviceId, event)
       },
       registerHapBridge(info: { setupURI: string; pincode: string; port: number; name: string }) {
         const entry = registry.get(plugin.manifest.name)
