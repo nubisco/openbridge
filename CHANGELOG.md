@@ -1,3 +1,16 @@
+# [0.35.0](https://github.com/nubisco/openbridge/compare/v0.34.3...v0.35.0) (2026-09-20)
+
+
+### Bug Fixes
+
+* **test:** stop tests depending on the host's special filesystems ([d2dfa04](https://github.com/nubisco/openbridge/commit/d2dfa04818373bde8467528f88e15f19e758322e))
+* **test:** stop the rotation test truncating CI's own log ([00b5406](https://github.com/nubisco/openbridge/commit/00b540680679d87d18a33d242f22117d59f2eec3))
+
+
+### Features
+
+* record a timeline of what happened to each device ([311afc5](https://github.com/nubisco/openbridge/commit/311afc5b8853c8b14be5641b7f0e37cc5355d827))
+
 ## [0.34.3](https://github.com/nubisco/openbridge/compare/v0.34.2...v0.34.3) (2026-09-19)
 
 
