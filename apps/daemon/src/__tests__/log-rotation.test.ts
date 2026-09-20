@@ -61,8 +61,18 @@ describe('rotateIfLarge', () => {
   })
 
   it('refuses to touch something that is not a regular file', () => {
-    // Under systemd this is the journal, which rotates itself.
-    expect(rotateIfLarge(1, { maxBytes: 0 })).toBe('not-a-file')
+    // Under systemd the daemon's stdout is the journal, which rotates itself.
+    //
+    // Deliberately not fd 1. This process's stdout is a pipe under a local
+    // vitest and a regular file under CI, where passing it here truncated the
+    // runner's own log and hung the job. A character device is the same kind of
+    // "not a file" without being anybody's output.
+    const fd = openSync('/dev/null', 'r')
+    try {
+      expect(rotateIfLarge(fd, { maxBytes: 0 })).toBe('not-a-file')
+    } finally {
+      closeSync(fd)
+    }
   })
 
   it('says what it did, for the line written just before the truncation', () => {
