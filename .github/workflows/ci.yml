@@ -10,6 +10,9 @@ jobs:
   build:
     name: Typecheck & Build
     runs-on: ubuntu-latest
+    # A hung step should fail with a readable log rather than occupy a runner
+    # until the six-hour default. Ten minutes is ample: a green run takes 90s.
+    timeout-minutes: 10
 
     steps:
       - uses: actions/checkout@v6

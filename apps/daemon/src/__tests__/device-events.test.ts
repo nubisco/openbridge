@@ -80,7 +80,16 @@ describe('DeviceEventLog', () => {
   })
 
   it('never throws, because a diagnostic must not break its device', () => {
-    const log = new DeviceEventLog('/proc/nonexistent-and-unwritable')
+    // A directory that cannot exist because a file is already in its path, so
+    // every call fails with ENOTDIR. Deliberately not somewhere under /proc:
+    // tests should not depend on the host's special filesystems, and doing so
+    // is what hung CI for twelve minutes.
+    const dir = mkdtempSync(join(tmpdir(), 'ob-events-'))
+    dirs.push(dir)
+    const blocked = join(dir, 'a-file', 'events')
+    writeFileSync(join(dir, 'a-file'), 'not a directory')
+
+    const log = new DeviceEventLog(blocked)
     expect(() => log.record('gate', { type: 'x', message: 'y' })).not.toThrow()
     expect(log.read('gate')).toEqual([])
   })

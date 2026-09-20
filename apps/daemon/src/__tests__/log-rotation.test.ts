@@ -23,7 +23,7 @@ function makeLog(bytes: number): { fd: number; path: string } {
 describe('rotateIfLarge', () => {
   it('leaves a log that is still small alone', () => {
     const { fd, path } = makeLog(1024)
-    expect(rotateIfLarge(fd, { maxBytes: 8192 })).toBe('not-needed')
+    expect(rotateIfLarge(fd, { maxBytes: 8192, path })).toBe('not-needed')
     expect(statSync(path).size).toBe(1024)
     closeSync(fd)
   })
@@ -31,7 +31,7 @@ describe('rotateIfLarge', () => {
   it('truncates one that has grown past the limit', () => {
     // The real case: 102 MB on an SD card, nothing rotating it.
     const { fd, path } = makeLog(16384)
-    expect(rotateIfLarge(fd, { maxBytes: 8192, keepBytes: 1024 })).toBe('rotated')
+    expect(rotateIfLarge(fd, { maxBytes: 8192, keepBytes: 1024, path })).toBe('rotated')
     expect(statSync(path).size).toBe(0)
     closeSync(fd)
   })
@@ -76,9 +76,9 @@ describe('rotateIfLarge', () => {
   })
 
   it('says what it did, for the line written just before the truncation', () => {
-    const { fd } = makeLog(16384)
+    const { fd, path } = makeLog(16384)
     let said = ''
-    rotateIfLarge(fd, { maxBytes: 8192, keepBytes: 1024, onRotate: (m) => (said = m) })
+    rotateIfLarge(fd, { maxBytes: 8192, keepBytes: 1024, path, onRotate: (m) => (said = m) })
     expect(said).toMatch(/truncated/)
     closeSync(fd)
   })
