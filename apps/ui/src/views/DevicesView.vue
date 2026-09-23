@@ -33,6 +33,20 @@
       </p>
     </div>
 
+    <!-- A standing fact about the estate, not news, so a banner rather than a
+         toast: it has to still be here the next time this page is opened.
+         Without it the only sign of an outage is a coloured dot on whichever
+         card you happen to scroll past. -->
+    <NbBanner
+      v-if="unhealthyDevices.length > 0"
+      variant="callout"
+      status="warning"
+      :title="unhealthyTitle"
+      class="health-summary"
+    >
+      {{ unhealthyDevices.map((d) => d.name).join(', ') }}
+    </NbBanner>
+
     <!-- self on the layout, not the grid: the click must land on the empty
          area around the cards, and a card click stops at the card itself. -->
     <div v-else class="devices-layout" @click.self="inspector.close()">
@@ -117,7 +131,12 @@
               />
             </div>
           </div>
-          <div class="device-reachability" :class="dev.pluginStatus === 'running' ? 'online' : 'offline'" />
+          <!-- Health, not plugin status. The two came apart during a real
+               outage: the plugin kept running perfectly while the devices it
+               polls had moved and stopped answering, so every dot stayed
+               green for thirty-six hours and the failure was found in
+               HomeKit instead. -->
+          <div class="device-reachability" :class="healthClass(dev)" :title="dev.health?.reason ?? healthLabel(dev)" />
         </NbPanel>
 
         <!-- HAP / Homebridge accessories -->
@@ -208,6 +227,34 @@ const daemon = useDaemonStore()
 const inspector = useInspectorStore()
 
 const router = useRouter()
+
+/**
+ * The dot's state.
+ *
+ * `unknown` is drawn the same as offline, deliberately: a device that has
+ * never reported cannot be called healthy, and calling it broken would light
+ * up every device for the first few seconds after a restart.
+ */
+const unhealthyDevices = computed(() => nativeDevices.value.filter((d) => d.health?.status === 'stale'))
+
+const unhealthyTitle = computed(() => {
+  const n = unhealthyDevices.value.length
+  return n === 1 ? '1 device is not responding' : `${n} devices are not responding`
+})
+
+function healthClass(dev: NativeDevice): string {
+  const status = dev.health?.status
+  if (status === 'ok') return 'online'
+  if (status === 'stale') return 'stale'
+  return 'offline'
+}
+
+function healthLabel(dev: NativeDevice): string {
+  const status = dev.health?.status
+  if (status === 'ok') return 'Responding'
+  if (status === 'stale') return 'Not responding'
+  return 'No data yet'
+}
 
 /**
  * Double-click opens the device's own page. Single click keeps its existing
@@ -736,6 +783,13 @@ onUnmounted(() => {
   margin-top: 0.25rem;
   &.online {
     background: var(--nb-c-success);
+  }
+  // Warning rather than danger: the device is not answering, which is usually
+  // a network or power problem outside OpenBridge and is often transient. A
+  // red dot on a gate that is merely slow to answer teaches people to ignore
+  // the colour, and then it cannot report the outage that matters.
+  &.stale {
+    background: var(--nb-c-warning);
   }
   &.offline {
     background: var(--nb-c-border);

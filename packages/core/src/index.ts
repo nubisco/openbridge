@@ -7,6 +7,8 @@ export type {
   PluginStatus,
   DeviceDescriptor,
   DeviceActionDescriptor,
+  DeviceHealth,
+  DeviceHealthStatus,
   DeviceEventInput,
   MetricDescriptor,
   InterpolationDescriptor,

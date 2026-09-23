@@ -54,6 +54,17 @@
             {{ action.label }}
           </NbButton>
         </template>
+        <!-- The reason, where someone looking at a device that is misbehaving
+             will actually look. The dot on the card says something is wrong;
+             this says what, and when it was last heard from. -->
+        <NbBanner
+          v-if="deviceHealth && deviceHealth.status === 'stale'"
+          status="warning"
+          :title="healthTitle"
+          style="margin-bottom: 0.5rem"
+        >
+          {{ deviceHealth.reason }}
+        </NbBanner>
         <NbBanner v-if="actionNotice" :status="actionStatus" :title="actionNotice" style="margin-bottom: 0.5rem" />
         <div class="info-grid">
           <span class="info-key">Plugin</span>
@@ -579,6 +590,18 @@ const confirm = useConfirm()
 const actionBusy = ref('')
 const actionNotice = ref('')
 const actionStatus = ref<'success' | 'error'>('success')
+
+const deviceHealth = computed(() => {
+  const item = inspector.selectedDevice
+  if (!item || item.kind !== 'native') return null
+  return item.dev.health ?? null
+})
+
+const healthTitle = computed(() => {
+  const seen = deviceHealth.value?.lastSeen
+  if (!seen) return 'Not responding'
+  return `Not responding since ${new Date(seen).toLocaleString()}`
+})
 
 const deviceActions = computed<DeviceActionDescriptor[]>(() => {
   const item = inspector.selectedDevice

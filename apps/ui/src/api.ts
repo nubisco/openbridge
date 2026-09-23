@@ -201,6 +201,14 @@ export interface DeviceActionDescriptor {
   danger?: boolean
 }
 
+/** Mirrors DeviceHealth in @nubisco/openbridge-core. */
+export interface DeviceHealth {
+  status: 'ok' | 'stale' | 'unknown'
+  lastSeen: string | null
+  silentForSeconds: number | null
+  reason: string | null
+}
+
 export interface DeviceDescriptor {
   id: string
   name: string
@@ -211,6 +219,8 @@ export interface DeviceDescriptor {
   interpolation?: InterpolationDescriptor
   metrics?: MetricDescriptor[]
   actions?: DeviceActionDescriptor[]
+  telemetryIntervalSeconds?: number
+  health?: DeviceHealth
 }
 
 export const api = {

@@ -221,6 +221,50 @@ describe('OpenBridge Server API', () => {
       }
     })
 
+    it('reports a device that has stopped answering, rather than showing it as fine', async () => {
+      // The outage this exists for: the plugin kept running while the devices
+      // it polls had moved and gone silent, so every indicator stayed green.
+      // Plugin status and device health are different questions.
+      writeConfig(baseConfig)
+      const { createServer } = await import('../server.js')
+      const { PluginRegistry } = await import('@nubisco/openbridge-core')
+      const registry = new PluginRegistry()
+
+      const instance: any = registry.register({ manifest: { name: 'health-plugin', version: '1.0.0' } })
+      registry.updateStatus('health-plugin', 'running')
+      instance.devices = {
+        fresh: { id: 'fresh', name: 'Gate', widgetType: 'gate', pluginId: 'health-plugin' },
+        silent: { id: 'silent', name: 'Pool Filter', widgetType: 'switch', pluginId: 'health-plugin' },
+        never: { id: 'never', name: 'New Thing', widgetType: 'switch', pluginId: 'health-plugin' },
+      }
+      instance.telemetry = {
+        fresh: { _updatedAt: new Date().toISOString() },
+        silent: { _updatedAt: new Date(Date.now() - 36 * 3600 * 1000).toISOString() },
+        never: {},
+      }
+
+      const server = await createServer(registry, null, null, [], new Set(), new Map())
+      await listen(server)
+
+      try {
+        const { devices } = await (await fetch(`${BASE}/api/devices`)).json()
+        const byId = Object.fromEntries(devices.map((d: any) => [d.id, d]))
+
+        expect(byId.fresh.health.status).toBe('ok')
+        expect(byId.fresh.health.reason).toBeNull()
+
+        expect(byId.silent.health.status).toBe('stale')
+        expect(byId.silent.health.reason).toMatch(/36 hours/)
+        // The plugin is healthy, so the device must be blamed, not the plugin.
+        expect(byId.silent.pluginStatus).toBe('running')
+
+        // Never reported is not the same as broken.
+        expect(byId.never.health.status).toBe('unknown')
+      } finally {
+        await server.close()
+      }
+    })
+
     it('persists a Homebridge plugin by package name, not the platform name it registers under', async () => {
       // The loader looks plugins up by npm package name. A compat plugin is
       // registered under its *platform* name, so persisting the registry id

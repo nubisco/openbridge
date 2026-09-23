@@ -83,6 +83,35 @@ export interface DeviceDescriptor {
    * widget already renders. See {@link DeviceActionDescriptor}.
    */
   actions?: DeviceActionDescriptor[]
+  /**
+   * How often this device is expected to report telemetry, in seconds.
+   *
+   * Only used to decide when silence has gone on long enough to be worth
+   * showing. A device polled once a second and one polled every five minutes
+   * are both healthy, and a single fixed threshold cannot be right for both:
+   * it either cries wolf about the slow one or says nothing for minutes about
+   * the fast one. Declare it and the judgement fits the device.
+   */
+  telemetryIntervalSeconds?: number
+}
+
+/**
+ * Whether a device is still answering.
+ *
+ * `unknown` is not a failure. It is a device that has never reported, which
+ * covers one that is still starting up and one whose plugin does not report
+ * telemetry at all, and neither deserves an alarm.
+ */
+export type DeviceHealthStatus = 'ok' | 'stale' | 'unknown'
+
+export interface DeviceHealth {
+  status: DeviceHealthStatus
+  /** ISO timestamp of the last telemetry, or null if none has ever arrived. */
+  lastSeen: string | null
+  /** How long it has been silent, in seconds. Null when nothing has arrived. */
+  silentForSeconds: number | null
+  /** One sentence naming the problem, for a person. Null when healthy. */
+  reason: string | null
 }
 
 /**

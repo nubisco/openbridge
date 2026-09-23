@@ -11,7 +11,8 @@ import { createRequire } from 'module'
 import os from 'os'
 
 const _req = createRequire(import.meta.url)
-import type { PluginRegistry, Plugin, DeviceDescriptor } from '@nubisco/openbridge-core'
+import type { PluginRegistry, Plugin, DeviceDescriptor, DeviceHealth } from '@nubisco/openbridge-core'
+import { assessDeviceHealth } from './device-health.js'
 import { Logger } from '@nubisco/openbridge-logger'
 import type { LogEntry } from '@nubisco/openbridge-logger'
 import type { HomebridgeAPI } from '@nubisco/openbridge-compatibility-homebridge'
@@ -541,7 +542,12 @@ export async function createServer(
     }
 
     const devices: Array<
-      DeviceDescriptor & { telemetry: Record<string, unknown>; pluginStatus: string; homekitType: string | null }
+      DeviceDescriptor & {
+        telemetry: Record<string, unknown>
+        pluginStatus: string
+        homekitType: string | null
+        health: DeviceHealth
+      }
     > = []
     for (const instance of registry.getAll()) {
       if (!instance.devices) continue
@@ -555,7 +561,15 @@ export async function createServer(
         const accessoryUuid = nativeAccessoryUuid?.(device.id) ?? null
         const homekitType = accessoryUuid ? (homekitServiceTypes?.typeForAccessory(accessoryUuid) ?? null) : null
 
-        devices.push({ ...device, name, telemetry, pluginStatus: instance.status, homekitType })
+        // Derived here rather than stored, so it is always current and there
+        // is no second copy of the truth to go stale on its own.
+        const health = assessDeviceHealth({
+          telemetry,
+          intervalSeconds: device.telemetryIntervalSeconds,
+          pluginStatus: instance.status,
+        })
+
+        devices.push({ ...device, name, telemetry, pluginStatus: instance.status, homekitType, health })
       }
     }
     return { devices }
