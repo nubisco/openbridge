@@ -1,3 +1,15 @@
+# [0.36.0](https://github.com/nubisco/openbridge/compare/v0.35.0...v0.36.0) (2026-09-23)
+
+
+### Bug Fixes
+
+* **ui:** take @nubisco/ui 5.8.2 for the bottom panel sizing fix ([0d29590](https://github.com/nubisco/openbridge/commit/0d29590e7dc3fbd6d72b14a2d78dceb834ecbceb))
+
+
+### Features
+
+* let a plugin declare one-shot device actions, and render them ([45eea23](https://github.com/nubisco/openbridge/commit/45eea23201b02d9a24fd4dd7980109df6e351bf4))
+
 # [0.35.0](https://github.com/nubisco/openbridge/compare/v0.34.3...v0.35.0) (2026-09-20)
 
 
