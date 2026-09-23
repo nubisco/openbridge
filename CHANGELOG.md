@@ -1,3 +1,10 @@
+# [0.37.0](https://github.com/nubisco/openbridge/compare/v0.36.0...v0.37.0) (2026-09-23)
+
+
+### Features
+
+* show when a device has stopped answering, and why ([58cf113](https://github.com/nubisco/openbridge/commit/58cf1137b022cd26fc73d9bc2547b6e9d84f3962))
+
 # [0.36.0](https://github.com/nubisco/openbridge/compare/v0.35.0...v0.36.0) (2026-09-23)
 
 
