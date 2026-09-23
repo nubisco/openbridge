@@ -37,6 +37,24 @@
 
       <!-- Device info -->
       <NbShellPanel title="Device info" fluid>
+        <!-- Actions sit in the header of the thing they act on, and only the
+             ones this device's plugin actually declared are rendered: a reboot
+             is spelled differently on a Shelly Gen1 and Gen2 and does not
+             exist at all on a Wiz bulb, so the product cannot hard-code one. -->
+        <template v-if="deviceActions.length > 0" #toolbar>
+          <NbButton
+            v-for="action in deviceActions"
+            :key="action.id"
+            size="xs"
+            :variant="action.danger ? 'danger' : 'ghost'"
+            :disabled="actionBusy !== ''"
+            :loading="actionBusy === action.id"
+            @click="runDeviceAction(action)"
+          >
+            {{ action.label }}
+          </NbButton>
+        </template>
+        <NbBanner v-if="actionNotice" :status="actionStatus" :title="actionNotice" style="margin-bottom: 0.5rem" />
         <div class="info-grid">
           <span class="info-key">Plugin</span>
           <span class="info-val">{{ (selected as any).dev.pluginId }}</span>
@@ -416,8 +434,9 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { useConfirm } from '@nubisco/ui'
 import { useInspectorStore, type NativeDevice } from '@/stores/inspector'
-import { api, type Accessory, type DeviceEvent, type InterpolationDescriptor } from '@/api'
+import { api, type Accessory, type DeviceActionDescriptor, type DeviceEvent, type InterpolationDescriptor } from '@/api'
 import { onMounted } from 'vue'
 
 // ─── HomeKit visibility ─────────────────────────────────────────────────────
@@ -551,6 +570,50 @@ onMounted(() => {
 })
 
 const inspector = useInspectorStore()
+
+// ─── Device actions ─────────────────────────────────────────────────────────
+// One-shot commands a plugin declared for this device (reboot, identify). The
+// descriptor carries the label and whether to confirm, so the guard is the
+// plugin's call: it knows what the command costs, and the UI does not.
+const confirm = useConfirm()
+const actionBusy = ref('')
+const actionNotice = ref('')
+const actionStatus = ref<'success' | 'error'>('success')
+
+const deviceActions = computed<DeviceActionDescriptor[]>(() => {
+  const item = inspector.selectedDevice
+  if (!item || item.kind !== 'native') return []
+  return item.dev.actions ?? []
+})
+
+async function runDeviceAction(action: DeviceActionDescriptor) {
+  const item = inspector.selectedDevice
+  if (!item || item.kind !== 'native') return
+
+  if (action.confirm) {
+    const ok = await confirm({
+      title: action.label,
+      subjectLabel: 'Device',
+      subject: item.dev.name,
+      message: action.confirm,
+      confirmLabel: action.label,
+    })
+    if (!ok) return
+  }
+
+  actionBusy.value = action.id
+  actionNotice.value = ''
+  try {
+    await api.controlDevice(item.dev.id, action.id, true)
+    actionStatus.value = 'success'
+    actionNotice.value = `${action.label} sent.`
+  } catch (err) {
+    actionStatus.value = 'error'
+    actionNotice.value = `${action.label} failed: ${(err as Error).message}`
+  } finally {
+    actionBusy.value = ''
+  }
+}
 
 const selected = computed(() => inspector.selectedDevice)
 

@@ -176,6 +176,51 @@ describe('OpenBridge Server API', () => {
       }
     })
 
+    it("carries a device's declared actions through to the UI, and runs one", async () => {
+      // A reboot is spelled differently on every device family and missing from
+      // most, so the plugin declares what it has and the product renders only
+      // that. The descriptor is what makes the button appear; the control that
+      // shares its id is what runs.
+      writeConfig(baseConfig)
+      const { createServer } = await import('../server.js')
+      const { PluginRegistry } = await import('@nubisco/openbridge-core')
+      const registry = new PluginRegistry()
+
+      const instance: any = registry.register({ manifest: { name: 'actions-plugin', version: '1.0.0' } })
+      registry.updateStatus('actions-plugin', 'running')
+      instance.devices = {
+        'dev-1': {
+          id: 'dev-1',
+          name: 'Pool Filter',
+          widgetType: 'switch',
+          pluginId: 'actions-plugin',
+          actions: [{ id: 'reboot', label: 'Reboot', confirm: 'The whole box restarts.' }],
+        },
+      }
+
+      let ran = 0
+      const controls = new Map<string, (value: unknown) => void | Promise<void>>([['dev-1::reboot', () => void ran++]])
+
+      const server = await createServer(registry, null, null, [], new Set(), controls)
+      await listen(server)
+
+      try {
+        const listed = await (await fetch(`${BASE}/api/devices`)).json()
+        const device = listed.devices.find((d: any) => d.id === 'dev-1')
+        expect(device.actions).toEqual([{ id: 'reboot', label: 'Reboot', confirm: 'The whole box restarts.' }])
+
+        const res = await fetch(`${BASE}/api/devices/dev-1/control`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ control: 'reboot', value: true }),
+        })
+        expect(res.status).toBe(200)
+        expect(ran).toBe(1)
+      } finally {
+        await server.close()
+      }
+    })
+
     it('persists a Homebridge plugin by package name, not the platform name it registers under', async () => {
       // The loader looks plugins up by npm package name. A compat plugin is
       // registered under its *platform* name, so persisting the registry id

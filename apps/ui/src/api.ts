@@ -193,6 +193,14 @@ export interface MetricDescriptor {
   trackExtremes?: boolean
 }
 
+/** Mirrors DeviceActionDescriptor in @nubisco/openbridge-core. */
+export interface DeviceActionDescriptor {
+  id: string
+  label: string
+  confirm?: string
+  danger?: boolean
+}
+
 export interface DeviceDescriptor {
   id: string
   name: string
@@ -202,6 +210,7 @@ export interface DeviceDescriptor {
   pluginId: string
   interpolation?: InterpolationDescriptor
   metrics?: MetricDescriptor[]
+  actions?: DeviceActionDescriptor[]
 }
 
 export const api = {

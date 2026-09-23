@@ -1551,21 +1551,24 @@ export async function createServer(
     log.info('Restart requested via API: respawning...')
     await reply.send({ restarting: true })
     setTimeout(() => {
-      // In dev mode (OPENBRIDGE_DEV=true set by the dev script), tsx watch detects the exit and restarts.
-      // In prod mode (node dist/index.js), we respawn using the same entry point.
-      const isTsx = process.env.OPENBRIDGE_DEV === 'true'
-      if (isTsx) {
-        // Let tsx watch restart us
+      // In dev mode (OPENBRIDGE_DEV=true set by the dev script), tsx watch
+      // detects the exit and restarts.
+      if (process.env.OPENBRIDGE_DEV === 'true') {
         process.exit(0)
-      } else {
-        const child = spawn(process.execPath, process.argv.slice(1), {
-          detached: true,
-          stdio: 'inherit',
-          env: process.env,
-        })
-        child.unref()
-        process.exit(0)
+        return
       }
+      // Otherwise hand over to the same watchdog the self-update uses, which
+      // starts a replacement only if nothing else has by the time it looks.
+      //
+      // Spawning our own replacement unconditionally, which is what this did,
+      // is wrong anywhere a supervisor is watching: under OpenRC
+      // `supervise-daemon` both the child and the supervisor's respawn come
+      // up, one wins the port and the other dies on EADDRINUSE, and the
+      // orphan holding 8582 and 51829 outlives the service that is supposed
+      // to own them. That failure has been diagnosed on the Pi more than
+      // once, and it looks like a crash loop rather than a bad restart.
+      const bound = app.server.address()
+      restartDaemon(typeof bound === 'object' && bound ? bound.port : 8582, (m) => log.info(m))
     }, 300)
   })
 

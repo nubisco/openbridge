@@ -6,6 +6,7 @@ export type {
   PluginInstance,
   PluginStatus,
   DeviceDescriptor,
+  DeviceActionDescriptor,
   DeviceEventInput,
   MetricDescriptor,
   InterpolationDescriptor,

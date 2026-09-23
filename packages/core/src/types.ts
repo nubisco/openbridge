@@ -78,6 +78,39 @@ export interface DeviceDescriptor {
    * nothing is stored.
    */
   metrics?: MetricDescriptor[]
+  /**
+   * One-shot commands the UI should offer as buttons, beyond whatever the
+   * widget already renders. See {@link DeviceActionDescriptor}.
+   */
+  actions?: DeviceActionDescriptor[]
+}
+
+/**
+ * A one-shot command on a device: reboot, identify, re-pair, clear counters.
+ *
+ * Declared rather than built in, because the same idea is spelled differently
+ * on every device and simply does not exist on many. A Shelly Gen2 reboots
+ * over `Shelly.Reboot` and a Gen1 over `/reboot`, while a Wiz bulb and a Tuya
+ * plug offer nothing of the sort. A button the product hard-codes is therefore
+ * wrong somewhere no matter which spelling it picks, so the plugin says what it
+ * can do and the UI renders only that.
+ *
+ * `id` is the same id passed to {@link PluginContext.registerControl}: the
+ * descriptor is how the action becomes visible, the control is how it runs.
+ */
+export interface DeviceActionDescriptor {
+  /** Matches the `controlId` given to `registerControl`. */
+  id: string
+  /** Button label. A verb, e.g. "Reboot". */
+  label: string
+  /**
+   * Shown in a confirmation step before the action runs. Set it for anything
+   * with a cost the user should weigh first, and say what happens and for how
+   * long. Omit it for actions that are cheap and obviously reversible.
+   */
+  confirm?: string
+  /** Render as destructive. Reserve for actions that lose data. */
+  danger?: boolean
 }
 
 /** One thing that happened to a device. See {@link PluginContext.recordEvent}. */
