@@ -1,3 +1,10 @@
+# [0.38.0](https://github.com/nubisco/openbridge/compare/v0.37.0...v0.38.0) (2026-09-25)
+
+
+### Features
+
+* **theme:** take the accent from the home category ([65a1dde](https://github.com/nubisco/openbridge/commit/65a1dde29ef07a3fd032eb72200c4defaa397ba8))
+
 # [0.37.0](https://github.com/nubisco/openbridge/compare/v0.36.0...v0.37.0) (2026-09-23)
 
 
