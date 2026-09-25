@@ -1,5 +1,6 @@
 // Nubisco UI global styles: includes CSS variables, grid, typography, reset
 @use '@nubisco/ui/styles';
+@use './theme';
 
 @font-face {
   font-family: 'Symbols Nerd Font Mono';

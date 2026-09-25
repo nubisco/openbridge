@@ -1,0 +1,11 @@
+// OpenBridge's accent, resolved from its audience category.
+//
+// OpenBridge is a home product: it runs in someone's house. The category, not
+// the hex, is what is declared here. @nubisco/ui holds the four category values
+// and knows nothing about OpenBridge, so a change to the home accent reaches
+// this app through a version bump rather than an edit. See AGENTS.md,
+// "Audience categories, and which product is in which".
+
+@use '@nubisco/ui/styles/theme-api' as nb;
+
+@include nb.app-theme('openbridge', $category: 'home');

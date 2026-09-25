@@ -1,7 +1,7 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
-import NubiscoUI, { configureTheme } from '@nubisco/ui'
+import NubiscoUI, { configureNamedTheme, configureTheme } from '@nubisco/ui'
 import App from './App.vue'
 import { router } from './router'
 import { registerRuntimeIcons } from './icons'
@@ -12,6 +12,9 @@ import PluginConfigField from './components/PluginConfigField.vue'
 // lost to the upgrade. Namespacing it also stops two Nubisco products served
 // from one origin fighting over the library's default `nubisco.theme`.
 configureTheme({ storageKey: 'openbridge.theme' })
+// OpenBridge ships one named theme, its own. This selects it. The accent
+// behind it comes from the home category in @nubisco/ui, not from anything here.
+configureNamedTheme({ themes: ['openbridge'], defaultTheme: 'openbridge' })
 
 const app = createApp(App)
 app.use(createPinia())
