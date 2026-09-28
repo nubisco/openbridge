@@ -48,6 +48,8 @@ export interface AccessoryCharacteristic {
   value: unknown
   format: string
   perms: string[]
+  /** HAP status, 0 when healthy. Non-zero means `value` is stale, not current. */
+  statusCode: number
 }
 
 export interface AccessoryService {
@@ -63,6 +65,8 @@ export interface Accessory {
   category: number
   services: AccessoryService[]
   reachable: boolean
+  /** The HAP status behind `reachable: false`, absent when healthy. */
+  statusCode?: number
 }
 
 export interface LogEntry {

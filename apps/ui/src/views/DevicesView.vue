@@ -172,7 +172,11 @@
               />
             </div>
           </div>
-          <div class="device-reachability" :class="acc.reachable ? 'online' : 'offline'" />
+          <div
+            class="device-reachability"
+            :class="acc.reachable ? 'online' : 'stale'"
+            :title="acc.reachable ? 'Responding' : HAP_UNREACHABLE_TOOLTIP"
+          />
         </NbPanel>
       </div>
 
@@ -199,7 +203,9 @@
           </div>
         </template>
         <template #cell-state="{ row }">
-          <NbBadge v-if="row.state" :variant="row.stateOn ? 'green' : 'grey'">{{ row.state }}</NbBadge>
+          <NbBadge v-if="row.state" :variant="row.unhealthy ? 'orange' : row.stateOn ? 'green' : 'grey'">
+            {{ row.state }}
+          </NbBadge>
           <span v-else>—</span>
         </template>
       </NbDataTable>
@@ -387,8 +393,8 @@ const deviceRows = computed<DeviceRow[]>(() => {
         name: acc.displayName,
         type: categoryInfo(acc.category).label,
         source: 'HomeKit',
-        state: on ? (on.value ? 'On' : 'Off') : '',
-        stateOn: !!on?.value,
+        state: acc.reachable ? (on ? (on.value ? 'On' : 'Off') : '') : 'Not responding',
+        stateOn: acc.reachable && !!on?.value,
         detail: hapPrimaryValue(acc) ?? '',
         icon: categoryInfo(acc.category).icon,
         unhealthy: !acc.reachable,
@@ -550,6 +556,11 @@ function hapOnCharacteristic(acc: Accessory) {
 }
 
 function hapPrimaryValue(acc: Accessory): string | null {
+  // A faulted accessory still carries its last good reading, so rendering it
+  // verbatim is how a dead bulb came to claim it was switched off. Say what is
+  // actually known instead.
+  if (!acc.reachable) return 'Not responding'
+
   const svc = hapPrimaryService(acc)
   if (!svc) return null
 

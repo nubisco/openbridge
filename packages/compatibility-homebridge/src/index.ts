@@ -662,6 +662,17 @@ export interface SerializedCharacteristic {
   value: unknown
   format: string
   perms: string[]
+  /**
+   * The characteristic's HAP status, 0 when healthy.
+   *
+   * A plugin reports an unreachable device by pushing a HapStatusError into
+   * the characteristic. HAP-NodeJS records that in `statusCode` and leaves
+   * `value` at the last good reading, which is why a dead bulb serialised to
+   * `On: false` and was indistinguishable from one that is simply switched
+   * off. HomeKit reads this field and says "No Response"; without it here,
+   * every other consumer is told a comfortable lie.
+   */
+  statusCode: number
 }
 
 export interface SerializedService {
@@ -677,6 +688,12 @@ export interface SerializedAccessory {
   category: number
   services: SerializedService[]
   reachable: boolean
+  /**
+   * Why the accessory is unreachable, when it is. Taken from the first
+   * faulted characteristic, so it carries the plugin's own HAP status rather
+   * than a guess made here.
+   */
+  statusCode?: number
 }
 
 // Map HAP service UUIDs to accessory categories. Used to infer the category
@@ -725,17 +742,28 @@ function inferCategoryFromServices(acc: any): number {
 export function serializeAccessory(acc: any): SerializedAccessory {
   const services: SerializedService[] = []
 
+  // The status of the first faulted characteristic found, which becomes the
+  // accessory's own. One failing characteristic is enough: HomeKit greys out
+  // the whole tile on exactly that basis, and a device answering for three of
+  // its four characteristics is not a device anyone should be told is fine.
+  let faultStatus: number | undefined
+
   try {
     for (const svc of acc.services ?? []) {
       const characteristics: SerializedCharacteristic[] = []
       for (const ch of svc.characteristics ?? []) {
         try {
+          // HAPStatus.SUCCESS is 0. Anything else means the last read or push
+          // failed, whatever `value` still happens to hold.
+          const statusCode = typeof ch.statusCode === 'number' ? ch.statusCode : 0
+          if (statusCode !== 0 && faultStatus === undefined) faultStatus = statusCode
           characteristics.push({
             uuid: ch.UUID,
             name: ch.constructor?.name ?? ch.displayName ?? ch.UUID,
             value: ch.value,
             format: ch.props?.format ?? 'unknown',
             perms: ch.props?.perms ?? [],
+            statusCode,
           })
         } catch {
           /* skip bad characteristic */
@@ -756,12 +784,18 @@ export function serializeAccessory(acc: any): SerializedAccessory {
   const explicitCategory = acc.category ?? 1
   const category = explicitCategory !== 1 ? explicitCategory : inferCategoryFromServices(acc)
 
+  // `acc.reachable` is a Homebridge field deprecated years ago that no current
+  // plugin sets, so on its own it made this flag permanently true and every
+  // status dot permanently green. The characteristic status is where the truth
+  // actually lives, so an accessory is reachable only if nothing on it is
+  // faulted.
   return {
     uuid: acc.UUID,
     displayName: acc.displayName,
     category,
     services,
-    reachable: acc.reachable !== false,
+    reachable: acc.reachable !== false && faultStatus === undefined,
+    ...(faultStatus === undefined ? {} : { statusCode: faultStatus }),
   }
 }
 
