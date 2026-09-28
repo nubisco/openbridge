@@ -1,3 +1,10 @@
+## [0.38.3](https://github.com/nubisco/openbridge/compare/v0.38.2...v0.38.3) (2026-09-28)
+
+
+### Bug Fixes
+
+* **ui:** poll HomeKit accessories too, not just native devices ([eb5ecc0](https://github.com/nubisco/openbridge/commit/eb5ecc0914d2c785eaef39eb58969a7734d0623d))
+
 ## [0.38.2](https://github.com/nubisco/openbridge/compare/v0.38.1...v0.38.2) (2026-09-28)
 
 
