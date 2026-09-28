@@ -1,3 +1,10 @@
+## [0.38.1](https://github.com/nubisco/openbridge/compare/v0.38.0...v0.38.1) (2026-09-28)
+
+
+### Bug Fixes
+
+* **ui:** one unreachable device no longer hides every other device ([32faa7c](https://github.com/nubisco/openbridge/commit/32faa7cb25c83644999385ab1e09712f3e58924f))
+
 # [0.38.0](https://github.com/nubisco/openbridge/compare/v0.37.0...v0.38.0) (2026-09-25)
 
 
