@@ -1,3 +1,10 @@
+## [0.38.2](https://github.com/nubisco/openbridge/compare/v0.38.1...v0.38.2) (2026-09-28)
+
+
+### Bug Fixes
+
+* **hap:** stop reporting unreachable accessories as healthy and off ([bb5bcba](https://github.com/nubisco/openbridge/commit/bb5bcbab5c516ee50763fc434fc1009af6881354))
+
 ## [0.38.1](https://github.com/nubisco/openbridge/compare/v0.38.0...v0.38.1) (2026-09-28)
 
 
