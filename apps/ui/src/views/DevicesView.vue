@@ -672,10 +672,34 @@ function cancelControl() {
   confirmDialog.value.visible = false
 }
 
+/**
+ * Both lists, every tick.
+ *
+ * Only the native list used to be polled, so anything arriving through the
+ * Homebridge compatibility layer (every WiZ bulb, every camera) was fetched
+ * once on mount and then frozen until the page was reloaded or the refresh
+ * button pressed. Turning a light on elsewhere never showed up, which read as
+ * the bridge having missed the change rather than the page having stopped
+ * asking. Both are served from memory in the daemon, so this costs no device
+ * traffic.
+ */
+async function poll() {
+  await Promise.all([daemon.fetchAccessories(), fetchNativeDevices()])
+
+  // fetchNativeDevices does this for its own kind. An open inspector holds the
+  // object it was given, so without the same step for HAP it would keep showing
+  // the reading from whenever it was opened.
+  if (inspector.mode === 'device' && inspector.selectedDevice?.kind === 'hap') {
+    const selectedUuid = inspector.selectedDevice.acc.uuid
+    const updated = daemon.accessories.find((a) => a.uuid === selectedUuid)
+    if (updated) inspector.updateDevice({ kind: 'hap', acc: updated })
+  }
+}
+
 onMounted(async () => {
   layout.setPage('Devices')
-  await Promise.all([daemon.fetchAccessories(), fetchNativeDevices()])
-  pollInterval = setInterval(fetchNativeDevices, 3000)
+  await poll()
+  pollInterval = setInterval(poll, 3000)
 })
 
 onUnmounted(() => {
