@@ -33,19 +33,12 @@
       </p>
     </div>
 
-    <!-- A standing fact about the estate, not news, so a banner rather than a
-         toast: it has to still be here the next time this page is opened.
-         Without it the only sign of an outage is a coloured dot on whichever
-         card you happen to scroll past. -->
-    <NbBanner
-      v-if="unhealthyDevices.length > 0"
-      variant="callout"
-      status="warning"
-      :title="unhealthyTitle"
-      class="health-summary"
-    >
-      {{ unhealthyDevices.map((d) => d.name).join(', ') }}
-    </NbBanner>
+    <!-- An unhealthy device is marked on the device itself, not summarised
+         above the list. A page-level banner here used to sit between this
+         `v-if` and the `v-else` below, which silently rebound the `v-else` to
+         the banner's condition and hid the entire list whenever anything was
+         unhealthy: one unreachable device made the other seventeen
+         unreachable too. Keep these two branches adjacent. -->
 
     <!-- self on the layout, not the grid: the click must land on the empty
          area around the cards, and a card click stops at the card itself. -->
@@ -57,7 +50,8 @@
           v-for="dev in nativeDevices"
           :key="'native:' + dev.id"
           class="device-card native-card"
-          :class="{ selected: selectedDeviceId === dev.id }"
+          :class="{ selected: selectedDeviceId === dev.id, unhealthy: isUnhealthy(dev) }"
+          :title="isUnhealthy(dev) ? healthTooltip(dev) : undefined"
           @click="selectNative(dev)"
           @dblclick="openDetail(dev)"
         >
@@ -66,7 +60,12 @@
             <NbIcon :name="widgetIcon(effectiveType(dev))" :size="22" />
           </div>
           <div class="device-info">
-            <div class="device-name">{{ dev.name }}</div>
+            <div class="device-name">
+              <!-- The same `warning` icon the page banner used, kept so the
+                   signal people learned there still means the same thing. -->
+              <NbIcon v-if="isUnhealthy(dev)" name="warning" :size="14" class="name-health-icon" />
+              <span>{{ dev.name }}</span>
+            </div>
             <div class="device-type">{{ widgetLabel(effectiveType(dev)) }}</div>
             <!-- Inline widget summary -->
             <div class="device-summary">
@@ -147,14 +146,19 @@
           :class="{
             selected: selectedDeviceId === acc.uuid,
             unreachable: !acc.reachable,
+            unhealthy: !acc.reachable,
           }"
+          :title="acc.reachable ? undefined : HAP_UNREACHABLE_TOOLTIP"
           @click="selectHap(acc)"
         >
           <div class="device-icon hap-icon" :class="{ unreachable: !acc.reachable }">
             <NbIcon :name="categoryInfo(acc.category).icon" :size="22" />
           </div>
           <div class="device-info">
-            <div class="device-name">{{ acc.displayName }}</div>
+            <div class="device-name">
+              <NbIcon v-if="!acc.reachable" name="warning" :size="14" class="name-health-icon" />
+              <span>{{ acc.displayName }}</span>
+            </div>
             <div class="device-type">{{ categoryInfo(acc.category).label }}</div>
             <div v-if="hapPrimaryValue(acc)" class="device-summary">
               <span class="summary-primary">{{ hapPrimaryValue(acc) }}</span>
@@ -184,9 +188,14 @@
         @row-click="(row: DeviceRow) => row.select()"
       >
         <template #cell-name="{ row }">
-          <div class="cell-name">
+          <div class="cell-name" :title="row.healthTooltip || undefined">
             <NbIcon :name="row.icon" :size="16" />
             <span>{{ row.name }}</span>
+            <!-- NbDataTable exposes no per-row class or data attribute, so the
+                 row highlight below hangs off this icon via `:has()` rather
+                 than off the row itself. Giving the table a `rowClass` prop in
+                 @nubisco/ui would be the cleaner fix. -->
+            <NbIcon v-if="row.unhealthy" name="warning" :size="14" class="cell-health-icon" />
           </div>
         </template>
         <template #cell-state="{ row }">
@@ -235,12 +244,56 @@ const router = useRouter()
  * never reported cannot be called healthy, and calling it broken would light
  * up every device for the first few seconds after a restart.
  */
-const unhealthyDevices = computed(() => nativeDevices.value.filter((d) => d.health?.status === 'stale'))
+/**
+ * `unknown` is not counted as unhealthy here even though the dot draws it like
+ * offline: every device is `unknown` for the first seconds after a restart, and
+ * flagging the whole estate on every restart would teach people to ignore the
+ * flag. Only `stale` means the device was answering and stopped.
+ */
+function isUnhealthy(dev: NativeDevice): boolean {
+  return dev.health?.status === 'stale'
+}
 
-const unhealthyTitle = computed(() => {
-  const n = unhealthyDevices.value.length
-  return n === 1 ? '1 device is not responding' : `${n} devices are not responding`
-})
+/** How long a device has been silent, in the roughest unit that still reads. */
+function silentFor(seconds: number): string {
+  if (seconds < 90) return `${Math.round(seconds)} seconds`
+  if (seconds < 5400) return `${Math.round(seconds / 60)} minutes`
+  if (seconds < 172800) return `${Math.round(seconds / 3600)} hours`
+  return `${Math.round(seconds / 86400)} days`
+}
+
+/**
+ * What to say on hover about a device that is not answering.
+ *
+ * The banner this replaces only stated the fact, which left nothing to act on.
+ * Everything useful is already known here: when it was last heard from and what
+ * the plugin reported. The rest (its address, its telemetry, its recent events)
+ * is one click away in the inspector, so the hover says so.
+ */
+function healthTooltip(dev: NativeDevice): string {
+  const h = dev.health
+  if (!h || h.status !== 'stale') return ''
+
+  const lines = ['Not responding']
+  if (h.silentForSeconds !== null) lines.push(`Silent for ${silentFor(h.silentForSeconds)}.`)
+  else if (h.lastSeen) lines.push(`Last seen ${new Date(h.lastSeen).toLocaleString()}.`)
+  if (h.reason) lines.push(h.reason)
+  lines.push(
+    'OpenBridge is running: the device itself is not answering. Check it is powered and reachable at its configured address.',
+    'Click to open it for its address, readings and recent events.',
+  )
+  return lines.join('\n')
+}
+
+/**
+ * HomeKit accessories report a bare reachable flag with no reason attached, so
+ * this is all that can honestly be said about one.
+ */
+const HAP_UNREACHABLE_TOOLTIP = [
+  'Not responding',
+  'HomeKit reports this accessory as unreachable. Check it is powered and on the network.',
+  'Click to open it for its services and characteristics.',
+].join('\n')
 
 function healthClass(dev: NativeDevice): string {
   const status = dev.health?.status
@@ -307,6 +360,8 @@ interface DeviceRow {
   stateOn: boolean
   detail: string
   icon: string
+  unhealthy: boolean
+  healthTooltip: string
   select: () => void
 }
 
@@ -321,6 +376,8 @@ const deviceRows = computed<DeviceRow[]>(() => {
       stateOn: !!dev.telemetry.active,
       detail: nativeSummary(dev),
       icon: widgetIcon(effectiveType(dev)),
+      unhealthy: isUnhealthy(dev),
+      healthTooltip: healthTooltip(dev),
       select: () => selectNative(dev),
     })),
     ...daemon.accessories.map((acc) => {
@@ -334,6 +391,8 @@ const deviceRows = computed<DeviceRow[]>(() => {
         stateOn: !!on?.value,
         detail: hapPrimaryValue(acc) ?? '',
         icon: categoryInfo(acc.category).icon,
+        unhealthy: !acc.reachable,
+        healthTooltip: acc.reachable ? '' : HAP_UNREACHABLE_TOOLTIP,
         select: () => selectHap(acc),
       }
     }),
@@ -653,6 +712,20 @@ onUnmounted(() => {
   gap: 0.5rem;
 }
 
+.cell-health-icon {
+  color: var(--nb-c-warning);
+  flex-shrink: 0;
+}
+
+// Table equivalent of the card's warning border. NbDataTable takes no row
+// class and puts no key on the <tr>, so the row is selected by the health icon
+// our own name-cell slot renders into it. Worth replacing with a `rowClass`
+// prop on the shared table rather than leaning on `:has()` long term.
+:deep(.nb-data-table__row:has(.cell-health-icon)) {
+  background: color-mix(in srgb, var(--nb-c-warning) 8%, transparent);
+  box-shadow: inset 3px 0 0 0 var(--nb-c-warning);
+}
+
 .devices-layout {
   min-height: 0;
   flex: 1;
@@ -691,6 +764,29 @@ onUnmounted(() => {
   &.unreachable {
     opacity: 0.55;
   }
+
+  // Warning, not danger, matching the dot: a device that has stopped answering
+  // is usually a network or power problem outside OpenBridge and is often
+  // transient. The card stays fully interactive, because its inspector holds
+  // the address and the recent events needed to fix it.
+  //
+  // Placed after `.selected` so selecting an unhealthy device still shows the
+  // selection colour rather than leaving the two competing for the border.
+  &.unhealthy:not(.selected) {
+    border-color: var(--nb-c-warning);
+    box-shadow: inset 3px 0 0 0 var(--nb-c-warning);
+  }
+
+  // An unreachable HAP card dims to 0.55, which would take the warning border
+  // down with it. The mark has to stay legible.
+  &.unhealthy {
+    opacity: 1;
+  }
+}
+
+.name-health-icon {
+  color: var(--nb-c-warning);
+  flex-shrink: 0;
 }
 
 // Marks a device served by a native OpenBridge plugin, mirroring the status
@@ -732,12 +828,21 @@ onUnmounted(() => {
   width: 100%;
 }
 .device-name {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  min-width: 0;
   font-weight: 600;
   font-size: 0.875rem;
   color: var(--nb-c-text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+
+  // Truncation belongs to the text now that the name can carry a health icon.
+  // Left on the container, the ellipsis would eat the icon before the name.
+  > span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }
 .device-type {
   font-size: 0.74rem;
