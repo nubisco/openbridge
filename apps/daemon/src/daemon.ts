@@ -169,6 +169,8 @@ export class Daemon {
     let hapBridge: any = null
     let homebridgeAPI: HomebridgeAPI | null = null
     let hapInfo: HapInfo | null = null
+    // Set once the bridge is built, invoked after every plugin has registered.
+    let publishBridge: (() => Promise<void>) | null = null
 
     // Load disabled plugins list early: applies to both Homebridge platforms and native plugins
     let disabledPlugins: string[] = []
@@ -298,28 +300,43 @@ export class Daemon {
       // restart. Homebridge disables it for the same reason.
       hapBridge.disableUnusedIDPurge?.()
 
-      // hap-nodejs listens asynchronously, after `publish()` has returned, so a
-      // port conflict surfaces as an uncaught exception rather than a throw
-      // that the catch below would see. The daemon then runs on with no
-      // HomeKit bridge and no other sign of trouble. Waiting for the port
-      // first covers the case that actually happens: a previous instance that
-      // has not finished letting go of its sockets.
-      await waitForFreePort(hapPort, {
-        timeoutMs: 30_000,
-        onWait: () => log.warn(`HomeKit port ${hapPort} is still in use, waiting for it to be released...`),
-      })
+      // Publishing is deliberately deferred until every plugin has registered.
+      //
+      // Each addBridgedAccessory() after publish bumps the bridge's config
+      // number and re-advertises, and HomeKit reads a config number change as
+      // "this bridge's accessory database changed, read it again". Publishing
+      // first therefore showed HomeKit a bridge that then mutated once per
+      // accessory: on this estate c# climbed 92 in 21 hours across 9 restarts,
+      // about ten bumps per start. Editing a room or a name during that window
+      // fails with "Could not change settings", and organisation done while it
+      // is still settling does not stick.
+      //
+      // Batching with addBridgedAccessory(acc, deferUpdate) cannot fix it here,
+      // because the plugins doing the adding are separate packages.
+      publishBridge = async () => {
+        // hap-nodejs listens asynchronously, after `publish()` has returned, so
+        // a port conflict surfaces as an uncaught exception rather than a throw
+        // that the catch below would see. The daemon then runs on with no
+        // HomeKit bridge and no other sign of trouble. Waiting for the port
+        // first covers the case that actually happens: a previous instance that
+        // has not finished letting go of its sockets.
+        await waitForFreePort(hapPort, {
+          timeoutMs: 30_000,
+          onWait: () => log.warn(`HomeKit port ${hapPort} is still in use, waiting for it to be released...`),
+        })
 
-      hapBridge.publish({
-        username,
-        pincode,
-        port: hapPort,
-        category: hapNodeJs.Categories.BRIDGE,
-      })
+        hapBridge.publish({
+          username,
+          pincode,
+          port: hapPort,
+          category: hapNodeJs.Categories.BRIDGE,
+        })
 
-      const setupURI = hapBridge.setupURI() as string
-      hapInfo = { setupURI, pincode }
-      log.info(`HAP bridge published: PIN: ${pincode}`)
-      printPairingInfo(setupURI, pincode)
+        const setupURI = hapBridge.setupURI() as string
+        hapInfo = { setupURI, pincode }
+        log.info(`HAP bridge published: PIN: ${pincode}`)
+        printPairingInfo(setupURI, pincode)
+      }
     } catch (err) {
       // Deliberately not fatal: the devices view, telemetry and the API are all
       // still worth serving without HomeKit. But it must not be quiet about it,
@@ -366,6 +383,21 @@ export class Daemon {
       const orphans = homebridgeAPI.pruneOrphanedAccessories()
       if (orphans.length > 0) {
         log.info(`Removed ${orphans.length} orphaned accessory(ies) from inactive plugins: ${orphans.join(', ')}`)
+      }
+    }
+
+    // Now the accessory set is final: every plugin has registered and the
+    // orphans are gone. HomeKit sees one settled configuration instead of one
+    // per accessory. A failure here is reported the same way as before and is
+    // still not fatal, since everything but HomeKit is worth serving.
+    if (publishBridge) {
+      try {
+        await publishBridge()
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : String(err)
+        hapInfo = { setupURI: null, pincode: null, error: reason }
+        log.error(`HomeKit bridge unavailable: ${reason}`)
+        log.error('Everything else is running. HomeKit will stay offline until the daemon is restarted.')
       }
     }
 
