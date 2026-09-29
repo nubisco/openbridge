@@ -820,9 +820,13 @@ const WIDGET_ICON: Record<string, string> = {
   // it silently rendered nothing, and @nubisco/ui 4.x throws on an unresolved
   // name, so this is now 'pulse'. Registered in src/icons.ts.
   sensor: 'pulse',
+  // See the note on the copy in DevicesView.vue: native cameras had no entry
+  // in either map and fell through to the generic cube.
+  camera: 'camera',
 }
 
 const WIDGET_LABEL: Record<string, string> = {
+  camera: 'Camera',
   switch: 'Switch',
   light: 'Light',
   thermostat: 'Thermostat',

@@ -515,9 +515,16 @@ const WIDGET_ICON: Record<string, string> = {
   // it silently rendered nothing, and @nubisco/ui 4.x throws on an unresolved
   // name, so this is now 'pulse'. Registered in src/icons.ts.
   sensor: 'pulse',
+  // Cameras arrived as native devices when the camera platform stopped going
+  // through the Homebridge compatibility layer. As HAP accessories they had
+  // been drawn from CATEGORY_INFO, so nothing here covered them and all three
+  // fell through to the generic cube. 'camera' is already registered in
+  // src/icons.ts for HomeKit category 17.
+  camera: 'camera',
 }
 
 const WIDGET_LABEL: Record<string, string> = {
+  camera: 'Camera',
   switch: 'Switch',
   light: 'Light',
   thermostat: 'Thermostat',
