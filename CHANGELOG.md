@@ -1,3 +1,10 @@
+## [0.38.4](https://github.com/nubisco/openbridge/compare/v0.38.3...v0.38.4) (2026-09-29)
+
+
+### Bug Fixes
+
+* **plugins:** plugin metadata enrichment never ran, so cards had no icon ([255031b](https://github.com/nubisco/openbridge/commit/255031bd4c9d5d3a0826e3ea243ab8caad781712))
+
 ## [0.38.3](https://github.com/nubisco/openbridge/compare/v0.38.2...v0.38.3) (2026-09-28)
 
 
