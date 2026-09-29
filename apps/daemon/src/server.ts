@@ -449,6 +449,10 @@ export async function createServer(
   })
 
   // ─── Plugins ─────────────────────────────────────────────────────────────
+  // Packages already being enriched, so a page that polls every few seconds
+  // does not queue a fetch per tick for the same plugin.
+  const enrichmentInFlight = new Set<string>()
+
   app.get('/api/plugins', async () => {
     const plugins = registry.getAll()
     // Attach cached enriched metadata to each plugin
@@ -457,6 +461,19 @@ export async function createServer(
       const pkgName = plugin.manifest.name
       if (cache[pkgName]) {
         plugin.enrichedMetadata = cache[pkgName]
+        continue
+      }
+
+      // Backfill anything the cache has never seen, in the background. A plugin
+      // installed outside the marketplace flow had no path into the cache at
+      // all, so it showed with no avatar, no sponsor link and no docs link
+      // until someone pressed Refresh metadata, and nothing on the card hinted
+      // that was why.
+      if (!enrichmentInFlight.has(pkgName)) {
+        enrichmentInFlight.add(pkgName)
+        void fetchAndCacheEnrichedMetadata(pkgName)
+          .catch((err) => log.debug(`Background metadata fetch failed for ${pkgName}: ${err}`))
+          .finally(() => enrichmentInFlight.delete(pkgName))
       }
     }
     return { plugins }
@@ -1303,17 +1320,15 @@ export async function createServer(
 
   async function fetchAndCacheEnrichedMetadata(pkgName: string): Promise<Record<string, any> | undefined> {
     try {
-      // Fetch from the enriched endpoint (same logic as GET /api/marketplace/enriched/:name)
-      const enrichedRes = await fetch(
-        `http://localhost:${process.env.PORT ?? 8000}/api/marketplace/enriched/${encodeURIComponent(pkgName)}`,
-      ).catch(() => null)
-      if (enrichedRes?.ok) {
-        const enriched = await enrichedRes.json()
-        // Save to cache
+      // Direct call, not a fetch back into our own HTTP server. See the note on
+      // enrichPackageMetadata: the old self-fetch guessed the wrong port and
+      // failed silently, so no plugin ever got an avatar or a sponsor link.
+      const enriched = await enrichPackageMetadata(pkgName)
+      if (enriched) {
         const cache = loadMetadataCache()
         cache[pkgName] = enriched
         saveMetadataCache(cache)
-        return enriched
+        return enriched as Record<string, any>
       }
     } catch (err) {
       log.warn(`Failed to fetch enriched metadata for ${pkgName}: ${err}`)
@@ -1651,10 +1666,19 @@ export async function createServer(
     return Math.round(value)
   }
 
-  // Enriched marketplace metadata endpoint
-  // Fetches npm download stats, GitHub stars, sponsors, and README
-  app.get('/api/marketplace/enriched/:name', async (req) => {
-    const { name } = req.params as { name: string }
+  /**
+   * Build the enriched marketplace record for a package: npm stats, GitHub
+   * stars and sponsors, docs link and README.
+   *
+   * A plain function rather than only an HTTP route, because the cache filler
+   * used to reach it by fetching `http://localhost:${process.env.PORT ?? 8000}`.
+   * The port is read from OPENBRIDGE_PORT, not PORT, so that env var is never
+   * set and every call went to port 8000 where nothing listens. The failure was
+   * swallowed by a `.catch(() => null)`, so enrichment silently did nothing for
+   * every plugin: no avatar, no sponsor link, no docs link, and a metadata cache
+   * that only ever aged. Calling it directly removes the guess entirely.
+   */
+  async function enrichPackageMetadata(name: string): Promise<Record<string, unknown>> {
     try {
       // Start with basic package info from npm registry
       const npmRes = await fetch(`https://registry.npmjs.org/${encodeURIComponent(name)}`, {
@@ -1791,7 +1815,12 @@ export async function createServer(
       log.debug(`Failed to enrich metadata for ${name}: ${err}`)
       return { name }
     }
-  })
+  }
+
+  // Enriched marketplace metadata endpoint
+  app.get('/api/marketplace/enriched/:name', async (req) =>
+    enrichPackageMetadata((req.params as { name: string }).name),
+  )
 
   // ─── Interactive shell WebSocket (PTY) ───────────────────────────────────
   // node-pty is an optional dependency: it only powers the interactive shell pane.

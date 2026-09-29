@@ -3,6 +3,20 @@
     <!-- Header -->
     <div class="mp-header">
       <span class="mp-title">Browse Plugins</span>
+      <!-- This panel searches npm and is deliberately narrow: install what you
+           already know you want. The marketplace site ranks, reviews and
+           compares, which needs room this drawer does not have, so it opens in
+           its own tab rather than trying to reproduce it here. -->
+      <a
+        class="mp-external"
+        :href="MARKETPLACE_URL"
+        target="_blank"
+        rel="noopener noreferrer"
+        title="Open the full marketplace in a new tab"
+      >
+        <NbIcon name="arrow-square-out" :size="12" />
+        Marketplace
+      </a>
     </div>
 
     <!-- Search -->
@@ -193,6 +207,11 @@ import { useNotifications } from '@/composables/useNotifications'
 const daemon = useDaemonStore()
 const notify = useNotifications()
 const uninstalling = ref<string | null>(null)
+
+// The public marketplace. Kept as a constant rather than read from the
+// daemon because this panel already talks to npm directly and the daemon
+// holds no marketplace address of its own.
+const MARKETPLACE_URL = 'https://marketplace.openbridge.nubisco.io'
 
 const query = ref('')
 const results = ref<NpmPackage[]>([])
@@ -395,7 +414,24 @@ onMounted(async () => {
   overflow: hidden;
 }
 
+.mp-external {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.72rem;
+  color: var(--nb-c-text-subtle);
+  text-decoration: none;
+  &:hover {
+    color: var(--nb-c-primary);
+  }
+}
+
 .mp-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+
   display: flex;
   align-items: center;
   justify-content: space-between;
