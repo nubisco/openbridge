@@ -1,3 +1,10 @@
+## [0.38.5](https://github.com/nubisco/openbridge/compare/v0.38.4...v0.38.5) (2026-09-29)
+
+
+### Bug Fixes
+
+* **ui:** cameras rendered as generic cubes ([ef497c3](https://github.com/nubisco/openbridge/commit/ef497c33fd956d61b33ac9d7bd6c1dd48f166ecb))
+
 ## [0.38.4](https://github.com/nubisco/openbridge/compare/v0.38.3...v0.38.4) (2026-09-29)
 
 
