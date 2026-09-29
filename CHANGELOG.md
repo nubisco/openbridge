@@ -1,3 +1,10 @@
+## [0.38.6](https://github.com/nubisco/openbridge/compare/v0.38.5...v0.38.6) (2026-09-29)
+
+
+### Bug Fixes
+
+* **hap:** publish the bridge after plugins register, not before ([65699aa](https://github.com/nubisco/openbridge/commit/65699aa071da6d63fab247374bf14e4aeea03a8c))
+
 ## [0.38.5](https://github.com/nubisco/openbridge/compare/v0.38.4...v0.38.5) (2026-09-29)
 
 
