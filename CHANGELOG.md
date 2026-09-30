@@ -1,3 +1,10 @@
+# [0.39.0](https://github.com/nubisco/openbridge/compare/v0.38.6...v0.39.0) (2026-09-30)
+
+
+### Features
+
+* **devices:** let people report what a device cannot measure ([9192a4b](https://github.com/nubisco/openbridge/commit/9192a4ba4472c06a5220745954a576b12a777671)), closes [hi#volume](https://github.com/hi/issues/volume)
+
 ## [0.38.6](https://github.com/nubisco/openbridge/compare/v0.38.5...v0.38.6) (2026-09-29)
 
 
