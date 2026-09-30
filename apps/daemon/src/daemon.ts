@@ -10,6 +10,7 @@ import { Logger } from '@nubisco/openbridge-logger'
 import { waitForFreePort } from './port.js'
 import { rotateIfLarge } from './log-rotation.js'
 import { DeviceEventLog } from './device-events.js'
+import { ObservationStore } from './observations.js'
 import { loadConfig, defaultConfigPath } from '@nubisco/openbridge-config'
 import type { OpenBridgeConfig } from '@nubisco/openbridge-config'
 import { createServer, type HapInfo } from './server.js'
@@ -66,6 +67,15 @@ export class Daemon {
   private metricSeries = new Map<string, DeviceSeries>()
   /** Per-device event timeline, written by plugins through ctx.recordEvent */
   private deviceEvents = new DeviceEventLog(join(OPENBRIDGE_HOME, 'device-events'))
+  private observations = new ObservationStore(OPENBRIDGE_HOME)
+  /**
+   * Per-device providers of machine state to attach to an observation.
+   *
+   * Registered by plugins, because only the plugin knows which of its readings
+   * matter. The daemon asks at submit time rather than letting a client supply
+   * them, so a report cannot claim conditions that were not happening.
+   */
+  private observationContexts = new Map<string, () => Record<string, unknown>>()
   /** Per-service HomeKit type overrides, applied at the bridge */
   private homekitServiceTypes = new HomeKitServiceTypes(join(OPENBRIDGE_HOME, 'homekit-service-types.json'))
   /** Per-accessory HomeKit visibility, enforced at the bridge */
@@ -416,6 +426,8 @@ export class Daemon {
       (deviceId) => this.resolveNativeAccessory(deviceId),
       (deviceId) => this.nativeAccessoryUuid(deviceId),
       this.deviceEvents,
+      this.observations,
+      (deviceId) => this.observationContexts.get(deviceId)?.(),
     )
     await server.listen({ port, host: '0.0.0.0' })
 
@@ -698,6 +710,9 @@ export class Daemon {
       },
       recordEvent: (deviceId: string, event: DeviceEventInput) => {
         this.deviceEvents.record(deviceId, event)
+      },
+      registerObservationContext: (deviceId: string, provider: () => Record<string, unknown>) => {
+        this.observationContexts.set(deviceId, provider)
       },
       registerHapBridge(info: { setupURI: string; pincode: string; port: number; name: string }) {
         const entry = registry.get(plugin.manifest.name)

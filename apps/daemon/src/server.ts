@@ -66,6 +66,7 @@ let shellAvailable = false
 
 import { OPENBRIDGE_HOME, OB_PLUGINS_DIR, HB_PLUGINS_DIR } from './daemon.js'
 import { DeviceEventLog } from './device-events.js'
+import { ObservationStore, validateObservation } from './observations.js'
 import { DeviceSeries } from './timeseries.js'
 import type { HomeKitVisibility } from './homekit-visibility.js'
 import {
@@ -122,6 +123,15 @@ export async function createServer(
   nativeAccessoryUuid: ((deviceId: string) => string | null) | null = null,
   /** Per-device event timeline, written by plugins through ctx.recordEvent. */
   deviceEvents: DeviceEventLog | null = null,
+  /** Person-reported observations for devices that cannot measure themselves. */
+  observations: ObservationStore | null = null,
+  /**
+   * Machine state to attach to an observation, asked of the plugin at submit
+   * time. Without it a report is unusable: a house at 24 degrees with cold
+   * radiators on a sunny afternoon and one the heating worked to reach are the
+   * same number and opposite evidence.
+   */
+  observationContext: ((deviceId: string) => Record<string, unknown> | undefined) | null = null,
 ) {
   const app = Fastify({ logger: false })
 
@@ -427,6 +437,40 @@ export async function createServer(
       return { events: deviceEvents.read(req.params.id, Number.isFinite(limit) ? limit : 100) }
     },
   )
+
+  // ─── Observations ─────────────────────────────────────────────────────────
+  // What a person reports about a room, for devices that control something
+  // they cannot measure. See observations.ts for why this exists at all.
+  app.get<{ Params: { id: string }; Querystring: { limit?: string } }>(
+    '/api/devices/:id/observations',
+    async (req, reply) => {
+      if (!observations) return reply.code(503).send({ error: 'observation store unavailable' })
+      const limit = Number(req.query.limit ?? 100)
+      return {
+        observations: observations.list(req.params.id, Number.isFinite(limit) ? limit : 100),
+        total: observations.count(req.params.id),
+      }
+    },
+  )
+
+  app.post<{ Params: { id: string } }>('/api/devices/:id/observations', async (req, reply) => {
+    if (!observations) return reply.code(503).send({ error: 'observation store unavailable' })
+
+    const parsed = validateObservation(req.body)
+    if (!parsed.ok) return reply.code(400).send({ error: parsed.error })
+
+    // The plugin's numbers are attached here rather than trusted from the
+    // client, so a report cannot claim conditions that were not happening.
+    const context = observationContext?.(req.params.id)
+    const record = { ...parsed.value, ...(context ? { context } : {}) }
+
+    try {
+      observations.append(req.params.id, record)
+    } catch (err) {
+      return reply.code(507).send({ error: err instanceof Error ? err.message : String(err) })
+    }
+    return { observation: record, total: observations.count(req.params.id) }
+  })
 
   // ─── HomeKit QR ───────────────────────────────────────────────────────────
   app.get('/api/qr', async () => {

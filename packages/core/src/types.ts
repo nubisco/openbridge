@@ -62,6 +62,24 @@ export interface MetricDescriptor {
   trackExtremes?: boolean
 }
 
+/**
+ * Declares that a device wants the person to report what it cannot measure.
+ *
+ * Some devices control a variable they have no sensor for. A heat pump with no
+ * room sensor is told what temperature water to send out, and whether that
+ * keeps the house warm is knowable only to whoever lives there. A plugin that
+ * sets this gets a small reporting form in the inspector.
+ */
+export interface ObservationDescriptor {
+  /** What is being asked for, e.g. "Room temperature". */
+  label: string
+  unit: string
+  min: number
+  max: number
+  /** One line explaining when a report is worth filing. */
+  help?: string
+}
+
 export interface DeviceDescriptor {
   id: string
   name: string
@@ -72,6 +90,11 @@ export interface DeviceDescriptor {
   pluginId: string
   /** If present, this device supports interactive interpolation calibration */
   interpolation?: InterpolationDescriptor
+  /**
+   * If present, the UI offers a form for reporting what the device cannot
+   * measure itself. See {@link ObservationDescriptor}.
+   */
+  observations?: ObservationDescriptor
   /**
    * Time-series this device reports. When present, OpenBridge records them to
    * history and can chart them. When absent, the device is still shown live but
@@ -176,6 +199,14 @@ export interface PluginContext {
    * it on every poll would bury the events that matter.
    */
   recordEvent?(deviceId: string, event: DeviceEventInput): void
+  /**
+   * Supply machine state to attach to a person's observation of this device.
+   *
+   * Only the plugin knows which of its readings matter, and the daemon asks at
+   * submit time rather than accepting them from a client, so a report cannot
+   * claim conditions that were not happening.
+   */
+  registerObservationContext?(deviceId: string, provider: () => Record<string, unknown>): void
   /** Register a HAP bridge so its QR/PIN appear in the OpenBridge UI */
   registerHapBridge(info: { setupURI: string; pincode: string; port: number; name: string }): void
   /** Block a device control from being changed via UI or HomeKit */

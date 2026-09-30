@@ -198,6 +198,23 @@ export interface MetricDescriptor {
 }
 
 /** Mirrors DeviceActionDescriptor in @nubisco/openbridge-core. */
+export interface ObservationDescriptor {
+  label: string
+  unit: string
+  min: number
+  max: number
+  help?: string
+}
+
+/** One report of what a device cannot measure, with the machine state at the time. */
+export interface DeviceObservation {
+  at: string
+  roomTemperature: number
+  comfort: 'cold' | 'ok' | 'warm'
+  note?: string
+  context?: Record<string, unknown>
+}
+
 export interface DeviceActionDescriptor {
   id: string
   label: string
@@ -221,6 +238,7 @@ export interface DeviceDescriptor {
   model?: string
   pluginId: string
   interpolation?: InterpolationDescriptor
+  observations?: ObservationDescriptor
   metrics?: MetricDescriptor[]
   actions?: DeviceActionDescriptor[]
   telemetryIntervalSeconds?: number
@@ -233,6 +251,19 @@ export const api = {
   qr: () => get<{ setupURI: string | null; pincode: string | null; error?: string }>('/qr'),
   deviceEvents: (id: string, limit = 100) =>
     get<{ events: DeviceEvent[] }>(`/devices/${encodeURIComponent(id)}/events?limit=${limit}`),
+  deviceObservations: (id: string, limit = 50) =>
+    get<{ observations: DeviceObservation[]; total: number }>(
+      `/devices/${encodeURIComponent(id)}/observations?limit=${limit}`,
+    ),
+  reportObservation: (id: string, body: { roomTemperature: number; comfort: string; note?: string }) =>
+    fetch(`/api/devices/${encodeURIComponent(id)}/observations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then(async (r) => {
+      if (!r.ok) throw new Error(((await r.json()) as { error?: string }).error ?? `HTTP ${r.status}`)
+      return r.json() as Promise<{ observation: DeviceObservation; total: number }>
+    }),
   plugins: () => get<{ plugins: PluginInstance[] }>('/plugins'),
   pluginsRefresh: () =>
     fetch('/api/plugins/refresh', { method: 'POST' }).then((r) => r.json() as Promise<{ plugins: PluginInstance[] }>),

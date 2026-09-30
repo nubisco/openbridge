@@ -226,6 +226,50 @@
         <div v-if="historyLoading" class="no-history">Loading history…</div>
       </NbShellPanel>
 
+      <!-- Reporting what the device cannot measure -->
+      <NbShellPanel v-if="(selected as any).dev.observations" title="Report" fluid>
+        <p class="obs-help">
+          {{ (selected as any).dev.observations.help ?? 'Tell the plugin what this device cannot measure itself.' }}
+        </p>
+        <div class="obs-form">
+          <NbNumberInput
+            v-model="obsValue"
+            size="sm"
+            :min="(selected as any).dev.observations.min"
+            :max="(selected as any).dev.observations.max"
+            :step="0.5"
+            :label="`${(selected as any).dev.observations.label} (${(selected as any).dev.observations.unit})`"
+          />
+          <div class="obs-verdicts">
+            <NbButton
+              v-for="v in OBSERVATION_VERDICTS"
+              :key="v.id"
+              size="sm"
+              :variant="obsComfort === v.id ? 'primary' : 'ghost'"
+              @click="obsComfort = v.id"
+            >
+              {{ v.label }}
+            </NbButton>
+          </div>
+          <NbTextInput v-model="obsNote" size="sm" placeholder="Anything worth noting (sunny, window open)" />
+          <NbButton size="sm" variant="primary" :disabled="obsValue === null || obsBusy" @click="submitObservation">
+            Save report
+          </NbButton>
+        </div>
+        <NbMessage v-if="obsError" variant="error">{{ obsError }}</NbMessage>
+        <div v-if="observations.length > 0" class="obs-list">
+          <div class="obs-list-head">{{ observationTotal }} report{{ observationTotal === 1 ? '' : 's' }} so far</div>
+          <div v-for="(o, i) in observations" :key="i" class="obs-row">
+            <span class="obs-when">{{ new Date(o.at).toLocaleString() }}</span>
+            <span class="obs-temp">{{ o.roomTemperature }}°</span>
+            <NbBadge :variant="o.comfort === 'ok' ? 'green' : o.comfort === 'cold' ? 'blue' : 'orange'" size="sm">
+              {{ o.comfort }}
+            </NbBadge>
+            <span v-if="o.note" class="obs-note">{{ o.note }}</span>
+          </div>
+        </div>
+      </NbShellPanel>
+
       <!-- Interpolation calibration -->
       <NbShellPanel
         v-if="(selected as any).dev.interpolation && interpolationPoints.length > 0"
@@ -447,7 +491,14 @@
 import { ref, computed, watch } from 'vue'
 import { useConfirm } from '@nubisco/ui'
 import { useInspectorStore, type NativeDevice } from '@/stores/inspector'
-import { api, type Accessory, type DeviceActionDescriptor, type DeviceEvent, type InterpolationDescriptor } from '@/api'
+import {
+  api,
+  type Accessory,
+  type DeviceActionDescriptor,
+  type DeviceEvent,
+  type InterpolationDescriptor,
+  type DeviceObservation,
+} from '@/api'
 import { onMounted } from 'vue'
 
 // ─── HomeKit visibility ─────────────────────────────────────────────────────
@@ -602,6 +653,76 @@ const healthTitle = computed(() => {
   if (!seen) return 'Not responding'
   return `Not responding since ${new Date(seen).toLocaleString()}`
 })
+
+/**
+ * Reporting what a device cannot measure.
+ *
+ * The verdict is asked for alongside the number because it is the more
+ * reliable half. A thermometer can be two degrees out and the reading still
+ * useless alone, but "this is too cold" is never wrong about the thing that
+ * matters, and it makes the "about right" samples identifiable. Those are the
+ * ones a curve most needs and the ones nobody thinks to file.
+ */
+const OBSERVATION_VERDICTS = [
+  { id: 'cold', label: 'Too cold' },
+  { id: 'ok', label: 'About right' },
+  { id: 'warm', label: 'Too warm' },
+] as const
+
+const obsValue = ref<number | null>(null)
+const obsComfort = ref<'cold' | 'ok' | 'warm'>('ok')
+const obsNote = ref('')
+const obsBusy = ref(false)
+const obsError = ref('')
+const observations = ref<DeviceObservation[]>([])
+const observationTotal = ref(0)
+
+async function loadObservations() {
+  const item = inspector.selectedDevice
+  if (!item || item.kind !== 'native' || !(item.dev as any).observations) {
+    observations.value = []
+    observationTotal.value = 0
+    return
+  }
+  try {
+    const res = await api.deviceObservations(item.dev.id, 20)
+    observations.value = res.observations
+    observationTotal.value = res.total
+  } catch {
+    /* the panel is still usable for reporting even if the history will not load */
+  }
+}
+
+async function submitObservation() {
+  const item = inspector.selectedDevice
+  if (!item || item.kind !== 'native' || obsValue.value === null) return
+
+  obsBusy.value = true
+  obsError.value = ''
+  try {
+    await api.reportObservation(item.dev.id, {
+      roomTemperature: obsValue.value,
+      comfort: obsComfort.value,
+      ...(obsNote.value.trim() ? { note: obsNote.value.trim() } : {}),
+    })
+    obsNote.value = ''
+    await loadObservations()
+  } catch (e) {
+    obsError.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    obsBusy.value = false
+  }
+}
+
+watch(
+  () => inspector.selectedDevice,
+  () => {
+    obsError.value = ''
+    obsNote.value = ''
+    void loadObservations()
+  },
+  { immediate: true },
+)
 
 const deviceActions = computed<DeviceActionDescriptor[]>(() => {
   const item = inspector.selectedDevice
@@ -1495,5 +1616,59 @@ const historyChartSeries = computed(() => {
   margin-top: 0.4rem;
   font-size: 0.72rem;
   color: var(--nb-color-text-muted, var(--nb-c-text-muted));
+}
+
+.obs-help {
+  margin: 0 0 0.6rem;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: var(--nb-c-text-subtle);
+}
+
+.obs-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.obs-verdicts {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.obs-list {
+  margin-top: 0.9rem;
+  border-top: 1px solid var(--nb-c-border);
+  padding-top: 0.6rem;
+}
+
+.obs-list-head {
+  font-size: 0.72rem;
+  color: var(--nb-c-text-subtle);
+  margin-bottom: 0.4rem;
+}
+
+.obs-row {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.22rem 0;
+  font-size: 0.75rem;
+}
+
+.obs-when {
+  color: var(--nb-c-text-subtle);
+  white-space: nowrap;
+}
+
+.obs-temp {
+  font-weight: 600;
+}
+
+.obs-note {
+  color: var(--nb-c-text-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>
