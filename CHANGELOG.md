@@ -1,3 +1,10 @@
+# [0.40.0](https://github.com/nubisco/openbridge/compare/v0.39.1...v0.40.0) (2026-10-23)
+
+
+### Features
+
+* **ui:** collapse the rail from the top, beside the brand ([3311c6b](https://github.com/nubisco/openbridge/commit/3311c6bb710b591fa1d316062450713392780ab5))
+
 ## [0.39.1](https://github.com/nubisco/openbridge/compare/v0.39.0...v0.39.1) (2026-10-23)
 
 
