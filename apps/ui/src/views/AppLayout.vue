@@ -1,34 +1,56 @@
 <template>
-  <NbShell :inspector-visible="inspector.visible" :main-padding="!layout.fullBleed">
-    <!-- ═══ Logo ═══ -->
+  <!-- The rail collapses from the top, beside the brand (the fleet standard).
+       One menu serves both states: a labelled row expanded, an icon with a
+       flyout label collapsed. On a phone it is the drawer, and the shell
+       renders no header toggle there. -->
+  <NbShell
+    :inspector-visible="inspector.visible"
+    :main-padding="!layout.fullBleed"
+    :sidebar-variant="nav.variant.value"
+    sidebar-header-action-position="start"
+    sidebar-header-action-compact="swap"
+  >
+    <!-- ═══ Brand ═══ -->
     <template #sidebar-logo>
-      <RouterLink to="/dashboard" data-tooltip="OpenBridge" class="sidebar-logo">
-        <img src="/logo.svg" width="32" height="32" alt="OpenBridge logo" />
+      <RouterLink to="/dashboard" class="sidebar-brand-link" aria-label="OpenBridge, dashboard">
+        <NbSidebarBrand title="OpenBridge">
+          <template #icon>
+            <img src="/logo.svg" width="28" height="28" alt="" />
+          </template>
+        </NbSidebarBrand>
       </RouterLink>
+    </template>
+    <template #sidebar-header-action>
+      <NbSidebarHeaderToggle @toggle="nav.toggle" />
     </template>
 
     <!-- ═══ Navigation ═══ -->
     <template #sidebar-nav>
-      <NbSidebarLink
-        v-for="item in navItems"
-        :key="item.name"
-        :to="item.href"
-        :tooltip="item.label"
-        :active="route.name === item.name"
-        @click.prevent="router.push(item.href)"
-      >
-        <NbIcon :name="item.icon" :size="18" />
-      </NbSidebarLink>
+      <NbSidebarMenu>
+        <NbSidebarMenuItem
+          v-for="item in navItems"
+          :key="item.name"
+          :icon="item.icon"
+          :label="item.label"
+          :to="item.href"
+          :active="route.name === item.name"
+        />
+      </NbSidebarMenu>
     </template>
 
     <!-- ═══ Bottom actions ═══ -->
     <template #sidebar-bottom>
+      <!-- Status, not a destination: a dot with a tooltip on the collapsed
+           rail, the dot and its words on the expanded one. -->
       <div
         class="daemon-status"
-        :class="daemon.connected ? 'online' : 'offline'"
-        :data-tooltip="daemon.connected ? 'Daemon connected' : 'Daemon offline'"
+        :class="[daemon.connected ? 'online' : 'offline', { 'daemon-status--verbose': !nav.isCompact.value }]"
+        role="status"
+        :aria-label="daemonLabel"
+        :data-tooltip="nav.isCompact.value ? daemonLabel : undefined"
       >
         <span class="daemon-dot" />
+        <span v-if="!nav.isCompact.value" class="daemon-label">{{ daemonLabel }}</span>
       </div>
       <NbUserMenu
         v-if="auth.config.value?.enabled && auth.user.value"
@@ -128,8 +150,8 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, watch, ref } from 'vue'
-import { useTheme, type TTheme } from '@nubisco/ui'
-import { useRoute, useRouter } from 'vue-router'
+import { useSidebarVariant, useTheme, type TTheme } from '@nubisco/ui'
+import { useRoute } from 'vue-router'
 import { useDaemonStore } from '@/stores/daemon'
 import { useInspectorStore } from '@/stores/inspector'
 import { useLayoutStore } from '@/stores/layout'
@@ -140,11 +162,16 @@ import DeviceInspector from '@/components/DeviceInspector.vue'
 import LiveLogsPanel from '@/components/LiveLogsPanel.vue'
 
 const route = useRoute()
-const router = useRouter()
 const daemon = useDaemonStore()
 const inspector = useInspectorStore()
 const layout = useLayoutStore()
 const auth = useAuth()
+
+// Collapsed or expanded is the person's choice, remembered per browser, never
+// derived from the route.
+const nav = useSidebarVariant({ storageKey: 'openbridge.sidebar' })
+
+const daemonLabel = computed(() => (daemon.connected ? 'Daemon connected' : 'Daemon offline'))
 
 async function signOut() {
   await auth.logout()
@@ -292,15 +319,14 @@ onUnmounted(() => daemon.disconnectLiveLogs())
   }
 }
 
-// Sidebar logo: local tooltip (NbShell slot can't use NbSidebarLink's scoped tooltip)
-.sidebar-logo {
+// The brand links home. NbSidebarBrand lays out the mark and the name for both
+// rail states. The link only has to stretch and drop its underline.
+.sidebar-brand-link {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
+  min-width: 0;
+  width: 100%;
+  color: inherit;
   text-decoration: none;
-
-  @include rail-tooltip;
 }
 
 // Daemon status indicator
@@ -330,6 +356,32 @@ onUnmounted(() => daemon.disconnectLiveLogs())
 
   &.offline .daemon-dot {
     background: var(--nb-c-danger);
+  }
+
+  // Expanded rail: a row lined up with the menu items above it, dot where
+  // their icons sit, words where their labels sit.
+  &--verbose {
+    width: 100%;
+    height: auto;
+    justify-content: flex-start;
+    gap: 0.625rem;
+    box-sizing: border-box;
+    padding: 0.45rem 0.75rem;
+    border-radius: 0;
+    font-size: 0.8125rem;
+    color: var(--nb-shell-sidebar-link-color);
+
+    // The dot is 10px, and a 16px box puts it where a menu icon would be.
+    .daemon-dot {
+      margin: 0 3px;
+      flex-shrink: 0;
+    }
+  }
+
+  .daemon-label {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 }
 
