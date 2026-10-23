@@ -2,7 +2,7 @@ import Fastify from 'fastify'
 import cors from '@fastify/cors'
 import websocket from '@fastify/websocket'
 import fastifyStatic from '@fastify/static'
-import type { SocketStream } from '@fastify/websocket'
+import type { WebSocket } from '@fastify/websocket'
 import { existsSync, readFileSync, readdirSync, writeFileSync, mkdirSync, chmodSync } from 'fs'
 import { resolve, dirname, join } from 'path'
 import { fileURLToPath } from 'url'
@@ -135,7 +135,9 @@ export async function createServer(
 ) {
   const app = Fastify({ logger: false })
 
-  await app.register(cors, { origin: true })
+  // @fastify/cors 11 narrowed its default to the CORS-safelisted methods. Keep the
+  // set it allowed before, so cross-origin clients see the same preflight answers.
+  await app.register(cors, { origin: true, methods: 'GET,HEAD,PUT,PATCH,POST,DELETE' })
   await app.register(websocket)
 
   // Optional: Nubisco Platform auth. No-op when PLATFORM_ENABLED is unset.
@@ -199,8 +201,7 @@ export async function createServer(
   })
 
   // ─── Update progress WebSocket ────────────────────────────────────────────
-  app.get('/ws/updates', { websocket: true }, (connection: SocketStream) => {
-    const ws = connection.socket
+  app.get('/ws/updates', { websocket: true }, (ws: WebSocket) => {
     const listener = (msg: UpdateProgress) => {
       try {
         ws.send(JSON.stringify(msg))
@@ -478,8 +479,7 @@ export async function createServer(
   })
 
   // ─── Live metrics WebSocket ───────────────────────────────────────────────
-  app.get('/ws/metrics', { websocket: true }, (connection: SocketStream) => {
-    const ws = connection.socket
+  app.get('/ws/metrics', { websocket: true }, (ws: WebSocket) => {
     // Send history immediately on connect
     ws.send(JSON.stringify({ type: 'history', data: getHistory() }))
 
@@ -1652,8 +1652,7 @@ export async function createServer(
     return { entries }
   })
 
-  app.get('/ws/logs', { websocket: true }, (connection: SocketStream) => {
-    const ws = connection.socket
+  app.get('/ws/logs', { websocket: true }, (ws: WebSocket) => {
     log.debug('Log WebSocket client connected')
     const unsubscribe = Logger.subscribe((entry: LogEntry) => {
       if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(entry))
@@ -1880,8 +1879,7 @@ export async function createServer(
     log.info('node-pty is not installed: the interactive shell pane is disabled. Everything else runs normally.')
   }
 
-  app.get('/ws/shell', { websocket: true }, (connection: SocketStream) => {
-    const ws = connection.socket
+  app.get('/ws/shell', { websocket: true }, (ws: WebSocket) => {
     let pty: any = null
     if (!shellAvailable) {
       ws.send(
@@ -1936,9 +1934,7 @@ export async function createServer(
   })
 
   // Terminal WebSocket: streams ANSI-formatted log lines for xterm.js
-  app.get('/ws/terminal', { websocket: true }, (connection: SocketStream) => {
-    const ws = connection.socket
-
+  app.get('/ws/terminal', { websocket: true }, (ws: WebSocket) => {
     function ansiLine(entry: LogEntry): string {
       const ANSI: Record<string, string> = {
         debug: '\x1b[90m',
