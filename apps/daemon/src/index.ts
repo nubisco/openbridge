@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { OPENBRIDGE_VERSION } from './version.js'
+import { nodeVersionWarning } from './node-version.js'
 
 // Argument handling runs before anything else: `openbridge --help` must never
 // start a daemon or publish a HAP bridge on the local network as a side effect.
@@ -52,6 +53,9 @@ const { Daemon } = await import('./daemon.js')
 const { Logger } = await import('@nubisco/openbridge-logger')
 
 const log = Logger.create('system')
+
+const nodeWarning = nodeVersionWarning(process.version)
+if (nodeWarning) log.warn(nodeWarning)
 
 // Prevent plugin errors from crashing the daemon
 process.on('uncaughtException', (err) => {

@@ -149,6 +149,8 @@ docker compose up -d
 
 Your config and pairing live on the other volume and survive either route.
 
+Both routes replace OpenBridge, not Node. Node comes from the `image:` line, so when Node ships a security release, raise that tag to the patched version and run `docker compose up -d`. OpenBridge needs Node 22.23.4 or newer and says so in its log at startup when it runs on anything older.
+
 ### Pinning a version
 
 Set a concrete version rather than `latest`:
