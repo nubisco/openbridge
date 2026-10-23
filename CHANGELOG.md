@@ -1,3 +1,12 @@
+## [0.39.1](https://github.com/nubisco/openbridge/compare/v0.39.0...v0.39.1) (2026-10-23)
+
+
+### Bug Fixes
+
+* **auth:** gate platform sessions on the matched route, not the raw URL ([70f9f60](https://github.com/nubisco/openbridge/commit/70f9f60e689b92945b661376ab1316a5738a7abc))
+* **deps:** migrate the daemon to fastify 5 to clear security advisories ([2df9db3](https://github.com/nubisco/openbridge/commit/2df9db344132a63a4e9c85a69caeca29ed5e68e5))
+* **deps:** refresh vulnerable transitive dependencies within their majors ([05775c9](https://github.com/nubisco/openbridge/commit/05775c98288e5278288f343b100fc486af17c864))
+
 # [0.39.0](https://github.com/nubisco/openbridge/compare/v0.38.6...v0.39.0) (2026-09-30)
 
 
