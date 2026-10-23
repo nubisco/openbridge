@@ -1,3 +1,25 @@
+# [1.0.0](https://github.com/nubisco/openbridge/compare/v0.40.0...v1.0.0) (2026-10-23)
+
+
+* feat!: require Node.js 22.23.4 or newer ([6f885dd](https://github.com/nubisco/openbridge/commit/6f885dd180ac79b97f51c97b7fdaca3c353a86c5))
+
+
+### Features
+
+* **daemon:** warn at startup when Node.js is older than 22.23.4 ([9b9162b](https://github.com/nubisco/openbridge/commit/9b9162b0f67663fe5061c81630fd5932573b7eb0))
+
+
+### BREAKING CHANGES
+
+* Node.js 20 is no longer supported. Node 20 reached end of
+life in April 2026 and gets no security fixes, so it stays exposed to the
+October 2026 Node.js security release (the Brotli remote code execution
+CVE-2026-111497 and the TLS hostname verification bypasses). Node 22
+releases before 22.23.4 are affected by the same release. Upgrade to
+Node.js 22.23.4 or newer, or any Node 24 release, before updating. Docker
+installs pick Node from the image tag in docker-compose.yml, so raise it to
+node:22.23.4-alpine.
+
 # [0.40.0](https://github.com/nubisco/openbridge/compare/v0.39.1...v0.40.0) (2026-10-23)
 
 
