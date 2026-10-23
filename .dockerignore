@@ -9,3 +9,5 @@ persist/
 *.log
 .DS_Store
 coverage/
+.env
+**/.env
