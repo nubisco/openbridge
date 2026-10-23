@@ -3,7 +3,7 @@ FROM node:22.23.4-alpine AS deps
 WORKDIR /repo
 
 RUN apk add --no-cache python3 make g++
-RUN npm install -g pnpm@9
+RUN npm install -g pnpm@9.0.0
 
 # Copy manifests only — maximise layer cache
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
