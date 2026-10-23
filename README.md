@@ -13,7 +13,7 @@
 [![CI](https://github.com/nubisco/openbridge/actions/workflows/ci.yml/badge.svg)](https://github.com/nubisco/openbridge/actions/workflows/ci.yml)
 [![GitHub release](https://img.shields.io/github/v/release/nubisco/openbridge)](https://github.com/nubisco/openbridge/releases)
 [![npm](https://img.shields.io/npm/v/%40nubisco%2Fopenbridge)](https://www.npmjs.com/package/@nubisco/openbridge)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D20.0.0-339933)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D22.23.4-339933)](https://nodejs.org/)
 [![pnpm](https://img.shields.io/badge/pnpm-9-f69220)](https://pnpm.io/)
 [![license](https://img.shields.io/github/license/nubisco/openbridge)](LICENSE)
 [![CLA](https://img.shields.io/badge/CLA-required-0A7F5A)](docs/CLA-INDIVIDUAL.md)
@@ -67,7 +67,7 @@ Three ways to install. Full details, including system and network requirements, 
 
 ### Install from npm
 
-**Requirements:** Node.js 20 or newer.
+**Requirements:** Node.js 22.23.4 or newer. Node 20 is end of life and no longer gets security fixes, and earlier Node 22 releases are affected by the October 2026 Node.js security release.
 
 ```bash
 npm install -g @nubisco/openbridge
@@ -85,7 +85,7 @@ State lives in `~/.openbridge` (config, plugins, HomeKit pairing), following the
 
 ### Run with Docker
 
-For servers and NAS boxes. There is no image to pull: the [`docker-compose.yml`](docker-compose.yml) in this repository runs a stock `node:22-alpine` container that installs `@nubisco/openbridge` from npm into a volume on first boot, which is also what the in-app updater replaces.
+For servers and NAS boxes. There is no image to pull: the [`docker-compose.yml`](docker-compose.yml) in this repository runs a stock `node:22.23.4-alpine` container that installs `@nubisco/openbridge` from npm into a volume on first boot, which is also what the in-app updater replaces.
 
 ```bash
 curl -O https://raw.githubusercontent.com/nubisco/openbridge/master/docker-compose.yml
@@ -96,7 +96,7 @@ The first start spends a minute or two installing before the dashboard answers o
 
 ### Install from source
 
-**Requirements:** Node.js 20+, pnpm 9+, roughly 1 GB of free disk (`node_modules` lands around 720 MB).
+**Requirements:** Node.js 22.23.4+, pnpm 9+, roughly 1 GB of free disk (`node_modules` lands around 720 MB).
 
 ```bash
 # Install dependencies

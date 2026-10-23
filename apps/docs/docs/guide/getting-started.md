@@ -6,7 +6,7 @@ This guide walks you from zero to a running OpenBridge daemon, paired with HomeK
 
 If you have not installed it yet, follow the [Installation guide](/guide/installation), which covers Docker, npm, and building from source, along with system and network requirements.
 
-The short version, for a machine that already has Node.js 20 or newer:
+The short version, for a machine that already has Node.js 22.23.4 or newer:
 
 ```bash
 npm install -g @nubisco/openbridge

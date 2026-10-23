@@ -5,8 +5,8 @@ There are three ways to install OpenBridge. Pick one; you do not need the others
 | Method                      | Best for                                                 | Needs Node.js | HomeKit works on |
 | --------------------------- | -------------------------------------------------------- | ------------- | ---------------- |
 | [Docker](#docker)           | Servers, NAS boxes, always-on machines                   | No            | Linux hosts only |
-| [npm](#npm)                 | Desktops, laptops, Raspberry Pi, quick trials            | Yes, 20+      | Linux, macOS     |
-| [From source](#from-source) | Contributing to OpenBridge, running an unreleased branch | Yes, 20+      | Linux, macOS     |
+| [npm](#npm)                 | Desktops, laptops, Raspberry Pi, quick trials            | Yes, 22.23.4+ | Linux, macOS     |
+| [From source](#from-source) | Contributing to OpenBridge, running an unreleased branch | Yes, 22.23.4+ | Linux, macOS     |
 
 If you are unsure: use **Docker** on a machine that is always on, and **npm** everywhere else.
 
@@ -19,7 +19,7 @@ All three install the same npm package. Docker is the only one that can update i
 | CPU     | 64-bit x86-64 or arm64             | A Raspberry Pi 3B+ is enough. 32-bit ARM is not supported.                            |
 | RAM     | ~512 MB free                       | Verified on a 906 MB Raspberry Pi 3B+ running Alpine.                                 |
 | Disk    | ~150 MB (npm), ~1 GB (from source) | A global npm install measures about 106 MB including dependencies.                    |
-| Node.js | 20 or newer                        | Not needed for Docker. Tested on 20, 22 and 24.                                       |
+| Node.js | 22.23.4 or newer                   | Not needed for Docker. Tested on 22 and 24. Node 20 is end of life.                   |
 | OS      | Linux (glibc or musl), macOS       | Windows is untested. Use WSL2 or Docker on a Linux host.                              |
 | Network | Wired or Wi-Fi LAN with mDNS       | See [Network requirements](#network-requirements). This is the part people get wrong. |
 
@@ -53,7 +53,7 @@ Do not port-forward it or expose it to the internet. Reach it remotely over a VP
 
 The recommended method for anything that runs unattended.
 
-There is no OpenBridge image to pull. A stock `node:22-alpine` container installs `@nubisco/openbridge` from npm into a volume the first time it starts, and runs it from there. That is deliberate: it is the same package the npm install uses, on every architecture Node itself supports, and the volume is also what the in-app updater replaces, so updating is an npm install rather than an image pull.
+There is no OpenBridge image to pull. A stock `node:22.23.4-alpine` container installs `@nubisco/openbridge` from npm into a volume the first time it starts, and runs it from there. That is deliberate: it is the same package the npm install uses, on every architecture Node itself supports, and the volume is also what the in-app updater replaces, so updating is an npm install rather than an image pull.
 
 ::: warning Docker on macOS and Windows will not pair with HomeKit
 HomeKit requires the container to share the host's network so it can send and receive mDNS on your LAN. Docker Desktop on macOS and Windows runs containers inside a VM, where `network_mode: host` does not provide real LAN access.
@@ -68,7 +68,7 @@ Create `docker-compose.yml`:
 ```yaml
 services:
   openbridge:
-    image: node:22-alpine
+    image: node:22.23.4-alpine
     container_name: openbridge
     restart: unless-stopped
     # Host networking is required for mDNS discovery, HomeKit advertisement,

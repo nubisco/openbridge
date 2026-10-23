@@ -36,7 +36,7 @@ Returns information about the host machine.
   "arch": "arm64",
   "hostname": "my-mac.local",
   "ip": "192.168.1.10",
-  "nodeVersion": "v20.11.0",
+  "nodeVersion": "v22.23.4",
   "uptime": 3600
 }
 ```

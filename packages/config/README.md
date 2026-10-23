@@ -10,7 +10,7 @@ Part of [OpenBridge](https://github.com/nubisco/openbridge), a local-first home 
 npm install @nubisco/openbridge-config
 ```
 
-Requires Node.js >= 20.
+Requires Node.js >= 22.23.4.
 
 ## Documentation
 
