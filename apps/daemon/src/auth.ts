@@ -7,9 +7,11 @@
  *   - Verifies platform-issued JWTs via JWKS (no extra deps).
  *   - Issues a short-lived, HMAC-signed local session cookie so subsequent
  *     /api/* requests don't have to re-validate against the platform.
- *   - Adds a Fastify pre-handler that requires a valid session for any
- *     /api/* or /ws/* path, except /api/health (so Docker healthcheck
- *     keeps working) and /auth/* (the auth endpoints themselves).
+ *   - Adds a Fastify onRequest hook that requires a valid session for any
+ *     /api/* or /ws/* route, except /api/health (so Docker healthcheck
+ *     keeps working). /auth/* (the auth endpoints themselves) stays public.
+ *     The check uses the route the router matched and a normalized path,
+ *     never the raw URL, see requiresSession().
  */
 
 import type { FastifyInstance, FastifyRequest } from 'fastify'
@@ -212,16 +214,74 @@ export async function registerAuthRoutes(app: FastifyInstance, config: TAuthConf
   // Gate /api/* and /ws/* when auth is enabled. Health and auth routes
   // are public so the Docker healthcheck and login flow keep working.
   app.addHook('onRequest', async (req, reply) => {
-    const url = req.url.split('?')[0] ?? ''
-    const gated = url.startsWith('/api/') || url.startsWith('/ws/')
-    if (!gated) return
-    if (url === '/api/health') return
-    if (url.startsWith('/auth/')) return
+    if (!requiresSession(req.routeOptions?.url, req.url)) return
 
     const cookie = getCookie(req, COOKIE_NAME)
     const session = cookie ? verifySession(config.secret, cookie) : null
     if (!session) {
-      reply.code(401).send({ error: 'unauthenticated' })
+      return reply.code(401).send({ error: 'unauthenticated' })
     }
   })
+}
+
+const PUBLIC_PATHS = new Set(['/api/health'])
+
+function isGatedPath(path: string): boolean {
+  if (PUBLIC_PATHS.has(path)) return false
+  return path === '/api' || path.startsWith('/api/') || path === '/ws' || path.startsWith('/ws/')
+}
+
+/**
+ * Reduce a request path to the form the gate compares against, so that no
+ * spelling of a protected path can slip past it: percent-encoding (applied any
+ * number of times, including encoded slashes and dots), backslashes, repeated
+ * slashes, dot segments, trailing dots on a segment and letter case all fold
+ * away. Returns null when the path cannot be decoded.
+ */
+export function normalizeRequestPath(rawUrl: string): string | null {
+  let path = rawUrl.split('?')[0]?.split('#')[0] ?? ''
+  for (let i = 0; i < 5; i++) {
+    let decoded: string
+    try {
+      decoded = decodeURIComponent(path)
+    } catch {
+      return null
+    }
+    if (decoded === path) break
+    path = decoded
+  }
+  if (/%[0-9a-f]{2}/i.test(path)) return null
+
+  const out: string[] = []
+  for (const raw of path.replace(/\\/g, '/').toLowerCase().split('/')) {
+    const segment = raw.trim()
+    if (segment === '' || segment === '.') continue
+    if (segment === '..') {
+      out.pop()
+      continue
+    }
+    // Some layers treat "api." and "api" as the same name, so the gate does too.
+    out.push(segment.replace(/[.\s]+$/, '') || segment)
+  }
+  return '/' + out.join('/')
+}
+
+/**
+ * Whether a request must carry a valid session.
+ *
+ * The decision rests on what the router matched, never on the raw URL alone.
+ * The router decodes the path before matching, so a check on the raw string
+ * let `/%61pi/plugins` reach `/api/plugins` (and `/%77s/shell` open a shell)
+ * without a session. The matched route pattern is authoritative for anything
+ * that reaches a handler. The normalized path is checked as well, so an
+ * unmatched spelling of a protected path is refused rather than falling
+ * through, and a future router option (case-insensitive matching, trailing
+ * slash folding) cannot reopen the hole. A path that cannot be decoded is
+ * refused.
+ */
+export function requiresSession(routeUrl: string | undefined, rawUrl: string): boolean {
+  if (routeUrl !== undefined && isGatedPath(routeUrl)) return true
+  const path = normalizeRequestPath(rawUrl)
+  if (path === null) return true
+  return isGatedPath(path)
 }
