@@ -1,5 +1,5 @@
 # ─── Stage 1: Install all dependencies ───────────────────────────────────────
-FROM node:22-alpine AS deps
+FROM node:22.23.4-alpine AS deps
 WORKDIR /repo
 
 RUN apk add --no-cache python3 make g++
@@ -39,7 +39,7 @@ FROM build AS prune
 RUN pnpm --filter @nubisco/openbridge deploy --prod /pruned
 
 # ─── Stage 4: Minimal runtime image ─────────────────────────────────────────
-FROM node:22-alpine AS runtime
+FROM node:22.23.4-alpine AS runtime
 WORKDIR /app
 
 # Copy production node_modules (workspace deps resolved to real packages)
