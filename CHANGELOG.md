@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/nubisco/openbridge/compare/v1.0.0...v1.1.0) (2026-10-24)
+
+
+### Features
+
+* **ui:** the rail's standard anatomy, with NbSidebarStatus for the daemon ([c22e09b](https://github.com/nubisco/openbridge/commit/c22e09b6d237cc8f0c442228bca5b39692151d0f))
+
 # [1.0.0](https://github.com/nubisco/openbridge/compare/v0.40.0...v1.0.0) (2026-10-23)
 
 
