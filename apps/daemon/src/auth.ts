@@ -35,6 +35,8 @@ interface TSessionPayload {
   email: string
   /** Platform avatar URL, absent when the person has no avatar. */
   picture?: string
+  /** Display name from the platform, absent when it sent none. */
+  name?: string
   exp: number
 }
 
@@ -67,6 +69,20 @@ export function acceptPictureClaim(issuer: string | null, picture: unknown): str
   if (!url.pathname.startsWith('/api/avatars/')) return undefined
   if (url.username !== '' || url.password !== '') return undefined
   return url.toString()
+}
+
+/**
+ * Keep a `name` claim when it is a usable display name.
+ *
+ * It is shown as text, never as markup, so the only checks are that it is a
+ * non-empty string and short enough not to bloat the session cookie. Anything
+ * else returns undefined, and the user menu falls back to the email.
+ */
+export function acceptNameClaim(name: unknown): string | undefined {
+  if (typeof name !== 'string') return undefined
+  const trimmed = name.trim()
+  if (trimmed === '' || trimmed.length > 200) return undefined
+  return trimmed
 }
 
 function getConfigDir(): string {
@@ -183,17 +199,19 @@ export async function registerAuthRoutes(app: FastifyInstance, config: TAuthConf
     // Re-read at every sign-in, so a changed avatar is picked up and a removed
     // one disappears. This session is the only user record OpenBridge keeps.
     const picture = acceptPictureClaim(config.issuer, claims.picture)
+    const name = acceptNameClaim(claims.name)
     const payload: TSessionPayload = {
       userId: claims.sub,
       email: claims.email,
       ...(picture ? { picture } : {}),
+      ...(name ? { name } : {}),
       exp: Math.floor(Date.now() / 1000) + SESSION_TTL_SEC,
     }
     const cookieValue = signSession(config.secret, payload)
     const parts = [`${COOKIE_NAME}=${cookieValue}`, 'HttpOnly', 'SameSite=Lax', 'Path=/', `Max-Age=${SESSION_TTL_SEC}`]
     if (isProductionLike()) parts.push('Secure')
     reply.header('Set-Cookie', parts.join('; '))
-    return { ok: true, user: { id: claims.sub, email: claims.email, picture } }
+    return { ok: true, user: { id: claims.sub, email: claims.email, picture, name } }
   })
 
   app.get('/auth/me', async (req, reply) => {
@@ -201,7 +219,7 @@ export async function registerAuthRoutes(app: FastifyInstance, config: TAuthConf
     if (!cookie) return reply.code(401).send({ error: 'unauthenticated' })
     const session = verifySession(config.secret, cookie)
     if (!session) return reply.code(401).send({ error: 'unauthenticated' })
-    return { user: { id: session.userId, email: session.email, picture: session.picture } }
+    return { user: { id: session.userId, email: session.email, picture: session.picture, name: session.name } }
   })
 
   app.post('/auth/logout', async (_req, reply) => {

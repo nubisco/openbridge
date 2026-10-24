@@ -40,21 +40,30 @@
 
     <!-- ═══ Bottom actions ═══ -->
     <template #sidebar-bottom>
-      <!-- Status, not a destination: a dot with a tooltip on the collapsed
-           rail, the dot and its words on the expanded one. -->
-      <div
-        class="daemon-status"
-        :class="[daemon.connected ? 'online' : 'offline', { 'daemon-status--verbose': !nav.isCompact.value }]"
-        role="status"
-        :aria-label="daemonLabel"
-        :data-tooltip="nav.isCompact.value ? daemonLabel : undefined"
-      >
-        <span class="daemon-dot" />
-        <span v-if="!nav.isCompact.value" class="daemon-label">{{ daemonLabel }}</span>
-      </div>
+      <!-- The fleet's bottom order: Documentation, Sponsor, Settings, the
+           person, then this product's own status. Openbridge has no
+           notifications yet, so that row is absent rather than empty.
+           External links open a new tab from here because the menu item has no
+           `target`, and stepping out to read must not lose the page open here. -->
+      <NbSidebarMenu>
+        <NbSidebarMenuItem icon="book" label="Documentation" :href="DOCS_URL" @click.prevent="openExternal(DOCS_URL)" />
+        <!-- Openbridge is free, with no hosted service around it, so it is the
+             one product that asks for sponsorship (see "Every rail has the same
+             anatomy" in the workspace AGENTS.md). Same URL as FUNDING.yml. -->
+        <NbSidebarMenuItem
+          icon="heart"
+          label="Sponsor"
+          :href="SPONSOR_URL"
+          @click.prevent="openExternal(SPONSOR_URL)"
+        />
+        <!-- Instance configuration. A self-hosted instance has no tenant above
+             it, so this is the tenant-level Settings and sits in its slot. -->
+        <NbSidebarMenuItem icon="gear" label="Settings" to="/settings" :active="route.name === 'settings'" />
+      </NbSidebarMenu>
       <NbUserMenu
         v-if="auth.config.value?.enabled && auth.user.value"
-        :user="{ email: auth.user.value.email, picture: auth.user.value.picture }"
+        :user="{ email: auth.user.value.email, name: auth.user.value.name, picture: auth.user.value.picture }"
+        trigger="identity"
         :accounts="menuAccounts"
         :accounts-unknown="accountsUnknown"
         :show-account-actions="auth.isNubiscoPlatform.value"
@@ -87,6 +96,9 @@
           </button>
         </template>
       </NbUserMenu>
+      <!-- Status, not a destination, and the one thing only Openbridge has, so
+           it sits last, apart from the rows every product shares. -->
+      <NbSidebarStatus :label="daemonLabel" :status="daemon.connected ? 'success' : 'danger'" />
     </template>
 
     <!-- ═══ Topbar ═══ -->
@@ -172,6 +184,13 @@ const auth = useAuth()
 const nav = useSidebarVariant({ storageKey: 'openbridge.sidebar' })
 
 const daemonLabel = computed(() => (daemon.connected ? 'Daemon connected' : 'Daemon offline'))
+
+const DOCS_URL = 'https://docs.nubisco.io/openbridge/'
+const SPONSOR_URL = 'https://github.com/sponsors/joseporto'
+
+function openExternal(url: string): void {
+  window.open(url, '_blank', 'noopener')
+}
 
 async function signOut() {
   await auth.logout()
@@ -264,7 +283,6 @@ const navItems = [
   { name: 'devices', icon: 'devices', label: 'Devices', href: '/devices' },
   { name: 'config', icon: 'brackets-curly', label: 'Config', href: '/config' },
   { name: 'terminal', icon: 'terminal', label: 'Terminal', href: '/terminal' },
-  { name: 'settings', icon: 'gear', label: 'Settings', href: '/settings' },
 ]
 
 // Close inspector when navigating away
@@ -292,33 +310,6 @@ onUnmounted(() => daemon.disconnectLiveLogs())
 </script>
 
 <style lang="scss" scoped>
-// Flyout tooltip for items in the sidebar rail. The rail keeps its dark chrome
-// in both themes (--nb-shell-sidebar-bg), so the tooltip is derived from the
-// same variable rather than from the page surface.
-@mixin rail-tooltip {
-  &[data-tooltip]::after {
-    content: attr(data-tooltip);
-    position: absolute;
-    left: calc(100% + 10px);
-    top: 50%;
-    transform: translateY(-50%);
-    background: color-mix(in srgb, var(--nb-shell-sidebar-bg) 95%, transparent);
-    color: var(--nb-c-white);
-    padding: 0.3rem 0.65rem;
-    border-radius: 5px;
-    font-size: 0.76rem;
-    white-space: nowrap;
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.12s;
-    z-index: 500;
-  }
-
-  &[data-tooltip]:hover::after {
-    opacity: 1;
-  }
-}
-
 // The brand links home. NbSidebarBrand lays out the mark and the name for both
 // rail states. The link only has to stretch and drop its underline.
 .sidebar-brand-link {
@@ -327,62 +318,6 @@ onUnmounted(() => daemon.disconnectLiveLogs())
   width: 100%;
   color: inherit;
   text-decoration: none;
-}
-
-// Daemon status indicator
-.daemon-status {
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  position: relative;
-
-  @include rail-tooltip;
-
-  .daemon-dot {
-    width: 10px;
-    height: 10px;
-    border-radius: 50%;
-    background: var(--nb-c-component-inactive);
-    transition: background 0.3s;
-  }
-
-  &.online .daemon-dot {
-    background: var(--nb-c-success);
-    box-shadow: 0 0 6px color-mix(in srgb, var(--nb-c-success) 60%, transparent);
-  }
-
-  &.offline .daemon-dot {
-    background: var(--nb-c-danger);
-  }
-
-  // Expanded rail: a row lined up with the menu items above it, dot where
-  // their icons sit, words where their labels sit.
-  &--verbose {
-    width: 100%;
-    height: auto;
-    justify-content: flex-start;
-    gap: 0.625rem;
-    box-sizing: border-box;
-    padding: 0.45rem 0.75rem;
-    border-radius: 0;
-    font-size: 0.8125rem;
-    color: var(--nb-shell-sidebar-link-color);
-
-    // The dot is 10px, and a 16px box puts it where a menu icon would be.
-    .daemon-dot {
-      margin: 0 3px;
-      flex-shrink: 0;
-    }
-  }
-
-  .daemon-label {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
 }
 
 // Teleport targets for per-view topbar chrome

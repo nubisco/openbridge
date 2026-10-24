@@ -10,6 +10,8 @@ export interface AuthUser {
    * it must fall back to initials.
    */
   picture?: string
+  /** Display name from the platform, absent when it sent none. */
+  name?: string
 }
 
 export interface PlatformAuthConfig {

@@ -34,6 +34,7 @@ declare module 'vue' {
     NbSidebarHeaderToggle: typeof import('@nubisco/ui/components/SidebarHeaderToggle')['NbSidebarHeaderToggle']
     NbSidebarMenu: typeof import('@nubisco/ui/components/SidebarMenu')['NbSidebarMenu']
     NbSidebarMenuItem: typeof import('@nubisco/ui/components/SidebarMenuItem')['NbSidebarMenuItem']
+    NbSidebarStatus: typeof import('@nubisco/ui/components/SidebarStatus')['NbSidebarStatus']
     NbSparkline: typeof import('@nubisco/ui/components/Charts/Sparkline')['NbSparkline']
     NbSwitch: typeof import('@nubisco/ui/components/Switch')['NbSwitch']
     NbTabs: typeof import('@nubisco/ui/components/Tabs')['NbTabs']

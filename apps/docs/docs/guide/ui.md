@@ -128,7 +128,9 @@ The terminal uses **JetBrains Mono** loaded from Google Fonts for a clean monosp
 
 ## Settings
 
-The Settings page lets you modify the `bridge` section of your config through a form.
+The Settings page lets you modify the `bridge` section of your config through a form. It is the gear near the bottom of the sidebar, apart from the views above it, because it configures the instance rather than showing it. Personal preferences such as the theme live in the user menu when Platform sign-in is enabled.
+
+The last line of the sidebar shows whether the UI is connected to the daemon.
 
 **Editable fields:**
 
