@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/nubisco/openbridge/compare/v1.1.0...v1.2.0) (2026-10-25)
+
+
+### Features
+
+* **ui:** theme from NbUserMenu's Appearance section, and in Settings when sign-in is off ([8232204](https://github.com/nubisco/openbridge/commit/8232204e7bb76e5fa9e187861b8feb3c1f23aa64))
+
 # [1.1.0](https://github.com/nubisco/openbridge/compare/v1.0.0...v1.1.0) (2026-10-24)
 
 
