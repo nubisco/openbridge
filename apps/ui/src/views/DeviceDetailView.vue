@@ -1,8 +1,9 @@
 <template>
   <div class="device-detail">
-    <NbBreadcrumbs :title="breadcrumbTitle" :subtitle="device?.name ?? deviceId">
-      <NbButton variant="ghost" size="sm" icon="arrow-left" @click="goBack">Devices</NbButton>
-    </NbBreadcrumbs>
+    <div class="detail-header">
+      <NbBreadcrumbs :items="crumbs" />
+      <span v-if="device?.model" class="detail-model">{{ device.model }}</span>
+    </div>
 
     <div v-if="loadError" class="detail-message">
       <!-- was "danger", which NbMessage never accepted (error|warning|success|helper). -->
@@ -77,13 +78,13 @@
 
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
+import type { IBreadcrumbItem } from '@nubisco/ui'
 import { api, type DeviceDescriptor, type MetricDescriptor } from '@/api'
 
 type NativeDevice = DeviceDescriptor & { telemetry: Record<string, unknown> }
 
 const route = useRoute()
-const router = useRouter()
 
 const deviceId = computed(() => String(route.params.id ?? ''))
 const device = ref<NativeDevice | null>(null)
@@ -111,7 +112,11 @@ const RANGES = [
 type RangeKey = (typeof RANGES)[number]['key']
 const selectedRange = ref<RangeKey>('24h')
 
-const breadcrumbTitle = computed(() => device.value?.model ?? 'Device')
+// The device list is the parent, so the trail is the way back to it.
+const crumbs = computed<IBreadcrumbItem[]>(() => [
+  { label: 'Devices', to: { name: 'devices' } },
+  { label: device.value?.name ?? deviceId.value },
+])
 
 const currentMetric = computed(() => metrics.value.find((m) => m.key === selectedMetric.value) ?? null)
 
@@ -156,10 +161,6 @@ function liveValue(metric: MetricDescriptor): number | null {
 function formatValue(value: number | null, metric: MetricDescriptor): string {
   if (value === null) return '—'
   return value.toFixed(metric.precision ?? 2)
-}
-
-function goBack() {
-  router.push({ name: 'devices' })
 }
 
 function selectMetric(key: string) {
@@ -242,6 +243,18 @@ watch(deviceId, async () => {
   flex-direction: column;
   gap: 1rem;
   padding: 1rem 1.25rem;
+}
+
+.detail-header {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.detail-model {
+  color: var(--nb-c-text-muted);
+  font-size: 0.85rem;
 }
 
 .detail-message {

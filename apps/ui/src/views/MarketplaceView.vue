@@ -59,7 +59,7 @@
             <span v-if="authorName(pkg)" class="sep">·</span>
             <span>updated {{ relativeDate(pkg.date) }}</span>
             <span v-if="pkg.links?.npm" class="sep">·</span>
-            <a v-if="pkg.links?.npm" :href="pkg.links.npm" target="_blank" class="npm-link">npm</a>
+            <NbButton v-if="pkg.links?.npm" variant="link" :href="pkg.links.npm" target="_blank">npm</NbButton>
           </div>
         </div>
         <div class="plugin-row-actions">
@@ -310,15 +310,6 @@ onMounted(async () => {
 
   .sep {
     opacity: 0.6;
-  }
-
-  .npm-link {
-    color: var(--nb-c-primary);
-    text-decoration: none;
-
-    &:hover {
-      text-decoration: underline;
-    }
   }
 }
 
