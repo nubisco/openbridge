@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/nubisco/openbridge/compare/v1.2.0...v1.3.0) (2026-10-25)
+
+
+### Features
+
+* **ui:** device detail trail leads back to Devices, on @nubisco/ui 5.36.0 ([b91e333](https://github.com/nubisco/openbridge/commit/b91e33318ab1a718d0afd7e72e0d0e71d9c3f0fe))
+
 # [1.2.0](https://github.com/nubisco/openbridge/compare/v1.1.0...v1.2.0) (2026-10-25)
 
 
