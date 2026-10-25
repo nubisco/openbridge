@@ -22,6 +22,7 @@ declare module 'vue' {
     NbIcon: typeof import('@nubisco/ui/components/Icon')['NbIcon']
     NbInterpolationChart: typeof import('@nubisco/ui/components/Charts/InterpolationChart')['NbInterpolationChart']
     NbLineChart: typeof import('@nubisco/ui/components/Charts/LineChart')['NbLineChart']
+    NbMenuItem: typeof import('@nubisco/ui/components/MenuItem')['NbMenuItem']
     NbMessage: typeof import('@nubisco/ui/components/Message')['NbMessage']
     NbNumberInput: typeof import('@nubisco/ui/components/NumberInput')['NbNumberInput']
     NbPanel: typeof import('@nubisco/ui/components/Panel')['NbPanel']

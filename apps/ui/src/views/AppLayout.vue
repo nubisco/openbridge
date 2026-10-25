@@ -64,6 +64,7 @@
         v-if="auth.config.value?.enabled && auth.user.value"
         :user="{ email: auth.user.value.email, name: auth.user.value.name, picture: auth.user.value.picture }"
         trigger="identity"
+        show-theme
         :accounts="menuAccounts"
         :accounts-unknown="accountsUnknown"
         :show-account-actions="auth.isNubiscoPlatform.value"
@@ -78,22 +79,12 @@
         @sign-out="signOut"
       >
         <template #default="{ close }">
-          <!-- Appearance first: every product lets a person change theme from
-               here, so it is where people look for it. Three options rather
-               than a switch, because `system` is a preference in its own right
-               and not the absence of one. -->
-          <NbField label="Theme" :hint="themeHint" control="fit" class="menu-theme">
-            <NbRadio v-model="theme" name="theme" :options="themeOptions" direction="horizontal" />
-          </NbField>
-          <button
-            type="button"
-            role="menuitem"
-            class="nb-user-menu__action nb-user-menu__action--danger"
-            @click="((close as () => void)(), auth.logoutEverywhere())"
-          >
-            <NbIcon name="sign-out" :size="15" />
-            Sign out of all apps
-          </button>
+          <NbMenuItem
+            icon="sign-out"
+            label="Sign out of all apps"
+            danger
+            @select="((close as () => void)(), auth.logoutEverywhere())"
+          />
         </template>
       </NbUserMenu>
       <!-- Status, not a destination, and the one thing only Openbridge has, so
@@ -162,7 +153,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, watch, ref } from 'vue'
-import { useSidebarVariant, useTheme, type TTheme } from '@nubisco/ui'
+import { useSidebarVariant } from '@nubisco/ui'
 import { useRoute } from 'vue-router'
 import { useDaemonStore } from '@/stores/daemon'
 import { useInspectorStore } from '@/stores/inspector'
@@ -195,29 +186,6 @@ function openExternal(url: string): void {
 async function signOut() {
   await auth.logout()
 }
-
-// ─── Appearance, in the account menu ────────────────────────────────────────
-// Moved here from Settings: the standard puts it first in the menu slot, and
-// having it in two places would give one preference two homes. `theme` from the
-// composable is readonly, so the control writes through setTheme.
-const { theme: currentTheme, resolved, followsSystem, setTheme } = useTheme()
-
-const themeOptions = [
-  { value: 'light', label: 'Light' },
-  { value: 'dark', label: 'Dark' },
-  { value: 'system', label: 'System' },
-]
-
-const theme = computed({
-  get: () => currentTheme.value as string,
-  set: (value: string) => setTheme(value as TTheme),
-})
-
-// Naming what `system` currently resolves to, since the choice itself does not
-// say whether the machine is light or dark right now.
-const themeHint = computed(() =>
-  followsSystem.value ? `Following your system, currently ${resolved.value}` : 'Pinned, ignoring your system setting',
-)
 
 /**
  * The profile is the platform's, not ours.

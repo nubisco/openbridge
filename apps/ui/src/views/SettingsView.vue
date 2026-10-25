@@ -160,6 +160,32 @@
       </div>
     </NbPanel>
 
+    <!-- Appearance. Theme is a personal setting and lives in the user menu,
+         but with sign-in off (the self-hosted default) there is no user menu,
+         so this is the only place left to set it. -->
+    <NbPanel v-if="!hasUserMenu" class="settings-card">
+      <div class="card-header">
+        <div class="card-icon">
+          <NbIcon name="palette" :size="18" />
+        </div>
+        <div>
+          <h2 class="card-title">Appearance</h2>
+          <p class="card-subtitle">Theme for this browser</p>
+        </div>
+      </div>
+
+      <NbGrid dir="col" gap="sm" class="field-grid">
+        <NbField label="Theme">
+          <NbRadio
+            name="settings-theme"
+            :options="themeOptions"
+            :model-value="themeController.theme.value"
+            @update:model-value="themeController.setTheme($event as TTheme)"
+          />
+        </NbField>
+      </NbGrid>
+    </NbPanel>
+
     <!-- HAP pairing info -->
     <NbPanel class="settings-card info-card">
       <h3 class="info-title">
@@ -190,11 +216,25 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { computed, ref, onMounted, onUnmounted } from 'vue'
+import { useTheme, type TTheme } from '@nubisco/ui'
 import { api, type BridgeConfig, type UpdateStatus } from '@/api'
+import { useAuth } from '@/composables/useAuth'
 import { useLayoutStore } from '@/stores/layout'
 
 const layout = useLayoutStore()
+const auth = useAuth()
+
+// The same condition AppLayout renders NbUserMenu on, so the theme always has
+// exactly one home: the menu when there is one, this panel when there is not.
+const hasUserMenu = computed(() => Boolean(auth.config.value?.enabled && auth.user.value))
+const themeController = useTheme()
+// Worded as NbUserMenu's built-in Appearance section, so both read the same.
+const themeOptions = [
+  { label: 'Light', value: 'light' },
+  { label: 'Dark', value: 'dark' },
+  { label: 'Match my system', value: 'system' },
+]
 
 const logLevelOptions = [
   { value: 'debug', label: 'Debug' },
