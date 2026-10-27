@@ -153,8 +153,8 @@ importers:
         specifier: ^1.7.0
         version: 1.7.0
       '@nubisco/ui':
-        specifier: ^5.36.0
-        version: 5.36.0(pixi.js@8.19.0)(vue-i18n@11.3.0(vue@3.5.44(typescript@5.9.3)))(vue@3.5.44(typescript@5.9.3))
+        specifier: ^5.37.0
+        version: 5.37.0(pixi.js@8.19.0)(vue-i18n@11.3.0(vue@3.5.44(typescript@5.9.3)))(vue@3.5.44(typescript@5.9.3))
       '@xterm/addon-fit':
         specifier: ^0.11.0
         version: 0.11.0
@@ -882,8 +882,8 @@ packages:
     resolution: {integrity: sha512-oGB+UxlgWcgQkgwo8GcEGwemoTFt3FIO9ababBmaGwXIoBKZ+GTy0pP185beGg7Llih/NSHSV2XAs1lnznocSg==}
     engines: {node: '>= 8'}
 
-  '@nubisco/ui@5.36.0':
-    resolution: {integrity: sha512-0txDV+gEajuWhEFWKr8StQRxsctT/8aKINuNFT6BsfmCDt3m1Xwq+guGlIroeo6mayP7GFoFq+8BG5zNNSm7SQ==}
+  '@nubisco/ui@5.37.0':
+    resolution: {integrity: sha512-/mGCja8OGBPwCbZ6moH697T/7Os8Xrekx54qmVH5vowm8RXi5pxTY3400DUx90The3L/tL67UdVQHCOR3pIEqA==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       pixi.js: ^8.0.0
@@ -5030,7 +5030,7 @@ snapshots:
       '@nodelib/fs.scandir': 2.1.5
       fastq: 1.20.1
 
-  '@nubisco/ui@5.36.0(pixi.js@8.19.0)(vue-i18n@11.3.0(vue@3.5.44(typescript@5.9.3)))(vue@3.5.44(typescript@5.9.3))':
+  '@nubisco/ui@5.37.0(pixi.js@8.19.0)(vue-i18n@11.3.0(vue@3.5.44(typescript@5.9.3)))(vue@3.5.44(typescript@5.9.3))':
     dependencies:
       pixi.js: 8.19.0
       vue: 3.5.44(typescript@5.9.3)
