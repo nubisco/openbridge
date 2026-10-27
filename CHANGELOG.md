@@ -1,3 +1,10 @@
+# [1.4.0](https://github.com/nubisco/openbridge/compare/v1.3.0...v1.4.0) (2026-10-27)
+
+
+### Features
+
+* move to @nubisco/ui 5.37, whose tables follow Carbon's data table ([8639207](https://github.com/nubisco/openbridge/commit/8639207310209f7d2e0d16a86cf18a9ad8d27d34))
+
 # [1.3.0](https://github.com/nubisco/openbridge/compare/v1.2.0...v1.3.0) (2026-10-25)
 
 
