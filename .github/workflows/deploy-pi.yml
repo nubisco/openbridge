@@ -1,0 +1,97 @@
+name: Deploy to the Pi
+
+# Installs a release on the home bridge once it is on npm.
+#
+# The bridge runs the published @nubisco/openbridge package, so only a release changes what it
+# should run. The chain is a merge to master, then CI, Release, Publish to npm, and this
+# workflow, which waits for the npm publish to succeed. A merge that makes no release, such as a
+# docs change, leaves the bridge alone.
+#
+# It runs on a self-hosted runner and checks out nothing. It asks the bridge to install the
+# exact version of the release, through a key that can run one deploy script and nothing else.
+# The key and the host alias live on the runner, not in GitHub or in this repository, so
+# nothing here describes how the bridge is set up. The script puts the previous version back if
+# the new one does not report healthy.
+#
+# There is no manual trigger on purpose: only a release made from master deploys.
+#
+# The runner group only lets this file run from master, so a pull request or another branch
+# cannot reach the runner.
+on:
+  workflow_run:
+    workflows: [Publish to npm]
+    types: [completed]
+
+# One at a time, and a newer release waits instead of cancelling a deploy in flight.
+concurrency:
+  group: openbridge-pi-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to the Pi
+    # Publish to npm must have succeeded, from a release in this repository. A manual run of it
+    # (a dry run) has another event and never deploys.
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'release' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: [self-hosted, nas-deploy]
+    # The script's worst case is a 15-minute install, then a rollback of the same size.
+    timeout-minutes: 40
+    environment: production
+    permissions:
+      contents: read
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      # For a release the run's head_branch is the tag, and head_sha is the tagged commit.
+      TAG: ${{ github.event.workflow_run.head_branch }}
+      SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      # Nothing from the event reaches a command before it has been checked: the tag must be a
+      # plain vX.Y.Z, it must point at the commit that was published, and that commit must be
+      # on master.
+      - name: Check this is a release of master
+        id: release
+        run: |
+          echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$' || { echo "not a release tag: $TAG"; exit 1; }
+          api() { curl -fsS -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/$REPO/$1"; }
+          tagged=$(api "commits/$TAG" | python3 -c 'import sys,json;print(json.load(sys.stdin)["sha"])')
+          [ "$tagged" = "$SHA" ] || { echo "$TAG is ${tagged:0:7}, not the published ${SHA:0:7}"; exit 1; }
+          status=$(api "compare/master...$TAG" | python3 -c 'import sys,json;print(json.load(sys.stdin)["status"])')
+          case "$status" in
+            identical|behind) ;;
+            *) echo "$TAG is not on master ($status)"; exit 1 ;;
+          esac
+          # A newer release will deploy itself, and installing this one after it would be a downgrade.
+          latest=$(api "releases/latest" | python3 -c 'import sys,json;print(json.load(sys.stdin)["tag_name"])')
+          if [ "$latest" = "$TAG" ]; then
+            echo "current=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "$latest is newer than $TAG. Leaving this to its own deploy."
+            echo "current=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "version=${TAG#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for the package on npm
+        if: steps.release.outputs.current == 'true'
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS -o /dev/null "https://registry.npmjs.org/@nubisco%2Fopenbridge/$VERSION"; then
+              echo "@nubisco/openbridge@$VERSION is on npm"; exit 0
+            fi
+            sleep 10
+          done
+          echo "@nubisco/openbridge@$VERSION is not on npm after 5 minutes. Not deploying."
+          exit 1
+
+      # The SSH key and the pi-deploy host alias live on the runner, not in GitHub, so only a job
+      # on this runner can reach the bridge.
+      - name: Deploy
+        if: steps.release.outputs.current == 'true'
+        env:
+          VERSION: ${{ steps.release.outputs.version }}
+        run: ssh -o BatchMode=yes pi-deploy "openbridge $VERSION"
