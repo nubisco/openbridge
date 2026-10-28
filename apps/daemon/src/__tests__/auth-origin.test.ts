@@ -6,11 +6,8 @@ describe('resolveAuthOrigin', () => {
     expect(resolveAuthOrigin('https://platform.nubisco.io', 'https://auth.example/')).toBe('https://auth.example')
   })
 
-  it("sends Nubisco's issuer to Accord's auth host", () => {
-    expect(resolveAuthOrigin('https://platform.nubisco.io', undefined)).toBe('https://auth.nubisco.io')
-  })
-
-  it('falls back to any other issuer', () => {
+  it("falls back to the issuer, Nubisco's included", () => {
+    expect(resolveAuthOrigin('https://platform.nubisco.io', undefined)).toBe('https://platform.nubisco.io')
     expect(resolveAuthOrigin('https://id.example', undefined)).toBe('https://id.example')
     expect(resolveAuthOrigin('https://id.example', '  ')).toBe('https://id.example')
   })

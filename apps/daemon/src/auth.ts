@@ -116,21 +116,16 @@ function loadOrCreateSecret(): Buffer {
   return secret
 }
 
-/** Nubisco's issuer, and the Accord host that holds its browser sessions. */
-const NUBISCO_ISSUER = 'https://platform.nubisco.io'
-const NUBISCO_AUTH_ORIGIN = 'https://auth.nubisco.io'
-
 /**
- * The browser-facing origin for an issuer. PLATFORM_AUTH_ORIGIN wins when it
- * is set. Otherwise Nubisco's own issuer maps to Accord's auth host, so an
- * install that only sets PLATFORM_ISSUER keeps a working account switcher,
- * and any other issuer is its own auth host.
+ * The browser-facing origin: where sign-in, sign-out and the account switcher
+ * go. PLATFORM_AUTH_ORIGIN when it is set, otherwise the issuer itself. Set it
+ * like the issuer, in the install's environment (for Nubisco's own bridge,
+ * https://auth.nubisco.io).
  */
 export function resolveAuthOrigin(issuer: string | null, configured: string | undefined): string | null {
   const explicit = configured?.trim().replace(/\/$/, '')
   if (explicit) return explicit
-  if (!issuer) return null
-  return issuer === NUBISCO_ISSUER ? NUBISCO_AUTH_ORIGIN : issuer
+  return issuer
 }
 
 export function loadAuthConfig(): TAuthConfig {
