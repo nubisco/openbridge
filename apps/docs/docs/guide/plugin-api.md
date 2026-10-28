@@ -1,7 +1,7 @@
-# Plugin API Reference
-
-This page is the authoritative reference for the `@nubisco/openbridge-sdk` and `@nubisco/openbridge-core` types available to plugin authors. For a tutorial approach, see [Creating a Plugin](/guide/creating-a-plugin).
-
+---
+layout: nubisco
+title: Plugin API Reference
+intro: 'This page is the authoritative reference for the `@nubisco/openbridge-sdk` and `@nubisco/openbridge-core` types available to plugin authors. For a tutorial approach, see [Creating a Plugin](/guide/creating-a-plugin).'
 ---
 
 ## `definePlugin(plugin)`

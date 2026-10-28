@@ -1,6 +1,8 @@
-# Installation
-
-There are three ways to install OpenBridge. Pick one; you do not need the others.
+---
+layout: nubisco
+title: Installation
+intro: 'There are three ways to install OpenBridge. Pick one; you do not need the others.'
+---
 
 | Method                      | Best for                                                 | Needs Node.js | HomeKit works on |
 | --------------------------- | -------------------------------------------------------- | ------------- | ---------------- |

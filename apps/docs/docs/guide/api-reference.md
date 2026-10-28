@@ -1,6 +1,8 @@
-# API Reference
-
-The OpenBridge daemon exposes a REST API and four WebSocket streams, all on port 8582 (configurable via `bridge.port`). The base URL for all REST endpoints is `http://localhost:8582`.
+---
+layout: nubisco
+title: API Reference
+intro: 'The OpenBridge daemon exposes a REST API and four WebSocket streams, all on port 8582 (configurable via `bridge.port`). The base URL for all REST endpoints is `http://localhost:8582`.'
+---
 
 All REST responses are JSON unless noted. All request bodies must be `Content-Type: application/json`.
 

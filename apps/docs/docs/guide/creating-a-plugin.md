@@ -1,6 +1,8 @@
-# Creating a Plugin
-
-Native OpenBridge plugins are TypeScript modules that export a plugin object. They have access to a typed config, a scoped logger, and three lifecycle hooks. This guide walks through building, configuring, and loading a real plugin.
+---
+layout: nubisco
+title: Creating a Plugin
+intro: 'Native OpenBridge plugins are TypeScript modules that export a plugin object. They have access to a typed config, a scoped logger, and three lifecycle hooks. This guide walks through building, configuring, and loading a real plugin.'
+---
 
 ## Quick start
 

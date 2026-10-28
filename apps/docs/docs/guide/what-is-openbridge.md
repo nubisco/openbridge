@@ -1,6 +1,10 @@
-# What is OpenBridge?
+---
+layout: nubisco
+title: What is OpenBridge?
+intro: 'OpenBridge is a TypeScript-first, local-first home automation bridge.'
+---
 
-OpenBridge is a TypeScript-first, local-first home automation bridge. It runs as a Node.js daemon on your local network and connects smart devices to **Apple HomeKit** — the same job Homebridge does, but with a modern architecture, a built-in UI, and a plugin API designed for developers.
+It runs as a Node.js daemon on your local network and connects smart devices to **Apple HomeKit** — the same job Homebridge does, but with a modern architecture, a built-in UI, and a plugin API designed for developers.
 
 If you have never used Homebridge: OpenBridge makes non-HomeKit devices appear in the Apple Home app on your iPhone, iPad, and Mac. Your lights, sensors, switches, and cameras show up as native HomeKit accessories — no cloud subscription, no third-party accounts, no data leaving your network.
 

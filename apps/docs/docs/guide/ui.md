@@ -1,6 +1,10 @@
-# Dashboard UI
+---
+layout: nubisco
+title: Dashboard UI
+intro: 'OpenBridge ships a built-in Vue 3 web interface.'
+---
 
-OpenBridge ships a built-in Vue 3 web interface. In production, the daemon serves it as static files at [http://localhost:8582](http://localhost:8582). In development, it runs on its own Vite dev server at [http://localhost:5174](http://localhost:5174) and proxies API calls to the daemon.
+In production, the daemon serves it as static files at [http://localhost:8582](http://localhost:8582). In development, it runs on its own Vite dev server at [http://localhost:5174](http://localhost:5174) and proxies API calls to the daemon.
 
 > **Tip:** You do not need to run the Vite dev server to use the UI. The daemon always serves the last built version of the UI at port 8582. Only start the Vite server if you are making changes to the UI source code.
 

@@ -1,7 +1,7 @@
-# Architecture
-
-This page explains how OpenBridge is structured internally, how data flows through the system, and why the pieces are split the way they are.
-
+---
+layout: nubisco
+title: Architecture
+intro: 'This page explains how OpenBridge is structured internally, how data flows through the system, and why the pieces are split the way they are.'
 ---
 
 ## Data flow diagram

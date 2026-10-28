@@ -1,7 +1,7 @@
-# Homebridge Compatibility
-
-OpenBridge includes a compatibility shim that lets you run existing Homebridge platform plugins without modification. This page documents what works, what does not work yet, and how to set up a Homebridge plugin from scratch.
-
+---
+layout: nubisco
+title: Homebridge Compatibility
+intro: 'OpenBridge includes a compatibility shim that lets you run existing Homebridge platform plugins without modification. This page documents what works, what does not work yet, and how to set up a Homebridge plugin from scratch.'
 ---
 
 ## What works

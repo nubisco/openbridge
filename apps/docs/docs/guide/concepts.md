@@ -1,7 +1,7 @@
-# Concepts
-
-This page defines the core vocabulary used throughout OpenBridge. Read it before diving into the plugin API or architecture docs — the terms here appear everywhere.
-
+---
+layout: nubisco
+title: Concepts
+intro: 'This page defines the core vocabulary used throughout OpenBridge. Read it before diving into the plugin API or architecture docs, the terms here appear everywhere.'
 ---
 
 ## Plugin

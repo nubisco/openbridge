@@ -1,7 +1,8 @@
-# HomeKit Exposure
-
-Applies to **native OpenBridge plugins** (`openbridge-*`), the ones written against the
-OpenBridge plugin API rather than loaded through the Homebridge compatibility layer.
+---
+layout: nubisco
+title: HomeKit Exposure
+intro: 'Applies to **native OpenBridge plugins** (`openbridge-*`), the ones written against the OpenBridge plugin API rather than loaded through the Homebridge compatibility layer.'
+---
 
 A plugin usually discovers more than one device. Some of those devices belong in the Home app
 and some do not, and the choice is per device, not per plugin.

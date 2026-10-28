@@ -1,5 +1,4 @@
-import { defineConfig } from 'vitepress'
-import { withMermaid } from './plugins/mermaid'
+import { defineNubiscoDocs } from '@nubisco/docs-sdk'
 
 /** Running a bridge: installing it, pairing devices, living with it. */
 const users = [
@@ -49,90 +48,64 @@ const developers = [
   },
 ]
 
-// Project page, so the site is served from a subpath. VitePress rewrites links
-// it owns (theme logo, router hrefs, bundled assets) but passes `head` through
-// verbatim, so anything below has to carry the prefix itself.
-const base = '/openbridge/'
+// Project page, so the site is served from a subpath.
+export default defineNubiscoDocs({
+  title: 'OpenBridge',
+  description: 'A modern, local-first home automation bridge built for developers.',
+  base: '/openbridge/',
+  hostname: 'https://docs.nubisco.io/openbridge/',
+  repo: 'nubisco/openbridge',
+  docsDir: 'apps/docs/docs/',
 
-export default withMermaid(
-  defineConfig({
-    title: 'OpenBridge',
-    description: 'A modern, local-first home automation bridge built for developers.',
-    base,
-    cleanUrls: true,
-    lastUpdated: true,
-    ignoreDeadLinks: true,
-
-    head: [
-      ['link', { rel: 'icon', href: `${base}favicon.ico`, sizes: 'any' }],
-      ['link', { rel: 'icon', type: 'image/png', sizes: '32x32', href: `${base}favicon-32x32.png` }],
-      ['link', { rel: 'icon', type: 'image/png', sizes: '16x16', href: `${base}favicon-16x16.png` }],
-      ['link', { rel: 'apple-touch-icon', sizes: '180x180', href: `${base}apple-touch-icon.png` }],
-      ['link', { rel: 'manifest', href: `${base}site.webmanifest` }],
-      ['meta', { name: 'theme-color', content: '#22335e' }],
-      ['script', { defer: '', src: 'https://analytics.nubisco.io/script.js' }],
-    ],
-
-    sitemap: { hostname: 'https://docs.nubisco.io/openbridge/' },
-
-    themeConfig: {
-      logo: { src: '/logo.svg', alt: 'OpenBridge' },
-
-      // TWO DOORS, BY PERSON. Someone running a bridge at home and someone
-      // writing a plugin for it want different halves of this site, and one flat
-      // sidebar made the person trying to pair a light bulb scroll past the
-      // plugin lifecycle and the HTTP API. Every page sits under /guide/, so the
-      // halves are keyed page by page: no file moves and no published URL
-      // changes. See "Documentation sites" in the workspace AGENTS.md.
-      nav: [
-        { text: 'Users', link: '/guide/what-is-openbridge' },
-        { text: 'Developers', link: '/guide/creating-a-plugin' },
+  // TWO DOORS, BY PERSON. Someone running a bridge at home and someone
+  // writing a plugin for it want different halves of this site, and one flat
+  // sidebar made the person trying to pair a light bulb scroll past the
+  // plugin lifecycle and the HTTP API. Every page sits under /guide/, so the
+  // halves are keyed page by page: no file moves and no published URL
+  // changes. See "Documentation sites" in the workspace AGENTS.md.
+  nav: [
+    { text: 'Users', link: '/guide/what-is-openbridge' },
+    { text: 'Developers', link: '/guide/creating-a-plugin' },
+    {
+      text: 'Project',
+      items: [
+        { text: 'Repository', link: 'https://github.com/nubisco/openbridge' },
         {
-          text: 'Project',
-          items: [
-            { text: 'Repository', link: 'https://github.com/nubisco/openbridge' },
-            {
-              text: 'Contributing',
-              link: 'https://github.com/nubisco/openbridge/blob/master/CONTRIBUTING.md',
-            },
-            { text: 'Plugin Marketplace', link: 'https://marketplace.openbridge.nubisco.io' },
-            { text: 'Sponsor', link: 'https://github.com/sponsors/joseporto' },
-          ],
+          text: 'Contributing',
+          link: 'https://github.com/nubisco/openbridge/blob/master/CONTRIBUTING.md',
         },
-        {
-          text: 'Nubisco',
-          items: [
-            { text: 'nubisco.io', link: 'https://nubisco.io' },
-            { text: 'Nubisco UI', link: 'https://docs.nubisco.io/ui/' },
-            { text: 'Acta', link: 'https://docs.nubisco.io/acta/' },
-            { text: 'Verba', link: 'https://docs.nubisco.io/verba/' },
-          ],
-        },
+        { text: 'Plugin Marketplace', link: 'https://marketplace.openbridge.nubisco.io' },
+        { text: 'Sponsor', link: 'https://github.com/sponsors/joseporto' },
       ],
-
-      sidebar: {
-        '/guide/creating-a-plugin': developers,
-        '/guide/plugin-api': developers,
-        '/guide/homekit-exposure': developers,
-        '/guide/api-reference': developers,
-        '/guide/architecture': developers,
-        '/': users,
-      },
-
-      search: { provider: 'local' },
-
-      footer: {
-        message:
-          'Released under the <a href="https://github.com/nubisco/openbridge/blob/master/LICENSE">MIT License</a>. · <a href="https://github.com/sponsors/joseporto">♥ Sponsor this project</a>',
-        copyright: 'Copyright © 2026 <a href="https://nubisco.io">Nubisco</a>',
-      },
-
-      socialLinks: [{ icon: 'github', link: 'https://github.com/nubisco/openbridge' }],
-
-      editLink: {
-        pattern: 'https://github.com/nubisco/openbridge/edit/master/apps/docs/docs/:path',
-        text: 'Suggest changes to this page',
-      },
     },
-  }),
-)
+    {
+      text: 'Nubisco',
+      items: [
+        { text: 'nubisco.io', link: 'https://nubisco.io' },
+        { text: 'Nubisco UI', link: 'https://docs.nubisco.io/ui/' },
+        { text: 'Acta', link: 'https://docs.nubisco.io/acta/' },
+        { text: 'Verba', link: 'https://docs.nubisco.io/verba/' },
+      ],
+    },
+  ],
+
+  sidebar: {
+    '/guide/creating-a-plugin': developers,
+    '/guide/plugin-api': developers,
+    '/guide/homekit-exposure': developers,
+    '/guide/api-reference': developers,
+    '/guide/architecture': developers,
+    '/': users,
+  },
+
+  footer: {
+    message:
+      'Released under the <a href="https://github.com/nubisco/openbridge/blob/master/LICENSE">MIT License</a>. · <a href="https://github.com/sponsors/joseporto">♥ Sponsor this project</a>',
+    copyright: 'Copyright © 2026 <a href="https://nubisco.io">Nubisco</a>',
+  },
+
+  vitepress: {
+    cleanUrls: true,
+    ignoreDeadLinks: true,
+  },
+})

@@ -1,6 +1,8 @@
-# Getting Started
-
-This guide walks you from zero to a running OpenBridge daemon, paired with HomeKit, with a Homebridge plugin installed. It takes about ten minutes on a machine that already has Node.js.
+---
+layout: nubisco
+title: Getting Started
+intro: 'This guide walks you from zero to a running OpenBridge daemon, paired with HomeKit, with a Homebridge plugin installed. It takes about ten minutes on a machine that already has Node.js.'
+---
 
 ## Install OpenBridge
 

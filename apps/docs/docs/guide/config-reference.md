@@ -1,6 +1,8 @@
-# Config Reference
-
-OpenBridge reads its configuration from a single JSON file. All fields are validated at startup using a Zod schema — invalid config prints a structured error and aborts.
+---
+layout: nubisco
+title: Config Reference
+intro: 'OpenBridge reads its configuration from a single JSON file. All fields are validated at startup using a Zod schema, invalid config prints a structured error and aborts.'
+---
 
 **Default path:** `~/.openbridge/config.json`
 
