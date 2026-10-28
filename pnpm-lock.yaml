@@ -156,8 +156,8 @@ importers:
         specifier: ^1.7.0
         version: 1.7.0
       '@nubisco/ui':
-        specifier: ^5.37.0
-        version: 5.37.0(pixi.js@8.19.0)(vue-i18n@11.3.0(vue@3.5.44(typescript@5.9.3)))(vue@3.5.44(typescript@5.9.3))
+        specifier: ^5.41.1
+        version: 5.41.1(pixi.js@8.19.0)(vue-i18n@11.3.0(vue@3.5.44(typescript@5.9.3)))(vue@3.5.44(typescript@5.9.3))
       '@xterm/addon-fit':
         specifier: ^0.11.0
         version: 0.11.0
@@ -905,14 +905,6 @@ packages:
     peerDependencies:
       '@nubisco/ui': ^5.40.0
       vue: ^3.5.0
-
-  '@nubisco/ui@5.37.0':
-    resolution: {integrity: sha512-/mGCja8OGBPwCbZ6moH697T/7Os8Xrekx54qmVH5vowm8RXi5pxTY3400DUx90The3L/tL67UdVQHCOR3pIEqA==}
-    engines: {node: '>=20.0.0'}
-    peerDependencies:
-      pixi.js: ^8.0.0
-      vue: ^3.5.30
-      vue-i18n: ^11.3.0
 
   '@nubisco/ui@5.41.1':
     resolution: {integrity: sha512-pmxWy7gG9HQ1PyLxBvIUuloyVjk6yowCUe4eMxBqwshF8NiICMfSi9lubNYS7PEbqI/O5ArTf9w4aH5Fbaus0g==}
@@ -5141,12 +5133,6 @@ snapshots:
       - typescript
       - universal-cookie
       - vite
-
-  '@nubisco/ui@5.37.0(pixi.js@8.19.0)(vue-i18n@11.3.0(vue@3.5.44(typescript@5.9.3)))(vue@3.5.44(typescript@5.9.3))':
-    dependencies:
-      pixi.js: 8.19.0
-      vue: 3.5.44(typescript@5.9.3)
-      vue-i18n: 11.3.0(vue@3.5.44(typescript@5.9.3))
 
   '@nubisco/ui@5.41.1(pixi.js@8.19.0)(vue-i18n@11.3.0(vue@3.5.44(typescript@5.9.3)))(vue@3.5.44(typescript@5.9.3))':
     dependencies:
