@@ -78,14 +78,22 @@ jobs:
         if: steps.release.outputs.current == 'true'
         env:
           VERSION: ${{ steps.release.outputs.version }}
+        # Every package the install will fetch, by its tarball. The metadata appears on the
+        # registry before the tarballs reach every mirror, and 1.4.1 failed on the Pi with a 404
+        # for a companion package's tarball seconds after Publish to npm finished.
         run: |
+          PKGS="openbridge openbridge-core openbridge-config openbridge-logger openbridge-compatibility-homebridge"
           for i in $(seq 1 30); do
-            if curl -fsS -o /dev/null "https://registry.npmjs.org/@nubisco%2Fopenbridge/$VERSION"; then
-              echo "@nubisco/openbridge@$VERSION is on npm"; exit 0
+            missing=""
+            for p in $PKGS; do
+              curl -fsS -o /dev/null "https://registry.npmjs.org/@nubisco/$p/-/$p-$VERSION.tgz" || missing="$missing $p"
+            done
+            if [ -z "$missing" ]; then
+              echo "every @nubisco package is on npm at $VERSION"; exit 0
             fi
             sleep 10
           done
-          echo "@nubisco/openbridge@$VERSION is not on npm after 5 minutes. Not deploying."
+          echo "not on npm after 5 minutes:$missing. Not deploying."
           exit 1
 
       # The SSH key and the pi-deploy host alias live on the runner, not in GitHub, so only a job
