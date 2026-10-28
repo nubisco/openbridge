@@ -1,3 +1,10 @@
+## [1.4.1](https://github.com/nubisco/openbridge/compare/v1.4.0...v1.4.1) (2026-10-28)
+
+
+### Bug Fixes
+
+* **auth:** talk to Accord's auth host for sign-in and the account switcher ([58270d1](https://github.com/nubisco/openbridge/commit/58270d1e7c274127a10c6d3516b155837f30f962))
+
 # [1.4.0](https://github.com/nubisco/openbridge/compare/v1.3.0...v1.4.0) (2026-10-27)
 
 
