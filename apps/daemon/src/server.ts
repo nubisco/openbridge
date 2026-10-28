@@ -144,7 +144,9 @@ export async function createServer(
   const authConfig = loadAuthConfig()
   await registerAuthRoutes(app, authConfig)
   if (authConfig.enabled) {
-    log.info(`Platform auth enabled, issuer=${authConfig.issuer ?? 'unset'} appId=${authConfig.appId ?? 'unset'}`)
+    log.info(
+      `Platform auth enabled, issuer=${authConfig.issuer ?? 'unset'} authOrigin=${authConfig.authOrigin ?? 'unset'} appId=${authConfig.appId ?? 'unset'}`,
+    )
   }
 
   // Start live metrics collection

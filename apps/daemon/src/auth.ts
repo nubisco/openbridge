@@ -26,6 +26,12 @@ const SESSION_TTL_SEC = 7 * 24 * 60 * 60 // 7 days
 export interface TAuthConfig {
   enabled: boolean
   issuer: string | null
+  /**
+   * Where the browser talks to Accord: sign-in, sign-out and the account
+   * switcher. Not the issuer, which stays an identifier in tokens while
+   * browser sessions live on the auth host. Null when the issuer is.
+   */
+  authOrigin: string | null
   appId: string | null
   secret: Buffer
 }
@@ -110,12 +116,31 @@ function loadOrCreateSecret(): Buffer {
   return secret
 }
 
+/** Nubisco's issuer, and the Accord host that holds its browser sessions. */
+const NUBISCO_ISSUER = 'https://platform.nubisco.io'
+const NUBISCO_AUTH_ORIGIN = 'https://auth.nubisco.io'
+
+/**
+ * The browser-facing origin for an issuer. PLATFORM_AUTH_ORIGIN wins when it
+ * is set. Otherwise Nubisco's own issuer maps to Accord's auth host, so an
+ * install that only sets PLATFORM_ISSUER keeps a working account switcher,
+ * and any other issuer is its own auth host.
+ */
+export function resolveAuthOrigin(issuer: string | null, configured: string | undefined): string | null {
+  const explicit = configured?.trim().replace(/\/$/, '')
+  if (explicit) return explicit
+  if (!issuer) return null
+  return issuer === NUBISCO_ISSUER ? NUBISCO_AUTH_ORIGIN : issuer
+}
+
 export function loadAuthConfig(): TAuthConfig {
   const flag = process.env.PLATFORM_ENABLED?.toLowerCase().trim()
   const enabled = flag === 'true' || flag === '1' || flag === 'yes'
+  const issuer = process.env.PLATFORM_ISSUER?.replace(/\/$/, '') ?? null
   return {
     enabled,
-    issuer: process.env.PLATFORM_ISSUER?.replace(/\/$/, '') ?? null,
+    issuer,
+    authOrigin: resolveAuthOrigin(issuer, process.env.PLATFORM_AUTH_ORIGIN),
     appId: process.env.PLATFORM_APP_ID ?? null,
     secret: loadOrCreateSecret(),
   }
@@ -159,6 +184,7 @@ export async function registerAuthRoutes(app: FastifyInstance, config: TAuthConf
   app.get('/auth/platform/config', async () => ({
     enabled: config.enabled,
     issuer: config.issuer,
+    authOrigin: config.authOrigin,
     appId: config.appId,
   }))
 

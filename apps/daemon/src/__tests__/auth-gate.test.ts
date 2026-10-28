@@ -89,7 +89,13 @@ describe('platform auth gate on a running server', () => {
   beforeAll(async () => {
     app = Fastify({ logger: false })
     await app.register(websocket)
-    const config: TAuthConfig = { enabled: true, issuer: 'https://issuer.invalid', appId: null, secret: SECRET }
+    const config: TAuthConfig = {
+      enabled: true,
+      issuer: 'https://issuer.invalid',
+      authOrigin: 'https://issuer.invalid',
+      appId: null,
+      secret: SECRET,
+    }
     await registerAuthRoutes(app, config)
     app.get('/api/health', async () => ({ status: 'ok' }))
     app.get('/api/plugins', async () => ({ plugins: ['secret'] }))

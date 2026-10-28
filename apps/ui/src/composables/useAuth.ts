@@ -17,7 +17,18 @@ export interface AuthUser {
 export interface PlatformAuthConfig {
   enabled: boolean
   issuer: string | null
+  /**
+   * Accord's auth host, where the browser's session lives: sign-in, sign-out
+   * and the account switcher go here. The daemon falls back to the issuer, and
+   * an older daemon does not send it at all, so read it through authOrigin().
+   */
+  authOrigin?: string | null
   appId: string | null
+}
+
+/** The browser-facing Accord origin, the issuer when none was configured. */
+function authOrigin(cfg: PlatformAuthConfig | null): string | null {
+  return cfg?.authOrigin ?? cfg?.issuer ?? null
 }
 
 export interface PlatformIdentity {
@@ -127,7 +138,8 @@ export function useAuth() {
 
   async function startPlatformLogin(options: LoginOptions = {}): Promise<void> {
     const cfg = await loadConfig()
-    if (!cfg.enabled || !cfg.issuer) return
+    const origin = authOrigin(cfg)
+    if (!cfg.enabled || !origin) return
 
     const appId = cfg.appId ?? 'openbridge'
     const state = Array.from(crypto.getRandomValues(new Uint8Array(16)))
@@ -138,7 +150,7 @@ export function useAuth() {
     else sessionStorage.removeItem(EXPECTED_SUB_KEY)
 
     const redirectUri = `${window.location.origin}/auth/callback`
-    const ssoUrl = new URL(`${cfg.issuer}/api/auth/sso`)
+    const ssoUrl = new URL(`${origin}/api/auth/sso`)
     ssoUrl.searchParams.set('app_id', appId)
     ssoUrl.searchParams.set('redirect_uri', redirectUri)
     ssoUrl.searchParams.set('state', state)
@@ -181,9 +193,10 @@ export function useAuth() {
    */
   async function listIdentities(): Promise<PlatformIdentity[]> {
     const cfg = await loadConfig()
-    if (!cfg.enabled || !cfg.issuer) return []
+    const origin = authOrigin(cfg)
+    if (!cfg.enabled || !origin) return []
     try {
-      const res = await fetch(`${cfg.issuer}/api/auth/identities`, { credentials: 'include' })
+      const res = await fetch(`${origin}/api/auth/identities`, { credentials: 'include' })
       if (!res.ok) return []
       const data = (await res.json()) as { identities?: PlatformIdentity[] }
       return data.identities ?? []
@@ -205,9 +218,10 @@ export function useAuth() {
    */
   async function removeIdentity(userId: string): Promise<boolean> {
     const cfg = await loadConfig()
-    if (!cfg.enabled || !cfg.issuer) return false
+    const origin = authOrigin(cfg)
+    if (!cfg.enabled || !origin) return false
     try {
-      const res = await fetch(`${cfg.issuer}/api/auth/identities/remove`, {
+      const res = await fetch(`${origin}/api/auth/identities/remove`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -237,9 +251,10 @@ export function useAuth() {
     clearLastAccount()
 
     const cfg = config.value
-    if (cfg?.enabled && cfg.issuer && cfg.appId) {
+    const origin = authOrigin(cfg)
+    if (cfg?.enabled && origin && cfg.appId) {
       const postLogout = `${window.location.origin}/login?logged_out=1`
-      const url = new URL('/api/auth/sso/end-session', cfg.issuer)
+      const url = new URL('/api/auth/sso/end-session', origin)
       url.searchParams.set('app_id', cfg.appId)
       url.searchParams.set('post_logout_redirect_uri', postLogout)
       window.location.href = url.toString()
