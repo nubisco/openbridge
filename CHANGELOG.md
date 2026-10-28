@@ -1,3 +1,10 @@
+## [1.4.2](https://github.com/nubisco/openbridge/compare/v1.4.1...v1.4.2) (2026-10-28)
+
+
+### Bug Fixes
+
+* **auth:** take the auth host from the environment only ([db4a53d](https://github.com/nubisco/openbridge/commit/db4a53dc6bacee0f9e34408b32ca9d4bc43ad994))
+
 ## [1.4.1](https://github.com/nubisco/openbridge/compare/v1.4.0...v1.4.1) (2026-10-28)
 
 
