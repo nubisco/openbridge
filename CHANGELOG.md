@@ -1,3 +1,10 @@
+## [1.5.1](https://github.com/nubisco/openbridge/compare/v1.5.0...v1.5.1) (2026-10-29)
+
+
+### Bug Fixes
+
+* **mcp:** ship the MCP endpoint off by default ([211bbcf](https://github.com/nubisco/openbridge/commit/211bbcf09bb5c0ca8f4e247b386027c88eb4e07c))
+
 # [1.5.0](https://github.com/nubisco/openbridge/compare/v1.4.2...v1.5.0) (2026-10-29)
 
 
