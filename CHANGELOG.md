@@ -1,3 +1,10 @@
+# [1.5.0](https://github.com/nubisco/openbridge/compare/v1.4.2...v1.5.0) (2026-10-29)
+
+
+### Features
+
+* **mcp:** ask an agent about your devices over the Model Context Protocol ([7bd0f22](https://github.com/nubisco/openbridge/commit/7bd0f220bc6692ffb03b4d05ddf0ec0fb2efa63f))
+
 ## [1.4.2](https://github.com/nubisco/openbridge/compare/v1.4.1...v1.4.2) (2026-10-28)
 
 
