@@ -19,6 +19,29 @@ The endpoint runs inside the daemon, on the same port as the dashboard
 (`http://<your-bridge>:8582/mcp`). Nothing leaves your network unless you put
 the bridge on the internet yourself.
 
+## Turn it on
+
+The endpoint is **off by default**. An agent that can read and operate a home is
+something you decide to allow, so no install or update turns it on for you.
+While it is off, `/mcp`, the sign-in routes and token management do not exist.
+
+Set `OPENBRIDGE_MCP=on` in the daemon's environment and restart it:
+
+```sh
+OPENBRIDGE_MCP=on openbridge            # run directly
+```
+
+```yaml
+# docker-compose.yml
+services:
+  openbridge:
+    environment:
+      OPENBRIDGE_MCP: 'on'
+```
+
+For a systemd service, add `Environment=OPENBRIDGE_MCP=on` to the unit. Settings
+→ AI agents shows whether it is on.
+
 ## Connect Claude Code
 
 1. In the dashboard, open **Settings → AI agents** and choose **New token**.

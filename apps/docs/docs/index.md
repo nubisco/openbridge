@@ -13,7 +13,7 @@ intro: 'Home automation for developers. Local-first, plugin-based and Homebridge
 
 ## Ask Claude about your home
 
-Your devices' readings and history over the Model Context Protocol. Ask how much energy the house used this week or when the gate last opened, with read-only or control access you choose. See [the MCP endpoint](/guide/mcp).
+Your devices' readings and history over the Model Context Protocol. Ask how much energy the house used this week or when the gate last opened, with read-only or control access you choose. Off until you turn it on. See [the MCP endpoint](/guide/mcp).
 
 ## Local-first
 

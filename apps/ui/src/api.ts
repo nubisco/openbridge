@@ -287,7 +287,10 @@ async function sendJson<T>(method: string, path: string, body?: unknown): Promis
 
 export const api = {
   access: {
-    get: () => get<{ endpoint: string; tokens: AccessToken[]; connections: AccessConnection[] }>('/access'),
+    get: () =>
+      get<
+        { enabled: false } | { enabled: true; endpoint: string; tokens: AccessToken[]; connections: AccessConnection[] }
+      >('/access'),
     createToken: (name: string, access: 'read' | 'control') =>
       sendJson<{ id: string; token: string }>('POST', '/access/tokens', { name, access }),
     revokeToken: (id: string) => sendJson<{ ok: true }>('DELETE', `/access/tokens/${encodeURIComponent(id)}`),

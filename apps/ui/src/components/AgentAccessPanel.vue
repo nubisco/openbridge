@@ -12,88 +12,98 @@
       </div>
     </div>
 
-    <NbBanner
-      v-if="freshToken"
-      status="info"
-      variant="inline"
-      title="Copy this token now. It is not shown again."
-      dismissible
-      @close="freshToken = ''"
-    >
-      <NbField v-slot="{ id }" label="Token" orientation="stack">
-        <div class="agents__reveal">
-          <NbTextInput :id="id" :model-value="freshToken" readonly size="sm" class="agents__mono" />
-          <NbCopyButton :text="freshToken" label="Copy" copied-label="Copied" />
-        </div>
-      </NbField>
-      <NbField v-slot="{ id }" label="Connect Claude Code" orientation="stack">
-        <div class="agents__reveal">
-          <NbTextInput :id="id" :model-value="cliCommand(freshToken)" readonly size="sm" class="agents__mono" />
-          <NbCopyButton :text="cliCommand(freshToken)" label="Copy" copied-label="Copied" />
-        </div>
-      </NbField>
-    </NbBanner>
-
-    <NbField v-slot="{ id }" label="MCP endpoint" orientation="stack">
-      <div class="agents__reveal">
-        <NbTextInput :id="id" :model-value="endpoint" readonly size="sm" class="agents__mono" />
-        <NbCopyButton :text="endpoint" label="Copy" copied-label="Copied" />
-      </div>
-    </NbField>
-    <NbMessage variant="helper">
-      Every request needs a token, even when sign-in is off. Create one below and paste it into your client, or add the
-      endpoint as a connector and approve it in your browser.
-      <a href="https://docs.nubisco.io/openbridge/guide/mcp" target="_blank" rel="noopener">How to connect</a>
+    <!-- Off by default: nothing here works until the owner turns it on. -->
+    <NbMessage v-if="enabled === false" variant="helper">
+      The MCP endpoint is off on this bridge. Start OpenBridge with
+      <code>OPENBRIDGE_MCP=on</code>
+      in its environment to turn it on, then create a token here.
+      <a href="https://docs.nubisco.io/openbridge/guide/mcp" target="_blank" rel="noopener">How to turn it on</a>
     </NbMessage>
 
-    <div class="agents__section-head">
-      <h3 class="agents__section-title">Tokens</h3>
-      <NbButton size="sm" variant="primary" icon="plus" @click="creating = true">New token</NbButton>
-    </div>
-    <NbDataTable
-      stack-on-phone
-      :columns="tokenColumns"
-      :rows="tokenRows"
-      row-key="id"
-      size="sm"
-      aria-label="Tokens"
-      :loading="loading"
-    >
-      <template #cell-actions="{ row }">
-        <NbButton size="sm" variant="ghost" @click="revokeToken(String(row.id), String(row.name))">Revoke</NbButton>
-      </template>
-      <template #empty>
-        <NbEmptyState
-          size="sm"
-          title="No tokens yet"
-          description="Create one to connect Claude Code or another MCP client."
-        />
-      </template>
-    </NbDataTable>
+    <template v-if="enabled">
+      <NbBanner
+        v-if="freshToken"
+        status="info"
+        variant="inline"
+        title="Copy this token now. It is not shown again."
+        dismissible
+        @close="freshToken = ''"
+      >
+        <NbField v-slot="{ id }" label="Token" orientation="stack">
+          <div class="agents__reveal">
+            <NbTextInput :id="id" :model-value="freshToken" readonly size="sm" class="agents__mono" />
+            <NbCopyButton :text="freshToken" label="Copy" copied-label="Copied" />
+          </div>
+        </NbField>
+        <NbField v-slot="{ id }" label="Connect Claude Code" orientation="stack">
+          <div class="agents__reveal">
+            <NbTextInput :id="id" :model-value="cliCommand(freshToken)" readonly size="sm" class="agents__mono" />
+            <NbCopyButton :text="cliCommand(freshToken)" label="Copy" copied-label="Copied" />
+          </div>
+        </NbField>
+      </NbBanner>
 
-    <h3 class="agents__section-title">Connected applications</h3>
-    <NbDataTable
-      stack-on-phone
-      :columns="connectionColumns"
-      :rows="connectionRows"
-      row-key="clientId"
-      size="sm"
-      aria-label="Connected applications"
-      :loading="loading"
-    >
-      <template #cell-actions="{ row }">
-        <NbButton size="sm" variant="ghost" @click="disconnect(String(row.clientId), String(row.name))">
-          Disconnect
-        </NbButton>
-      </template>
-      <template #empty>
-        <NbEmptyState
-          size="sm"
-          title="Nothing connected"
-          description="Applications you approve through a connector sign-in appear here."
-        />
-      </template>
-    </NbDataTable>
+      <NbField v-slot="{ id }" label="MCP endpoint" orientation="stack">
+        <div class="agents__reveal">
+          <NbTextInput :id="id" :model-value="endpoint" readonly size="sm" class="agents__mono" />
+          <NbCopyButton :text="endpoint" label="Copy" copied-label="Copied" />
+        </div>
+      </NbField>
+      <NbMessage variant="helper">
+        Every request needs a token, even when sign-in is off. Create one below and paste it into your client, or add
+        the endpoint as a connector and approve it in your browser.
+        <a href="https://docs.nubisco.io/openbridge/guide/mcp" target="_blank" rel="noopener">How to connect</a>
+      </NbMessage>
+
+      <div class="agents__section-head">
+        <h3 class="agents__section-title">Tokens</h3>
+        <NbButton size="sm" variant="primary" icon="plus" @click="creating = true">New token</NbButton>
+      </div>
+      <NbDataTable
+        stack-on-phone
+        :columns="tokenColumns"
+        :rows="tokenRows"
+        row-key="id"
+        size="sm"
+        aria-label="Tokens"
+        :loading="loading"
+      >
+        <template #cell-actions="{ row }">
+          <NbButton size="sm" variant="ghost" @click="revokeToken(String(row.id), String(row.name))">Revoke</NbButton>
+        </template>
+        <template #empty>
+          <NbEmptyState
+            size="sm"
+            title="No tokens yet"
+            description="Create one to connect Claude Code or another MCP client."
+          />
+        </template>
+      </NbDataTable>
+
+      <h3 class="agents__section-title">Connected applications</h3>
+      <NbDataTable
+        stack-on-phone
+        :columns="connectionColumns"
+        :rows="connectionRows"
+        row-key="clientId"
+        size="sm"
+        aria-label="Connected applications"
+        :loading="loading"
+      >
+        <template #cell-actions="{ row }">
+          <NbButton size="sm" variant="ghost" @click="disconnect(String(row.clientId), String(row.name))">
+            Disconnect
+          </NbButton>
+        </template>
+        <template #empty>
+          <NbEmptyState
+            size="sm"
+            title="Nothing connected"
+            description="Applications you approve through a connector sign-in appear here."
+          />
+        </template>
+      </NbDataTable>
+    </template>
 
     <NbMessage v-if="error" variant="error">{{ error }}</NbMessage>
 
@@ -116,6 +126,8 @@ import NewTokenModal from '@/components/NewTokenModal.vue'
 const confirm = useConfirm()
 const notify = useNotifications()
 
+/** Null until the daemon has answered, so neither state flashes first. */
+const enabled = ref<boolean | null>(null)
 const endpoint = ref(`${location.origin}/mcp`)
 const tokens = ref<AccessToken[]>([])
 const connections = ref<AccessConnection[]>([])
@@ -169,9 +181,12 @@ async function load() {
   loading.value = true
   try {
     const data = await api.access.get()
-    endpoint.value = data.endpoint
-    tokens.value = data.tokens
-    connections.value = data.connections
+    enabled.value = data.enabled
+    if (data.enabled) {
+      endpoint.value = data.endpoint
+      tokens.value = data.tokens
+      connections.value = data.connections
+    }
     error.value = ''
   } catch (e) {
     error.value = (e as Error).message

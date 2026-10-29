@@ -31,6 +31,7 @@ Options:
 Environment:
   OPENBRIDGE_PORT     Same as --port
   OPENBRIDGE_UI_PATH  Override the location of the built dashboard
+  OPENBRIDGE_MCP      Set to "on" to serve the MCP endpoint at /mcp (off by default)
 
 State (config, plugins, HAP pairing) is stored in ~/.openbridge, following HOME.
 

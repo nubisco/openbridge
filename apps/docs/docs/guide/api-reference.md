@@ -542,6 +542,49 @@ The connection will drop immediately after this response. The UI reconnects auto
 
 ---
 
+## AI agents (MCP)
+
+The [MCP endpoint](/guide/mcp) and what manages it. None of these exist unless the daemon runs with `OPENBRIDGE_MCP=on`. While it is off, `GET /api/access` answers `{ "enabled": false }` and `/mcp` answers `404`. When on, `/mcp` takes a token in `Authorization: Bearer obt_...`, always, whether or not dashboard sign-in is on, and a token opens nothing else.
+
+| Route                                         | What it is                                                                                                                                       |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `POST /mcp`                                   | JSON-RPC 2.0 over stateless Streamable HTTP. `401` with a `WWW-Authenticate` pointer to the metadata below when the token is missing or invalid. |
+| `GET /.well-known/oauth-protected-resource`   | RFC 9728 resource metadata (also under `/mcp` path variants).                                                                                    |
+| `GET /.well-known/oauth-authorization-server` | RFC 8414 server metadata (also as `openid-configuration`).                                                                                       |
+| `POST /oauth/register`                        | RFC 7591 dynamic client registration. Public clients only, limited per address.                                                                  |
+| `GET /oauth/authorize`                        | Starts sign-in. Sends the browser to the dashboard's consent screen.                                                                             |
+| `POST /oauth/token`                           | `authorization_code` with S256 PKCE, or `refresh_token` (rotates on use).                                                                        |
+
+The dashboard manages tokens and connections through these. They are behind dashboard sign-in when it is on, and refuse requests made from any page other than the dashboard itself.
+
+### `GET /api/access`
+
+```json
+{
+  "endpoint": "http://192.168.1.10:8582/mcp",
+  "tokens": [
+    { "id": "…", "name": "Claude on my laptop", "access": "read", "owner": null, "createdAt": "…", "lastUsedAt": null }
+  ],
+  "connections": [
+    { "clientId": "…", "name": "Claude", "access": "control", "owners": [], "connectedAt": "…", "lastUsedAt": "…" }
+  ]
+}
+```
+
+### `POST /api/access/tokens`
+
+Body `{ "name": "Claude on my laptop", "access": "read" | "control" }`. Returns `{ "id", "token" }`. The token is returned this once and stored only as a hash.
+
+### `DELETE /api/access/tokens/:id`
+
+Revokes a token immediately.
+
+### `DELETE /api/access/connections/:clientId`
+
+Disconnects an application, cutting every sign-in it holds, refresh tokens included.
+
+---
+
 ## WebSocket streams
 
 All WebSocket endpoints are at `ws://localhost:8582/ws/*`. Connect using any standard WebSocket client.
@@ -616,6 +659,7 @@ This is what the Terminal view in the UI connects to when in shell mode. The she
 
 ## Related pages
 
-- [Dashboard UI](/guide/ui) — how the UI uses these endpoints
-- [Config Reference](/guide/config-reference) — the config schema behind the config endpoints
-- [Homebridge Compatibility](/guide/homebridge-compatibility) — the marketplace endpoints in context
+- [Dashboard UI](/guide/ui): how the UI uses these endpoints
+- [The MCP endpoint](/guide/mcp): connecting Claude and other agents
+- [Config Reference](/guide/config-reference): the config schema behind the config endpoints
+- [Homebridge Compatibility](/guide/homebridge-compatibility): the marketplace endpoints in context

@@ -313,12 +313,14 @@ The location follows the `HOME` environment variable, so running the daemon unde
 
 ## Environment variables
 
-| Variable                    | Effect                                                                                          |
-| --------------------------- | ----------------------------------------------------------------------------------------------- |
-| `OPENBRIDGE_PORT`           | Dashboard and API port. Same as `--port`.                                                       |
-| `OPENBRIDGE_UI_PATH`        | Override where the built dashboard is loaded from.                                              |
-| `OPENBRIDGE_SESSION_SECRET` | Fixed secret for signing session cookies. Minimum 16 characters. Generated and stored if unset. |
-| `TZ`                        | Timezone, mainly useful in Docker so log timestamps match your locale.                          |
+| Variable                    | Effect                                                                                                                                                                                                                     |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `OPENBRIDGE_PORT`           | Dashboard and API port. Same as `--port`.                                                                                                                                                                                  |
+| `OPENBRIDGE_UI_PATH`        | Override where the built dashboard is loaded from.                                                                                                                                                                         |
+| `OPENBRIDGE_SESSION_SECRET` | Fixed secret for signing session cookies. Minimum 16 characters. Generated and stored if unset.                                                                                                                            |
+| `OPENBRIDGE_MCP`            | `on` serves the [MCP endpoint](/guide/mcp) at `/mcp`, for Claude and other AI agents. Off by default.                                                                                                                      |
+| `OPENBRIDGE_PUBLIC_URL`     | The address clients use when the bridge is behind a proxy or tunnel, e.g. `https://bridge.example.com`. Used by the [MCP endpoint](/guide/mcp) for its sign-in addresses. Defaults to the address each request came in on. |
+| `TZ`                        | Timezone, mainly useful in Docker so log timestamps match your locale.                                                                                                                                                     |
 
 ## Troubleshooting
 

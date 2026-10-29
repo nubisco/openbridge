@@ -40,6 +40,7 @@ export function runTokenCommand(args: string[], home = resolve(os.homedir(), '.o
       const access: Access = flagValue(rest, '--control') ? 'control' : 'read'
       const { token } = store.createToken(name, access, { id: 'local', email: null })
       console.log(`Created "${name}" with ${access === 'control' ? 'read and control' : 'read-only'} access.`)
+      console.log('It works once the daemon runs with OPENBRIDGE_MCP=on, which is off by default.')
       console.log('Copy it now, it is not shown again:\n')
       console.log(`  ${token}\n`)
       console.log('Connect Claude Code with:\n')

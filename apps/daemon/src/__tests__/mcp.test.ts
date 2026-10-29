@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { mkdtempSync, readFileSync, rmSync, statSync } from 'fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'fs'
 import { join } from 'path'
 import { tmpdir } from 'os'
 import Fastify, { type FastifyInstance } from 'fastify'
@@ -471,5 +471,57 @@ describe('sameOrigin', () => {
     expect(sameOrigin(req({}))).toBe(true)
     expect(sameOrigin(req({ origin: 'https://evil.example' }))).toBe(false)
     expect(sameOrigin(req({ 'sec-fetch-site': 'same-site' }))).toBe(false)
+  })
+})
+
+describe('the off switch', () => {
+  it('reads only an explicit yes', async () => {
+    const { isMcpEnabled } = await import('../mcp/index.js')
+    expect(isMcpEnabled(undefined)).toBe(false)
+    expect(isMcpEnabled('')).toBe(false)
+    expect(isMcpEnabled('off')).toBe(false)
+    expect(isMcpEnabled('ON')).toBe(true)
+    expect(isMcpEnabled('1')).toBe(true)
+  })
+
+  it('serves no MCP, OAuth or token routes until OPENBRIDGE_MCP=on', async () => {
+    const previousHome = process.env.HOME
+    const previousFlag = process.env.OPENBRIDGE_MCP
+    process.env.HOME = home
+    try {
+      const { createServer } = await import('../server.js')
+      const off = await createServer(new PluginRegistry(), null, null, [], new Set(), new Map())
+      try {
+        const mcp = await off.inject({ method: 'POST', url: '/mcp', payload: {} })
+        expect(mcp.statusCode).toBe(404)
+        expect(mcp.json().error).toContain('OPENBRIDGE_MCP=on')
+        // Unknown paths fall through to the dashboard, so what matters is that
+        // nothing answers as the feature would.
+        const reg = await off.inject({
+          method: 'POST',
+          url: '/oauth/register',
+          payload: { redirect_uris: ['https://a.example/cb'] },
+        })
+        expect(reg.statusCode).not.toBe(201)
+        await off.inject({ method: 'POST', url: '/api/access/tokens', payload: { name: 'x', access: 'control' } })
+        expect(existsSync(join(home, '.openbridge', 'access.json'))).toBe(false)
+        expect((await off.inject({ url: '/api/access' })).json()).toEqual({ enabled: false })
+      } finally {
+        await off.close()
+      }
+
+      process.env.OPENBRIDGE_MCP = 'on'
+      const on = await createServer(new PluginRegistry(), null, null, [], new Set(), new Map())
+      try {
+        expect((await on.inject({ method: 'POST', url: '/mcp', payload: {} })).statusCode).toBe(401)
+        expect((await on.inject({ url: '/api/access' })).json().enabled).toBe(true)
+      } finally {
+        await on.close()
+      }
+    } finally {
+      process.env.HOME = previousHome
+      if (previousFlag === undefined) delete process.env.OPENBRIDGE_MCP
+      else process.env.OPENBRIDGE_MCP = previousFlag
+    }
   })
 })

@@ -129,6 +129,17 @@ async function handleToolCall(
 }
 
 /**
+ * Whether this bridge serves the MCP endpoint at all. Off unless
+ * OPENBRIDGE_MCP says otherwise: an agent that can operate a home is
+ * something its owner turns on, not something an update turns on for them.
+ * Off, none of /mcp, the OAuth routes or token management exist.
+ */
+export function isMcpEnabled(value: string | undefined): boolean {
+  const flag = value?.toLowerCase().trim()
+  return flag === 'on' || flag === 'true' || flag === '1' || flag === 'yes'
+}
+
+/**
  * This bridge as clients reach it. OPENBRIDGE_PUBLIC_URL when it sits behind a
  * proxy or a tunnel, otherwise the address the request came in on, which on a
  * home network is the one the client already used.

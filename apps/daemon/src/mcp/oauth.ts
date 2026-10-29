@@ -306,6 +306,7 @@ export async function registerOauthRoutes(app: FastifyInstance, deps: OauthDeps)
   // leaked token cannot mint another one or revoke the person's own.
 
   app.get('/api/access', async (req) => ({
+    enabled: true,
     endpoint: `${publicOrigin(req)}/mcp`,
     tokens: store.listTokens(),
     connections: store.listConnections(),

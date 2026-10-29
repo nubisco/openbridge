@@ -29,7 +29,7 @@ import {
   type BridgeContext,
 } from './services/bridge.js'
 import { AccessStore } from './access.js'
-import { registerMcpRoutes } from './mcp/index.js'
+import { isMcpEnabled, registerMcpRoutes } from './mcp/index.js'
 import { registerOauthRoutes } from './mcp/oauth.js'
 
 const log = Logger.create('system')
@@ -172,21 +172,35 @@ export async function createServer(
   }
 
   // ─── MCP ──────────────────────────────────────────────────────────────────
-  // A second door onto the same functions, for AI agents. Token only, always,
-  // whether or not dashboard sign-in is on. See mcp/index.ts.
-  const accessStore = new AccessStore(join(OPENBRIDGE_HOME, 'access.json'))
-  await registerMcpRoutes(app, {
-    bridge,
-    store: accessStore,
-    bridgeName: () => {
-      try {
-        return JSON.parse(readFileSync(join(OPENBRIDGE_HOME, 'config.json'), 'utf8'))?.bridge?.name ?? null
-      } catch {
-        return null
-      }
-    },
-  })
-  await registerOauthRoutes(app, { store: accessStore, authConfig })
+  // A second door onto the same functions, for AI agents. Off unless
+  // OPENBRIDGE_MCP=on. On, it is token only, always, whether or not dashboard
+  // sign-in is on. See mcp/index.ts.
+  if (isMcpEnabled(process.env.OPENBRIDGE_MCP)) {
+    const accessStore = new AccessStore(join(OPENBRIDGE_HOME, 'access.json'))
+    await registerMcpRoutes(app, {
+      bridge,
+      store: accessStore,
+      bridgeName: () => {
+        try {
+          return JSON.parse(readFileSync(join(OPENBRIDGE_HOME, 'config.json'), 'utf8'))?.bridge?.name ?? null
+        } catch {
+          return null
+        }
+      },
+    })
+    await registerOauthRoutes(app, { store: accessStore, authConfig })
+    log.info('MCP endpoint enabled at /mcp')
+  } else {
+    // Settings asks, so it can say how to turn the endpoint on.
+    app.get('/api/access', async () => ({ enabled: false }))
+    // Answered here rather than by the dashboard's catch-all, which would hand
+    // an MCP client an HTML page and a 200.
+    app.all('/mcp', async (_req, reply) =>
+      reply
+        .status(404)
+        .send({ error: 'The MCP endpoint is off on this bridge. Start OpenBridge with OPENBRIDGE_MCP=on.' }),
+    )
+  }
 
   // Start live metrics collection
   startMetrics(2000)
