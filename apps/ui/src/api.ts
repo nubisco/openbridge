@@ -245,7 +245,55 @@ export interface DeviceDescriptor {
   health?: DeviceHealth
 }
 
+/** A token that opens the MCP endpoint. The secret itself is shown once, at creation. */
+export interface AccessToken {
+  id: string
+  name: string
+  access: 'read' | 'control'
+  /** Who created it, null when dashboard sign-in was off. */
+  owner: string | null
+  createdAt: string
+  lastUsedAt: string | null
+}
+
+/** An application connected through OAuth, one row however many times it was approved. */
+export interface AccessConnection {
+  clientId: string
+  name: string
+  access: 'read' | 'control'
+  owners: string[]
+  connectedAt: string
+  lastUsedAt: string | null
+}
+
+async function sendJson<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method,
+    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+  if (!res.ok) {
+    let message = `${method} ${path} failed: ${res.status}`
+    try {
+      const data = (await res.json()) as { error?: string; message?: string }
+      message = data.error ?? data.message ?? message
+    } catch {
+      /* not JSON */
+    }
+    throw new Error(message)
+  }
+  return res.json() as Promise<T>
+}
+
 export const api = {
+  access: {
+    get: () => get<{ endpoint: string; tokens: AccessToken[]; connections: AccessConnection[] }>('/access'),
+    createToken: (name: string, access: 'read' | 'control') =>
+      sendJson<{ id: string; token: string }>('POST', '/access/tokens', { name, access }),
+    revokeToken: (id: string) => sendJson<{ ok: true }>('DELETE', `/access/tokens/${encodeURIComponent(id)}`),
+    revokeConnection: (clientId: string) =>
+      sendJson<{ ok: true }>('DELETE', `/access/connections/${encodeURIComponent(clientId)}`),
+  },
   health: () => get<HealthResponse>('/health'),
   system: () => get<SystemInfo>('/system'),
   qr: () => get<{ setupURI: string | null; pincode: string | null; error?: string }>('/qr'),

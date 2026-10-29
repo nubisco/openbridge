@@ -9,6 +9,7 @@ import SettingsView from '@/views/SettingsView.vue'
 import TerminalView from '@/views/TerminalView.vue'
 import LoginView from '@/views/LoginView.vue'
 import AuthCallbackView from '@/views/AuthCallbackView.vue'
+import OAuthConsentView from '@/views/OAuthConsentView.vue'
 import { useAuth } from '@/composables/useAuth'
 
 export const router = createRouter({
@@ -16,6 +17,8 @@ export const router = createRouter({
   routes: [
     { path: '/login', name: 'login', component: LoginView },
     { path: '/auth/callback', name: 'auth-callback', component: AuthCallbackView },
+    // Outside the auth gate: it asks for sign-in itself, keeping the request it was given.
+    { path: '/oauth/consent', name: 'oauth-consent', component: OAuthConsentView },
     {
       path: '/',
       component: AppLayout,
@@ -39,7 +42,7 @@ export const router = createRouter({
 let authChecked = false
 
 router.beforeEach(async (to) => {
-  if (to.name === 'login' || to.name === 'auth-callback') return true
+  if (to.name === 'login' || to.name === 'auth-callback' || to.name === 'oauth-consent') return true
 
   const { config, user, loadConfig, checkAuth } = useAuth()
   if (!config.value) await loadConfig()

@@ -160,6 +160,8 @@
       </div>
     </NbPanel>
 
+    <AgentAccessPanel />
+
     <!-- Appearance. Theme is a personal setting and lives in the user menu,
          but with sign-in off (the self-hosted default) there is no user menu,
          so this is the only place left to set it. -->
@@ -221,6 +223,7 @@ import { useTheme, type TTheme } from '@nubisco/ui'
 import { api, type BridgeConfig, type UpdateStatus } from '@/api'
 import { useAuth } from '@/composables/useAuth'
 import { useLayoutStore } from '@/stores/layout'
+import AgentAccessPanel from '@/components/AgentAccessPanel.vue'
 
 const layout = useLayoutStore()
 const auth = useAuth()

@@ -11,13 +11,26 @@ import { createRequire } from 'module'
 import os from 'os'
 
 const _req = createRequire(import.meta.url)
-import type { PluginRegistry, Plugin, DeviceDescriptor, DeviceHealth } from '@nubisco/openbridge-core'
-import { assessDeviceHealth } from './device-health.js'
+import type { PluginRegistry, Plugin } from '@nubisco/openbridge-core'
 import { Logger } from '@nubisco/openbridge-logger'
 import type { LogEntry } from '@nubisco/openbridge-logger'
 import type { HomebridgeAPI } from '@nubisco/openbridge-compatibility-homebridge'
 import { startMetrics, onMetrics, getHistory } from './metrics.js'
 import { loadAuthConfig, registerAuthRoutes } from './auth.js'
+import {
+  controlDevice,
+  deviceEvents as readDeviceEvents,
+  deviceMetrics,
+  deviceObservations,
+  listAccessories,
+  listDevices,
+  readLogs,
+  setCharacteristic,
+  type BridgeContext,
+} from './services/bridge.js'
+import { AccessStore } from './access.js'
+import { registerMcpRoutes } from './mcp/index.js'
+import { registerOauthRoutes } from './mcp/oauth.js'
 
 const log = Logger.create('system')
 
@@ -67,7 +80,6 @@ let shellAvailable = false
 import { OPENBRIDGE_HOME, OB_PLUGINS_DIR, HB_PLUGINS_DIR } from './daemon.js'
 import { DeviceEventLog } from './device-events.js'
 import { ObservationStore, validateObservation } from './observations.js'
-import { DeviceSeries } from './timeseries.js'
 import type { HomeKitVisibility } from './homekit-visibility.js'
 import {
   CONVERTIBLE_SERVICES,
@@ -92,15 +104,6 @@ export interface LocalPlugin {
   path: string
   platform?: string
   displayName?: string
-}
-
-/** Find a registered device by id across every plugin. */
-function findDevice(registry: PluginRegistry, deviceId: string): DeviceDescriptor | null {
-  for (const instance of registry.getAll()) {
-    const device = instance.devices?.[deviceId]
-    if (device) return device
-  }
-  return null
 }
 
 export async function createServer(
@@ -135,9 +138,28 @@ export async function createServer(
 ) {
   const app = Fastify({ logger: false })
 
+  // What the REST routes below and the MCP tools both read from.
+  const bridge: BridgeContext = {
+    registry,
+    home: OPENBRIDGE_HOME,
+    hapAPI,
+    controls,
+    restrictedControls,
+    deviceEvents,
+    observations,
+    homekitServiceTypes,
+    nativeAccessoryUuid,
+  }
+
   // @fastify/cors 11 narrowed its default to the CORS-safelisted methods. Keep the
   // set it allowed before, so cross-origin clients see the same preflight answers.
-  await app.register(cors, { origin: true, methods: 'GET,HEAD,PUT,PATCH,POST,DELETE' })
+  // WWW-Authenticate is exposed so a browser-based MCP connector can read the
+  // 401 that tells it where to sign in.
+  await app.register(cors, {
+    origin: true,
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+    exposedHeaders: ['WWW-Authenticate'],
+  })
   await app.register(websocket)
 
   // Optional: Nubisco Platform auth. No-op when PLATFORM_ENABLED is unset.
@@ -148,6 +170,23 @@ export async function createServer(
       `Platform auth enabled, issuer=${authConfig.issuer ?? 'unset'} authOrigin=${authConfig.authOrigin ?? 'unset'} appId=${authConfig.appId ?? 'unset'}`,
     )
   }
+
+  // ─── MCP ──────────────────────────────────────────────────────────────────
+  // A second door onto the same functions, for AI agents. Token only, always,
+  // whether or not dashboard sign-in is on. See mcp/index.ts.
+  const accessStore = new AccessStore(join(OPENBRIDGE_HOME, 'access.json'))
+  await registerMcpRoutes(app, {
+    bridge,
+    store: accessStore,
+    bridgeName: () => {
+      try {
+        return JSON.parse(readFileSync(join(OPENBRIDGE_HOME, 'config.json'), 'utf8'))?.bridge?.name ?? null
+      } catch {
+        return null
+      }
+    },
+  })
+  await registerOauthRoutes(app, { store: accessStore, authConfig })
 
   // Start live metrics collection
   startMetrics(2000)
@@ -436,8 +475,7 @@ export async function createServer(
     '/api/devices/:id/events',
     async (req, reply) => {
       if (!deviceEvents) return reply.code(503).send({ error: 'event log unavailable' })
-      const limit = Number(req.query.limit ?? 100)
-      return { events: deviceEvents.read(req.params.id, Number.isFinite(limit) ? limit : 100) }
+      return { events: readDeviceEvents(bridge, req.params.id, Number(req.query.limit ?? 100)) }
     },
   )
 
@@ -448,11 +486,7 @@ export async function createServer(
     '/api/devices/:id/observations',
     async (req, reply) => {
       if (!observations) return reply.code(503).send({ error: 'observation store unavailable' })
-      const limit = Number(req.query.limit ?? 100)
-      return {
-        observations: observations.list(req.params.id, Number.isFinite(limit) ? limit : 100),
-        total: observations.count(req.params.id),
-      }
+      return deviceObservations(bridge, req.params.id, Number(req.query.limit ?? 100))
     },
   )
 
@@ -595,47 +629,7 @@ export async function createServer(
 
   // Returns all devices across all plugins with their descriptors and latest telemetry
   app.get('/api/devices', async () => {
-    // Load custom names
-    const namesPath = join(OPENBRIDGE_HOME, 'device-names.json')
-    let customNames: Record<string, string> = {}
-    try {
-      customNames = JSON.parse(readFileSync(namesPath, 'utf8'))
-    } catch {
-      /* no custom names */
-    }
-
-    const devices: Array<
-      DeviceDescriptor & {
-        telemetry: Record<string, unknown>
-        pluginStatus: string
-        homekitType: string | null
-        health: DeviceHealth
-      }
-    > = []
-    for (const instance of registry.getAll()) {
-      if (!instance.devices) continue
-      for (const device of Object.values(instance.devices)) {
-        const telemetry = instance.telemetry?.[device.id] ?? {}
-        const name = customNames[device.id] ?? device.name
-
-        // What the device is *presented* as, which may differ from the widget
-        // type its plugin declared. Sent so the card can show a relay driving a
-        // lamp as a light rather than contradicting the inspector next to it.
-        const accessoryUuid = nativeAccessoryUuid?.(device.id) ?? null
-        const homekitType = accessoryUuid ? (homekitServiceTypes?.typeForAccessory(accessoryUuid) ?? null) : null
-
-        // Derived here rather than stored, so it is always current and there
-        // is no second copy of the truth to go stale on its own.
-        const health = assessDeviceHealth({
-          telemetry,
-          intervalSeconds: device.telemetryIntervalSeconds,
-          pluginStatus: instance.status,
-        })
-
-        devices.push({ ...device, name, telemetry, pluginStatus: instance.status, homekitType, health })
-      }
-    }
-    return { devices }
+    return { devices: listDevices(bridge) }
   })
 
   // ─── HomeKit visibility ─────────────────────────────────────────────────
@@ -772,13 +766,7 @@ export async function createServer(
   app.post('/api/devices/:deviceId/control', async (req) => {
     const { deviceId } = req.params as { deviceId: string }
     const { control, value } = req.body as { control: string; value: unknown }
-    const key = `${deviceId}::${control}`
-    if (restrictedControls.has(key)) {
-      throw { statusCode: 403, message: `Control '${control}' is restricted for device '${deviceId}'` }
-    }
-    const handler = controls.get(key)
-    if (!handler) throw { statusCode: 404, message: `No control '${control}' registered for device '${deviceId}'` }
-    await handler(value)
+    await controlDevice(bridge, deviceId, control, value)
     return { ok: true }
   })
 
@@ -793,42 +781,12 @@ export async function createServer(
   app.get('/api/devices/:deviceId/metrics', async (req) => {
     const { deviceId } = req.params as { deviceId: string }
     const { metric, from, to, maxPoints } = req.query as Record<string, string>
-
-    const device = findDevice(registry, deviceId)
-    if (!device) throw { statusCode: 404, message: `Device '${deviceId}' not found` }
-    const metrics = device.metrics ?? []
-    if (metrics.length === 0) return { deviceId, metrics: [], series: null }
-
-    // Without an explicit metric, report what this device offers so the UI can
-    // populate its selector without a second round trip.
-    if (!metric) return { deviceId, metrics, series: null }
-
-    const descriptor = metrics.find((m) => m.key === metric)
-    if (!descriptor) throw { statusCode: 404, message: `Device '${deviceId}' does not report '${metric}'` }
-
-    const now = Math.floor(Date.now() / 1000)
-    const toSec = to ? Number(to) : now
-    const fromSec = from ? Number(from) : toSec - 86400
-    if (!Number.isFinite(fromSec) || !Number.isFinite(toSec) || fromSec >= toSec) {
-      throw { statusCode: 400, message: 'Invalid from/to range' }
-    }
-
-    const series = new DeviceSeries(join(OPENBRIDGE_HOME, 'metrics'), deviceId, metrics)
-    const points = Math.min(5000, Math.max(10, Number(maxPoints) || 720))
-    const result = series.query(metric, fromSec, toSec, points)
-
-    return {
-      deviceId,
-      metrics,
-      series: {
-        metric: descriptor,
-        resolution: result.tier.interval,
-        tier: result.tier.name,
-        from: fromSec,
-        to: toSec,
-        points: result.points,
-      },
-    }
+    return deviceMetrics(bridge, deviceId, {
+      metric: metric || undefined,
+      from: from ? Number(from) : undefined,
+      to: to ? Number(to) : undefined,
+      maxPoints: Number(maxPoints) || undefined,
+    })
   })
 
   app.get('/api/devices/:deviceId/history', async (req) => {
@@ -948,32 +906,15 @@ export async function createServer(
 
   // ─── Accessories (HAP / Homebridge) ───────────────────────────────────────
   app.get('/api/accessories', async () => {
-    return { accessories: hapAPI ? hapAPI.getAccessories() : [] }
+    return { accessories: listAccessories(bridge) }
   })
 
   // Write a characteristic value: triggers the platform's onSet handler
   app.post('/api/accessories/:uuid/characteristics', async (req) => {
-    if (!hapAPI) throw { statusCode: 503, message: 'HAP not available' }
     const { uuid } = req.params as { uuid: string }
     const { serviceUuid, charUuid, value } = req.body as { serviceUuid: string; charUuid: string; value: unknown }
-
-    const raw = hapAPI.getRawAccessories()
-    const acc = raw.find((a: any) => a.UUID === uuid)
-    if (!acc) throw { statusCode: 404, message: `Accessory '${uuid}' not found` }
-
-    const svc = acc.services?.find((s: any) => s.UUID === serviceUuid)
-    if (!svc) throw { statusCode: 404, message: `Service '${serviceUuid}' not found` }
-
-    const ch = svc.characteristics?.find((c: any) => c.UUID === charUuid)
-    if (!ch) throw { statusCode: 404, message: `Characteristic '${charUuid}' not found` }
-
-    try {
-      ch.setValue(value)
-    } catch (err) {
-      throw { statusCode: 500, message: `setValue failed: ${err}` }
-    }
-
-    log.debug(`Set ${acc.displayName} / ${svc.displayName} / ${ch.displayName} = ${value}`)
+    setCharacteristic(bridge, uuid, serviceUuid, charUuid, value)
+    log.debug(`Set ${uuid} / ${serviceUuid} / ${charUuid} = ${value}`)
     return { uuid, serviceUuid, charUuid, value }
   })
 
@@ -1650,7 +1591,7 @@ export async function createServer(
   // ─── Logs ─────────────────────────────────────────────────────────────────
   app.get('/api/logs', async (req) => {
     const query = req.query as { plugin?: string; limit?: string }
-    const entries = Logger.getEntries(query.plugin, query.limit ? parseInt(query.limit) : 200)
+    const entries = readLogs({ plugin: query.plugin, limit: query.limit ? parseInt(query.limit) : 200 })
     return { entries }
   })
 

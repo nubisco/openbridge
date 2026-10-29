@@ -97,6 +97,10 @@ export default defineConfig({
     proxy: {
       '/api': 'http://localhost:8582',
       '/auth': 'http://localhost:8582',
+      '/mcp': 'http://localhost:8582',
+      '/.well-known': 'http://localhost:8582',
+      // Not /oauth/consent: that is a page of this app, not a daemon route.
+      '^/oauth/(authorize|context|register|token)': 'http://localhost:8582',
       '/ws': { target: 'ws://localhost:8582', ws: true },
     },
   },

@@ -6,6 +6,12 @@ import { nodeVersionWarning } from './node-version.js'
 // start a daemon or publish a HAP bridge on the local network as a side effect.
 const argv = process.argv.slice(2)
 
+// Token management works on the state directory alone and must never start a daemon.
+if (argv[0] === 'token') {
+  const { runTokenCommand } = await import('./token-cli.js')
+  process.exit(runTokenCommand(argv.slice(1)))
+}
+
 if (argv.includes('--help') || argv.includes('-h')) {
   console.log(`openbridge ${OPENBRIDGE_VERSION}
 
@@ -14,6 +20,8 @@ dashboard, and publishes a HomeKit (HAP) bridge on your local network.
 
 Usage:
   openbridge [options]
+
+  openbridge token <create|list|revoke>   Manage tokens for the MCP endpoint
 
 Options:
   -p, --port <port>   HTTP API and dashboard port (default: 8582)

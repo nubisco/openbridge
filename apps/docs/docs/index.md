@@ -9,6 +9,11 @@ intro: 'Home automation for developers. Local-first, plugin-based and Homebridge
 - [Get started](/guide/getting-started): from zero to a running daemon paired with HomeKit.
 - [What is OpenBridge?](/guide/what-is-openbridge): what it is and what it does.
 - [Writing a plugin](/guide/creating-a-plugin): the TypeScript SDK and its lifecycle hooks.
+- [Ask Claude about your home](/guide/mcp): the Model Context Protocol endpoint.
+
+## Ask Claude about your home
+
+Your devices' readings and history over the Model Context Protocol. Ask how much energy the house used this week or when the gate last opened, with read-only or control access you choose. See [the MCP endpoint](/guide/mcp).
 
 ## Local-first
 

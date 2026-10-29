@@ -39,6 +39,7 @@ const developers = [
     text: 'Reference',
     items: [
       { text: 'HTTP API', link: '/guide/api-reference' },
+      { text: 'MCP endpoint', link: '/guide/mcp' },
       { text: 'Architecture', link: '/guide/architecture' },
     ],
   },
@@ -94,6 +95,7 @@ export default defineNubiscoDocs({
     '/guide/plugin-api': developers,
     '/guide/homekit-exposure': developers,
     '/guide/api-reference': developers,
+    '/guide/mcp': developers,
     '/guide/architecture': developers,
     '/': users,
   },

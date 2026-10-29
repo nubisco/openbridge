@@ -75,7 +75,12 @@ onMounted(async () => {
   await checkAuth()
   // Successful sign-in re-arms the login page's one-shot silent resume.
   sessionStorage.removeItem('openbridge_auto_resume_attempted')
-  router.replace('/')
+  // The OAuth consent screen sends people through sign-in and expects them
+  // back with its request intact. Only that screen may ask, so this can never
+  // become a redirect to somewhere a link chose.
+  const returnTo = sessionStorage.getItem('openbridge_return_to')
+  sessionStorage.removeItem('openbridge_return_to')
+  router.replace(returnTo?.startsWith('/oauth/consent?') ? returnTo : '/')
 })
 </script>
 

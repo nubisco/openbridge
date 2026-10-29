@@ -169,6 +169,17 @@ function getCookie(req: FastifyRequest, name: string): string | null {
   return match ? (match[1] ?? null) : null
 }
 
+/**
+ * The signed-in person behind a request, from the session cookie, or null.
+ * Always null when sign-in is off, because then there is nobody to be.
+ */
+export function readSession(config: TAuthConfig, req: FastifyRequest): { userId: string; email: string } | null {
+  if (!config.enabled || !config.issuer) return null
+  const cookie = getCookie(req, COOKIE_NAME)
+  const session = cookie ? verifySession(config.secret, cookie) : null
+  return session ? { userId: session.userId, email: session.email } : null
+}
+
 function isProductionLike(): boolean {
   return process.env.NODE_ENV === 'production'
 }
