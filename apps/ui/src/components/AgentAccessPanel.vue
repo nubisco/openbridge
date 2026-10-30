@@ -51,7 +51,8 @@
       </NbField>
       <NbMessage variant="helper">
         Every request needs a token, even when sign-in is off. Create one below and paste it into your client, or add
-        the endpoint as a connector and approve it in your browser.
+        the endpoint as a connector and approve it in your browser. claude.ai and the Claude app connect from the cloud,
+        so their connectors need this bridge on an https address reachable from the internet.
         <a href="https://docs.nubisco.io/openbridge/guide/mcp" target="_blank" rel="noopener">How to connect</a>
       </NbMessage>
 

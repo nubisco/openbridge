@@ -73,17 +73,37 @@ on the host already owns the bridge, so the command asks for nothing else.
 ## Connect without a token
 
 Clients that sign in instead of taking a pasted header (Claude Code's own
-OAuth flow, the claude.ai custom connector, ChatGPT) can add
-`http://<your-bridge>:8582/mcp` and nothing else. OpenBridge is its own
+OAuth flow, the claude.ai custom connector, ChatGPT) can add the endpoint and
+nothing else. OpenBridge is its own
 authorization server: the client registers itself, opens a consent screen on
 your bridge, and you approve it there, choosing read only or read and control.
 Access tokens last an hour and refresh themselves. Approved applications are
 listed under **Settings → AI agents → Connected applications**, and
 disconnecting one cuts all of its sign-ins at once.
 
-claude.ai and ChatGPT connect from the cloud, so they can only reach a bridge
-that is reachable from the internet. On a home network, use Claude Code or
-Claude Desktop.
+In Claude Code, add the endpoint, then run `/mcp`, pick `openbridge` and
+choose to authenticate. Your browser opens the consent screen:
+
+```sh
+claude mcp add --transport http openbridge http://192.168.1.10:8582/mcp
+```
+
+### claude.ai and the Claude app
+
+Custom connectors in claude.ai, and in the Claude desktop and mobile apps that
+share them, connect from Anthropic's cloud, not from your computer. They can
+only reach a bridge on a public `https://` address, so a bridge that is only on
+your home network needs a tunnel or a reverse proxy first (see below). Then, in
+**Settings → Connectors → Add custom connector**, give it
+`https://<public-address>/mcp` and leave the OAuth client fields empty.
+
+A connector that cannot reach the bridge, or that is handed `http://`
+addresses, fails with "Couldn't register with OpenBridge's sign-in service".
+Check that `https://<public-address>/.well-known/oauth-authorization-server`
+opens from outside your network and lists only `https://` addresses.
+
+The connector list shows the icon of the address's domain, not OpenBridge's
+logo, and nothing on the bridge changes that.
 
 A tunnel (Cloudflare Tunnel, for example) or a reverse proxy that ends HTTPS in
 front of the bridge works as is: the bridge reads `X-Forwarded-Proto` and hands
@@ -91,6 +111,12 @@ out `https://` sign-in addresses on the public hostname, while clients on your
 network keep the address they used. Set `OPENBRIDGE_PUBLIC_URL` (for example
 `https://bridge.example.com`) only when your proxy does not send that header or
 rewrites the host, because it then applies to every client.
+
+Putting the bridge on the internet puts the whole dashboard there, not only
+`/mcp`, and that includes the shell pane. **Turn dashboard sign-in on first.**
+If your tunnel can route by path, publishing only `/mcp`, `/oauth/`,
+`/.well-known/`, `/auth/` and the dashboard's static files is narrower still:
+that is all a connector and the consent screen use.
 
 ## Who can connect
 
