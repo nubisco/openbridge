@@ -91,7 +91,7 @@ export interface UpdateStatus {
   updateCommand: string
   /** Why self-update is unavailable, when it is. */
   updateBlockedBy?: string | null
-  installMethod: 'docker' | 'npm' | 'source'
+  installMethod: 'docker' | 'homebrew' | 'npm' | 'source'
   /** Set when the deployment holds a fixed version, which disables self-update. */
   pinnedTo: string | null
   releaseUrl?: string

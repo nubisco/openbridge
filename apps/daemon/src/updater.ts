@@ -29,7 +29,7 @@ export const PACKAGE_ROOT = resolve(__dirname, '..')
  * something to run the new code afterwards is, and that is what separates
  * these three.
  */
-export type InstallMethod = 'docker' | 'npm' | 'source'
+export type InstallMethod = 'docker' | 'homebrew' | 'npm' | 'source'
 
 export interface InstallInfo {
   method: InstallMethod
@@ -152,6 +152,11 @@ function pinnedVersion(): string | null {
   return /^\d+\.\d+\.\d+/.test(spec) ? spec : null
 }
 
+/** Whether a package root sits inside a Homebrew Cellar, on macOS or Linux. */
+export function isHomebrewPath(root: string): boolean {
+  return root.includes(`${sep}Cellar${sep}openbridge${sep}`)
+}
+
 export function detectInstall(): InstallInfo {
   const pin = pinnedVersion()
 
@@ -167,6 +172,20 @@ export function detectInstall(): InstallInfo {
       pinnedTo: pin,
       restart: 'supervisor',
       ...(pin ? { blockedBy: `pinned to ${pin}` } : {}),
+    }
+  }
+
+  // Homebrew owns its Cellar: an npm install over it would leave brew
+  // believing in a version that is no longer on disk, and the next
+  // `brew upgrade` would put the old files back. brew updates it, or nothing.
+  if (process.env.OPENBRIDGE_INSTALL === 'homebrew' || isHomebrewPath(PACKAGE_ROOT)) {
+    return {
+      method: 'homebrew',
+      canSelfUpdate: false,
+      command: 'brew upgrade openbridge && brew services restart openbridge',
+      pinnedTo: null,
+      restart: null,
+      blockedBy: 'installed with Homebrew, which updates it',
     }
   }
 

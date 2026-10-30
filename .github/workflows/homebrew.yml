@@ -1,0 +1,89 @@
+name: Update Homebrew
+
+# Writes the formula for `brew install nubisco/tap/openbridge` into the
+# nubisco/homebrew-tap repository, from the latest release on npm.
+#
+# Not chained to Publish to npm on purpose. Homebrew installs npm packages with
+# --min-release-age=1, refusing anything published in the last day, so a
+# formula for a release made an hour ago fails for everyone who installs it
+# until the day is up. A daily run picks each release up once it is old enough,
+# and a release that is followed by a fix the same day never reaches Homebrew.
+#
+# The formula comes from scripts/homebrew-formula.mjs. The push uses
+# HOMEBREW_TAP_TOKEN, a fine-grained token that can write the tap's contents and
+# nothing else.
+on:
+  schedule:
+    - cron: '30 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: homebrew-tap
+  cancel-in-progress: false
+
+jobs:
+  formula:
+    name: Update the formula
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: master
+
+      - uses: actions/checkout@v7
+        with:
+          repository: nubisco/homebrew-tap
+          path: tap
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Pick the release
+        id: pick
+        run: |
+          set -euo pipefail
+          meta=$(curl -fsS https://registry.npmjs.org/@nubisco/openbridge)
+          version=$(echo "$meta" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s)["dist-tags"].latest))')
+          published=$(echo "$meta" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).time[process.argv[1]]))' "$version")
+          echo "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "not a release version: $version"; exit 1; }
+          age=$(( $(date +%s) - $(date -d "$published" +%s) ))
+          current=$(sed -n 's/^  url ".*openbridge-\([0-9.]*\)\.tgz"$/\1/p' tap/Formula/openbridge.rb 2>/dev/null || true)
+          echo "latest $version, published $published, tap has ${current:-nothing}"
+          if [ "$current" = "$version" ]; then
+            echo "update=false" >> "$GITHUB_OUTPUT"
+          elif [ "$age" -lt 90000 ]; then
+            # A day plus an hour, so the formula never lands just inside Homebrew's cutoff.
+            echo "$version is under a day old. A later run will take it."
+            echo "update=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "update=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Write the formula
+        if: steps.pick.outputs.update == 'true'
+        env:
+          VERSION: ${{ steps.pick.outputs.version }}
+        run: |
+          set -euo pipefail
+          sha=$(curl -fsSL "https://registry.npmjs.org/@nubisco/openbridge/-/openbridge-$VERSION.tgz" | sha256sum | cut -d' ' -f1)
+          node scripts/homebrew-formula.mjs "$VERSION" "$sha" > tap/Formula/openbridge.rb
+          cat tap/Formula/openbridge.rb
+
+      - name: Push to the tap
+        if: steps.pick.outputs.update == 'true'
+        env:
+          VERSION: ${{ steps.pick.outputs.version }}
+        working-directory: tap
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add Formula/openbridge.rb
+          git commit -m "openbridge $VERSION"
+          git push origin HEAD

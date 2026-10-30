@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { detectInstall, detectRestartStrategy, globalPrefix, PACKAGE_ROOT } from '../updater.js'
+import { detectInstall, detectRestartStrategy, globalPrefix, isHomebrewPath, PACKAGE_ROOT } from '../updater.js'
 
 const saved = { ...process.env }
 
@@ -63,6 +63,26 @@ describe('detectInstall', () => {
   it('allows it for an unpinned container', () => {
     process.env.OPENBRIDGE_INSTALL = 'docker'
     expect(detectInstall().canSelfUpdate).toBe(true)
+  })
+
+  it('leaves a Homebrew install to brew, and says how to update it', () => {
+    // npm over the Cellar would leave brew believing in a version that is no
+    // longer on disk, and the next brew upgrade would undo it.
+    process.env.OPENBRIDGE_INSTALL = 'homebrew'
+    const info = detectInstall()
+    expect(info.method).toBe('homebrew')
+    expect(info.canSelfUpdate).toBe(false)
+    expect(info.command).toMatch(/^brew upgrade openbridge/)
+  })
+
+  it('recognises the Cellar on macOS and on Linux', () => {
+    expect(isHomebrewPath('/opt/homebrew/Cellar/openbridge/1.5.2/libexec/lib/node_modules/@nubisco/openbridge')).toBe(
+      true,
+    )
+    expect(
+      isHomebrewPath('/home/linuxbrew/.linuxbrew/Cellar/openbridge/1.5.2/libexec/lib/node_modules/@nubisco/openbridge'),
+    ).toBe(true)
+    expect(isHomebrewPath('/usr/local/lib/node_modules/@nubisco/openbridge')).toBe(false)
   })
 })
 

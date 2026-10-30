@@ -1,18 +1,19 @@
 ---
 layout: nubisco
 title: Installation
-intro: 'There are three ways to install OpenBridge. Pick one; you do not need the others.'
+intro: 'There are four ways to install OpenBridge. Pick one. You do not need the others.'
 ---
 
 | Method                      | Best for                                                 | Needs Node.js | HomeKit works on |
 | --------------------------- | -------------------------------------------------------- | ------------- | ---------------- |
 | [Docker](#docker)           | Servers, NAS boxes, always-on machines                   | No            | Linux hosts only |
+| [Homebrew](#homebrew)       | Macs, and Linux machines that already use Homebrew       | No            | Linux, macOS     |
 | [npm](#npm)                 | Desktops, laptops, Raspberry Pi, quick trials            | Yes, 22.23.4+ | Linux, macOS     |
 | [From source](#from-source) | Contributing to OpenBridge, running an unreleased branch | Yes, 22.23.4+ | Linux, macOS     |
 
-If you are unsure: use **Docker** on a machine that is always on, and **npm** everywhere else.
+If you are unsure: use **Docker** on a machine that is always on, **Homebrew** on a Mac, and **npm** everywhere else.
 
-All three install the same npm package. Docker is the only one that can update itself from the dashboard, because its restart policy is what starts the daemon again afterwards; the others tell you the command to run instead.
+All four install the same npm package. Docker is the only one that can update itself from the dashboard, because its restart policy is what starts the daemon again afterwards; the others tell you the command to run instead.
 
 ## System requirements
 
@@ -162,6 +163,25 @@ OPENBRIDGE_VERSION_SPEC: 0.30.0
 ```
 
 then `docker compose up -d --force-recreate`. While a pin is set the in-app updater is disabled, and Settings shows what to edit instead: a restart would reinstall the pin and silently undo any update applied from the UI.
+
+## Homebrew
+
+```bash
+brew install nubisco/tap/openbridge
+brew services start openbridge
+```
+
+Open **http://localhost:8582**. `brew services` starts OpenBridge now and again at every login, and restarts it if it stops. Homebrew brings its own Node.js, so you do not need to install one. Settings and pairing data live in `~/.openbridge`, as with every other method.
+
+```bash
+brew upgrade openbridge && brew services restart openbridge   # upgrade
+brew services stop openbridge && brew uninstall openbridge    # remove the program
+rm -rf ~/.openbridge                                          # remove config and pairing data too
+```
+
+Homebrew owns the files it installs, so the dashboard does not update a Homebrew install itself. Settings shows the `brew upgrade` command instead. Logs are in `$(brew --prefix)/var/log/openbridge.log`.
+
+Homebrew holds back npm packages published in the last day, as a guard against a compromised release. A new OpenBridge version therefore reaches Homebrew a day after it reaches npm.
 
 ## npm
 
