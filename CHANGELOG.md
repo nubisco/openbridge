@@ -1,3 +1,10 @@
+## [1.5.2](https://github.com/nubisco/openbridge/compare/v1.5.1...v1.5.2) (2026-10-30)
+
+
+### Bug Fixes
+
+* **mcp:** hand out https sign-in addresses behind a tunnel ([4255a1f](https://github.com/nubisco/openbridge/commit/4255a1fe8876acab2bb7b4d44159bed75ad4854c))
+
 ## [1.5.1](https://github.com/nubisco/openbridge/compare/v1.5.0...v1.5.1) (2026-10-29)
 
 
