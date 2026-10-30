@@ -321,6 +321,22 @@ describe('over HTTP', () => {
     )
   })
 
+  it('advertises https when a tunnel ended TLS in front of it', async () => {
+    await build(false)
+    const headers = { host: 'openbridge.example.com', 'x-forwarded-proto': 'https' }
+    const meta = await app.inject({ url: '/.well-known/oauth-authorization-server', headers })
+    expect(meta.json().registration_endpoint).toBe('https://openbridge.example.com/oauth/register')
+    const res = await app.inject({ method: 'POST', url: '/mcp', headers, payload: {} })
+    expect(res.headers['www-authenticate']).toContain('"https://openbridge.example.com/.well-known/')
+
+    // Anything but https is ignored, so the header can never downgrade.
+    const odd = await app.inject({
+      url: '/.well-known/oauth-authorization-server',
+      headers: { host: 'bridge.local:8582', 'x-forwarded-proto': 'gopher' },
+    })
+    expect(odd.json().issuer).toBe('http://bridge.local:8582')
+  })
+
   it('serves tools to a personal token', async () => {
     await build(false)
     const { token } = store.createToken('t', 'read', { id: 'local', email: null })

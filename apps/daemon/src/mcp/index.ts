@@ -143,11 +143,19 @@ export function isMcpEnabled(value: string | undefined): boolean {
  * This bridge as clients reach it. OPENBRIDGE_PUBLIC_URL when it sits behind a
  * proxy or a tunnel, otherwise the address the request came in on, which on a
  * home network is the one the client already used.
+ *
+ * A tunnel such as cloudflared ends TLS before the bridge and talks to it over
+ * plain http, keeping the public Host but not the scheme. Without honouring
+ * X-Forwarded-Proto every URL in the OAuth metadata would read http://, and
+ * connectors refuse to register against that. Only https is taken from the
+ * header: a client that forges it misleads nobody but itself.
  */
 export function publicOrigin(req: FastifyRequest): string {
   const configured = process.env.OPENBRIDGE_PUBLIC_URL?.trim().replace(/\/+$/, '')
   if (configured) return configured
-  return `${req.protocol}://${req.host}`
+  const forwarded = req.headers['x-forwarded-proto']
+  const proto = (Array.isArray(forwarded) ? forwarded[0] : forwarded)?.split(',')[0]?.trim().toLowerCase()
+  return `${proto === 'https' ? 'https' : req.protocol}://${req.host}`
 }
 
 export interface McpDeps {

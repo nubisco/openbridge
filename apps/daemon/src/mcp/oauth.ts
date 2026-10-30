@@ -199,7 +199,11 @@ export async function registerOauthRoutes(app: FastifyInstance, deps: OauthDeps)
 
     // ── Registration ──
     scope.post('/oauth/register', async (req, reply) => {
-      if (!registrationAllowed(req.ip)) {
+      // Behind a Cloudflare tunnel every request arrives from the tunnel's
+      // host, so the caller is the one Cloudflare names, or the whole
+      // internet would share one allowance.
+      const caller = req.headers['cf-connecting-ip']
+      if (!registrationAllowed(typeof caller === 'string' && caller ? caller : req.ip)) {
         return reply.status(429).send({ error: 'slow_down', error_description: 'Too many registrations. Try later.' })
       }
       const body = req.body

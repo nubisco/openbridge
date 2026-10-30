@@ -83,9 +83,14 @@ disconnecting one cuts all of its sign-ins at once.
 
 claude.ai and ChatGPT connect from the cloud, so they can only reach a bridge
 that is reachable from the internet. On a home network, use Claude Code or
-Claude Desktop. If the bridge sits behind a reverse proxy or a tunnel, set
-`OPENBRIDGE_PUBLIC_URL` to the address clients use (for example
-`https://bridge.example.com`), so the sign-in addresses it hands out are right.
+Claude Desktop.
+
+A tunnel (Cloudflare Tunnel, for example) or a reverse proxy that ends HTTPS in
+front of the bridge works as is: the bridge reads `X-Forwarded-Proto` and hands
+out `https://` sign-in addresses on the public hostname, while clients on your
+network keep the address they used. Set `OPENBRIDGE_PUBLIC_URL` (for example
+`https://bridge.example.com`) only when your proxy does not send that header or
+rewrites the host, because it then applies to every client.
 
 ## Who can connect
 
