@@ -1,3 +1,10 @@
+# [1.6.0](https://github.com/nubisco/openbridge/compare/v1.5.2...v1.6.0) (2026-10-30)
+
+
+### Features
+
+* **install:** install with Homebrew from nubisco/tap ([f927aa2](https://github.com/nubisco/openbridge/commit/f927aa23349b94330d089c39b3500de400428dba))
+
 ## [1.5.2](https://github.com/nubisco/openbridge/compare/v1.5.1...v1.5.2) (2026-10-30)
 
 
