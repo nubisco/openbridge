@@ -38,17 +38,15 @@
 
       <template v-else>
         <div class="chart-toolbar">
-          <div class="range-tabs">
-            <button
-              v-for="range in RANGES"
-              :key="range.key"
-              class="range-tab"
-              :class="{ active: range.key === selectedRange }"
-              @click="selectRange(range.key)"
-            >
-              {{ range.label }}
-            </button>
-          </div>
+          <NbTabs
+            class="range-tabs"
+            :items="rangeTabs"
+            :model-value="selectedRange"
+            variant="contained"
+            size="sm"
+            aria-label="History range"
+            @update:model-value="selectRange($event as RangeKey)"
+          />
           <span v-if="resolutionLabel" class="resolution-note">{{ resolutionLabel }}</span>
         </div>
 
@@ -79,7 +77,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
-import type { IBreadcrumbItem } from '@nubisco/ui'
+import type { IBreadcrumbItem, ITabItem } from '@nubisco/ui'
 import { api, type DeviceDescriptor, type MetricDescriptor } from '@/api'
 
 type NativeDevice = DeviceDescriptor & { telemetry: Record<string, unknown> }
@@ -110,6 +108,7 @@ const RANGES = [
   { key: '1y', label: '1 year', seconds: 365 * 86400 },
 ] as const
 type RangeKey = (typeof RANGES)[number]['key']
+const rangeTabs: ITabItem[] = RANGES.map((r) => ({ id: r.key, label: r.label }))
 const selectedRange = ref<RangeKey>('24h')
 
 // The device list is the parent, so the trail is the way back to it.
@@ -318,25 +317,12 @@ watch(deviceId, async () => {
   flex-wrap: wrap;
 }
 
+// NbTabs fills its row by default, which pushed the resolution note onto a
+// line of its own. Sized to its tabs, the note stays beside them.
 .range-tabs {
-  display: inline-flex;
-  gap: 0.25rem;
-}
-
-.range-tab {
-  border: 1px solid transparent;
-  background: transparent;
-  border-radius: 7px;
-  padding: 0.3rem 0.65rem;
-  font-size: 0.82rem;
-  cursor: pointer;
-  color: var(--nb-color-text-muted, var(--nb-c-text-muted));
-}
-
-.range-tab.active {
-  border-color: var(--nb-color-border, var(--nb-c-border));
-  color: var(--nb-color-text, var(--nb-c-text));
-  font-weight: 600;
+  width: auto;
+  min-width: 0;
+  flex: 0 1 auto;
 }
 
 .resolution-note {
