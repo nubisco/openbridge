@@ -77,6 +77,7 @@
             @update:model-value="emit('updateArray', path, idx, $event)"
           />
           <NbButton
+            v-nb-tooltip="{ body: `Remove ${label()} ${idx + 1}` }"
             variant="ghost"
             size="sm"
             icon="trash"
@@ -245,6 +246,20 @@ function arrayItems(): unknown[] {
 
   &--array {
     align-items: start;
+  }
+
+  // The inspector sheet is the full width of a phone, and a 140px label
+  // column left the control a sliver of it. The label sits above instead.
+  // A switch keeps its row, it is narrow enough to sit beside its label.
+  @include variables.phone {
+    &:not(.pcf-row--switch) {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0.25rem;
+    }
+
+    &--switch {
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
   }
 }
 

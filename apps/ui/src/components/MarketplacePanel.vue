@@ -38,7 +38,7 @@
       Click it in your plugins list to configure it.
     </NbBanner>
 
-    <NbMessage v-if="error" variant="error">{{ error }}</NbMessage>
+    <NbMessage v-if="error" variant="error" class="mp-error">{{ error }}</NbMessage>
 
     <!-- Local plugins (from configured sources) -->
     <div v-if="localPlugins.length > 0" class="mp-local-section">
@@ -53,14 +53,8 @@
         <div class="mp-info">
           <div class="mp-name-row">
             <span class="mp-name">{{ local.name }}</span>
-            <span class="badge badge--native">
-              <NbIcon name="diamond" :size="9" />
-              Native
-            </span>
-            <span class="badge badge--local">
-              <NbIcon name="folder" :size="9" />
-              Local
-            </span>
+            <NbBadge variant="primary" size="sm" icon="diamond">Native</NbBadge>
+            <NbBadge variant="blue" size="sm" icon="folder">Local</NbBadge>
             <span class="mp-ver">v{{ local.version }}</span>
           </div>
           <p v-if="local.description" class="mp-desc">{{ local.description }}</p>
@@ -88,8 +82,7 @@
     <!-- Results -->
     <div class="mp-list">
       <div v-if="loading && results.length === 0" class="mp-loading">
-        <NbIcon name="spinner" :size="22" />
-        <span>Searching npm…</span>
+        <NbInlineLoading status="active" label="Searching npm…" />
       </div>
 
       <NbPanel v-for="pkg in results" :key="pkg.name" class="mp-row" :class="{ 'mp-row--ob': isOpenBridge(pkg) }">
@@ -200,12 +193,12 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useToast } from '@nubisco/ui'
 import { useDaemonStore } from '@/stores/daemon'
 import { api, type NpmPackage, type LocalPlugin } from '@/api'
-import { useNotifications } from '@/composables/useNotifications'
 
 const daemon = useDaemonStore()
-const notify = useNotifications()
+const toast = useToast()
 const uninstalling = ref<string | null>(null)
 
 // The public marketplace. Kept as a constant rather than read from the
@@ -310,10 +303,10 @@ async function install(pkg: NpmPackage) {
     justInstalled.value = { name: pkg.name, mainFile: res.mainFile }
     await api.pluginsRefresh()
     await daemon.fetchPlugins()
-    notify.success(`Installed ${pkg.name}`)
+    toast.success(`Installed ${pkg.name}`)
   } catch (e) {
     error.value = `Failed to install ${pkg.name}: ${e}`
-    notify.error(`Failed to install ${pkg.name}`)
+    toast.error(`Failed to install ${pkg.name}`)
   } finally {
     installing.value = null
   }
@@ -327,10 +320,10 @@ async function uninstall(name: string) {
     await api.marketplace.uninstall(name)
     installed.value.delete(name)
     await daemon.fetchPlugins()
-    notify.success(`Removed ${name}`)
+    toast.success(`Removed ${name}`)
   } catch (e) {
     error.value = `Failed to uninstall ${name}: ${e}`
-    notify.error(`Failed to remove ${name}`)
+    toast.error(`Failed to remove ${name}`)
   } finally {
     uninstalling.value = null
   }
@@ -346,10 +339,10 @@ async function activateLocal(local: LocalPlugin) {
     installed.value.set(local.name, `${local.path}/dist/index.js`)
     justInstalled.value = { name: local.name, mainFile: `${local.path}/dist/index.js` }
     await daemon.fetchPlugins()
-    notify.success(`Activated ${local.name}`)
+    toast.success(`Activated ${local.name}`)
   } catch (e) {
     error.value = `Failed to activate ${local.name}: ${e}`
-    notify.error(`Failed to activate ${local.name}`)
+    toast.error(`Failed to activate ${local.name}`)
   } finally {
     installing.value = null
   }
@@ -440,6 +433,18 @@ onMounted(async () => {
   flex-shrink: 0;
 }
 
+// On a phone the sheet's dismiss button sits over the top right corner, where
+// the Marketplace link is, so the header keeps clear of it. The error line
+// takes the panel gutter there too.
+@include variables.phone {
+  .mp-header {
+    padding-right: calc(1.1rem + var(--nb-shell-inspector-dismiss-inset, 0px));
+  }
+  .mp-error {
+    margin: 0.5rem 1.1rem 0;
+  }
+}
+
 .mp-title {
   font-size: 0.9rem;
   font-weight: 700;
@@ -471,12 +476,8 @@ onMounted(async () => {
 
 .mp-loading {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
+  justify-content: center;
   padding: 3rem 1rem;
-  color: var(--nb-c-text-subtle);
-  font-size: 0.82rem;
 }
 
 // ─── Result row ───────────────────────────────────────────────────────────────
@@ -543,30 +544,6 @@ onMounted(async () => {
 .mp-ver {
   font-size: 0.68rem;
   color: var(--nb-c-text-subtle);
-}
-
-.badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.2rem;
-  font-size: 0.62rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 0.1rem 0.4rem;
-  border-radius: 20px;
-  flex-shrink: 0;
-
-  &--native {
-    background: linear-gradient(135deg, var(--nb-c-primary), var(--nb-c-primary));
-    color: var(--nb-c-primary-a11y);
-    box-shadow: 0 1px 4px color-mix(in srgb, var(--nb-c-primary) 40%, transparent);
-  }
-  &--hb {
-    background: color-mix(in srgb, var(--nb-c-warning) 30%, var(--nb-c-surface));
-    color: var(--nb-c-warning);
-    border: 1px solid var(--nb-c-warning);
-  }
 }
 
 .mp-desc {
@@ -660,22 +637,6 @@ onMounted(async () => {
       var(--nb-c-layer-1) 100%
     );
   }
-}
-
-.badge--local {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.2rem;
-  font-size: 0.62rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 0.1rem 0.4rem;
-  border-radius: 20px;
-  flex-shrink: 0;
-  background: color-mix(in srgb, var(--nb-c-primary) 12%, var(--nb-c-surface));
-  color: var(--nb-c-primary-hover);
-  border: 1px solid var(--nb-c-primary);
 }
 
 .mp-load-more-wrap {

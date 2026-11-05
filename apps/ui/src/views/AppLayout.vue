@@ -4,6 +4,7 @@
        flyout label collapsed. On a phone it is the drawer, and the shell
        renders no header toggle there. -->
   <NbShell
+    ref="shell"
     :inspector-visible="inspector.visible"
     :main-padding="!layout.fullBleed"
     :sidebar-variant="nav.variant.value"
@@ -40,9 +41,8 @@
 
     <!-- ═══ Bottom actions ═══ -->
     <template #sidebar-bottom>
-      <!-- The fleet's bottom order: Documentation, Sponsor, Settings, the
-           person, then this product's own status. Openbridge has no
-           notifications yet, so that row is absent rather than empty.
+      <!-- The fleet's bottom order: Documentation, Sponsor, Notifications,
+           Settings, the person, then this product's own status.
            External links open a new tab from here because the menu item has no
            `target`, and stepping out to read must not lose the page open here. -->
       <NbSidebarMenu>
@@ -56,6 +56,9 @@
           :href="SPONSOR_URL"
           @click.prevent="openExternal(SPONSOR_URL)"
         />
+      </NbSidebarMenu>
+      <NotificationBell />
+      <NbSidebarMenu>
         <!-- Instance configuration. A self-hosted instance has no tenant above
              it, so this is the tenant-level Settings and sits in its slot. -->
         <NbSidebarMenuItem icon="gear" label="Settings" to="/settings" :active="route.name === 'settings'" />
@@ -153,7 +156,8 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, watch, ref } from 'vue'
-import { useSidebarVariant } from '@nubisco/ui'
+import { usePhoneLayout, useSidebarVariant } from '@nubisco/ui'
+import type { NbShell } from '@nubisco/ui'
 import { useRoute } from 'vue-router'
 import { useDaemonStore } from '@/stores/daemon'
 import { useInspectorStore } from '@/stores/inspector'
@@ -163,6 +167,7 @@ import PluginInspector from '@/components/PluginInspector.vue'
 import MarketplacePanel from '@/components/MarketplacePanel.vue'
 import DeviceInspector from '@/components/DeviceInspector.vue'
 import LiveLogsPanel from '@/components/LiveLogsPanel.vue'
+import NotificationBell from '@/components/NotificationBell.vue'
 
 const route = useRoute()
 const daemon = useDaemonStore()
@@ -173,6 +178,18 @@ const auth = useAuth()
 // Collapsed or expanded is the person's choice, remembered per browser, never
 // derived from the route.
 const nav = useSidebarVariant({ storageKey: 'openbridge.sidebar' })
+
+// A drawer that stays open after the page changed covers the page you went
+// to. The shell closes it when a link inside it is used. This catches the
+// rest, such as Back. Only a phone has the drawer, so the desktop is untouched.
+const shell = ref<InstanceType<typeof NbShell> | null>(null)
+const { phone } = usePhoneLayout()
+watch(
+  () => route.fullPath,
+  () => {
+    if (phone.value) shell.value?.setSidebarOpen(false)
+  },
+)
 
 const daemonLabel = computed(() => (daemon.connected ? 'Daemon connected' : 'Daemon offline'))
 
@@ -293,5 +310,11 @@ onUnmounted(() => daemon.disconnectLiveLogs())
   display: flex;
   align-items: center;
   gap: 0.5rem;
+
+  // On a phone the left slot (page path) must be allowed to shrink, or at
+  // 360px it runs under the page actions on the right.
+  @include variables.phone {
+    min-width: 0;
+  }
 }
 </style>

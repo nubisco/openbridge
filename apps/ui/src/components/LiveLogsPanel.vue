@@ -7,7 +7,14 @@
              the header band instead of overflowing it. -->
         <NbSelect v-model="logFilter" multiple :options="pluginFilterOptions" placeholder="All plugins" size="xs" />
       </div>
-      <NbButton size="xs" variant="ghost" icon="trash" title="Clear" @click="clearLogs" />
+      <NbButton
+        v-nb-tooltip="{ body: 'Clear logs' }"
+        size="xs"
+        variant="ghost"
+        icon="trash"
+        aria-label="Clear logs"
+        @click="clearLogs"
+      />
     </template>
 
     <div ref="logsEl" class="log-list">
@@ -79,6 +86,14 @@ watch(
 <style lang="scss" scoped>
 .logs-filter {
   width: 220px;
+
+  // The panel header also holds the title and three size controls, so on a
+  // phone the filter takes what is left instead of pushing them off.
+  @include variables.phone {
+    width: auto;
+    flex: 1 1 0;
+    min-width: 0;
+  }
 }
 
 // No background of its own: the NbShellPanel surface shows through, so the

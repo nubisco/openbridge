@@ -1,38 +1,48 @@
 <template>
   <div class="plugins-view">
     <Teleport defer to="#ob-topbar-right">
-      <NbTextInput v-model="search" placeholder="Search plugins..." size="sm" style="width: 200px" />
-      <NbButton
-        variant="ghost"
-        size="sm"
-        icon="arrow-clockwise"
-        title="Refresh metadata"
-        :loading="refreshingMetadata"
-        :disabled="refreshingMetadata"
-        @click="refreshPluginMetadata(true)"
-      />
-      <NbButton
-        variant="ghost"
-        size="sm"
-        :icon="view === 'cards' ? 'list' : 'squares-four'"
-        :title="view === 'cards' ? 'Show as table' : 'Show as cards'"
-        @click="toggleView"
-      />
-      <NbButton variant="primary" size="sm" icon="magnifying-glass" @click="inspector.openMarketplace()">
-        Browse plugins
-      </NbButton>
+      <!-- A phone topbar has room for the title and two icons, so the search
+           moves into the page and Refresh and the view toggle fold into the
+           group's menu. Desktop renders the same controls as before. -->
+      <template v-if="!phone">
+        <NbTextInput v-model="search" placeholder="Search plugins..." size="sm" style="width: 200px" />
+        <NbButton
+          v-nb-tooltip="{ body: 'Refresh metadata' }"
+          variant="ghost"
+          size="sm"
+          icon="arrow-clockwise"
+          aria-label="Refresh metadata"
+          :loading="refreshingMetadata"
+          :disabled="refreshingMetadata"
+          @click="refreshPluginMetadata(true)"
+        />
+        <NbButton
+          v-nb-tooltip="{ body: viewToggleLabel }"
+          variant="ghost"
+          size="sm"
+          :icon="view === 'cards' ? 'list' : 'squares-four'"
+          :aria-label="viewToggleLabel"
+          @click="toggleView"
+        />
+      </template>
+      <NbActionGroup :items="topbarItems" overflow="phone" />
     </Teleport>
 
-    <div v-if="rows.length === 0" class="empty-state">
-      <NbIcon name="puzzle-piece" :size="40" />
-      <p v-if="search">No plugins matching "{{ search }}"</p>
-      <template v-else>
-        <p>No plugins loaded yet.</p>
+    <NbTextInput v-if="phone" v-model="search" placeholder="Search plugins..." size="sm" />
+
+    <NbEmptyState
+      v-if="rows.length === 0"
+      :kind="search ? 'no-results' : 'empty'"
+      :icon="search ? undefined : iconPuzzlePiece"
+      :title="search ? `No plugins matching &quot;${search}&quot;` : 'No plugins loaded yet'"
+      bordered
+    >
+      <template v-if="!search" #actions>
         <NbButton variant="primary" size="sm" icon="magnifying-glass" @click="inspector.openMarketplace()">
           Browse &amp; install plugins
         </NbButton>
       </template>
-    </div>
+    </NbEmptyState>
 
     <!-- self: a click on the empty area around the cards dismisses the
          inspector, which is why there is no close button on it. -->
@@ -44,18 +54,24 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { useToast, usePhoneLayout, type IActionGroupItem } from '@nubisco/ui'
+import * as iconArrowClockwise from '@nubisco/ui/icons/arrow-clockwise'
+import * as iconList from '@nubisco/ui/icons/list'
+import * as iconMagnifyingGlass from '@nubisco/ui/icons/magnifying-glass'
+import * as iconPuzzlePiece from '@nubisco/ui/icons/puzzle-piece'
+import * as iconSquaresFour from '@nubisco/ui/icons/squares-four'
 import { useDaemonStore } from '@/stores/daemon'
 import { useInspectorStore } from '@/stores/inspector'
 import { useLayoutStore } from '@/stores/layout'
 import { api, type NpmPackage } from '@/api'
-import { useNotifications } from '@/composables/useNotifications'
 import PluginList, { type PluginRow } from '@/components/PluginList.vue'
 import type { PluginInstance } from '@/api'
 
 const daemon = useDaemonStore()
 const inspector = useInspectorStore()
 const layout = useLayoutStore()
-const notify = useNotifications()
+const toast = useToast()
+const { phone } = usePhoneLayout()
 const search = ref('')
 const enriched = ref(new Map<string, NpmPackage>())
 const loadingEnriched = ref(new Set<string>())
@@ -70,6 +86,39 @@ function toggleView() {
   view.value = view.value === 'cards' ? 'table' : 'cards'
   localStorage.setItem(VIEW_KEY, view.value)
 }
+
+const viewToggleLabel = computed(() => (view.value === 'cards' ? 'Show as table' : 'Show as cards'))
+
+// Desktop shows Refresh and the view toggle as icon buttons beside the search,
+// so the group holds only Browse there. On a phone Browse stays as an icon and
+// the other two live in the group's menu.
+const topbarItems = computed<IActionGroupItem[]>(() => {
+  const browse: IActionGroupItem = {
+    id: 'browse',
+    label: 'Browse plugins',
+    icon: iconMagnifyingGlass,
+    variant: 'primary',
+    priority: 'primary',
+    onSelect: () => inspector.openMarketplace(),
+  }
+  if (!phone.value) return [browse]
+  return [
+    browse,
+    {
+      id: 'refresh',
+      label: 'Refresh metadata',
+      icon: iconArrowClockwise,
+      loading: refreshingMetadata.value,
+      onSelect: () => void refreshPluginMetadata(true),
+    },
+    {
+      id: 'view',
+      label: viewToggleLabel.value,
+      icon: view.value === 'cards' ? iconList : iconSquaresFour,
+      onSelect: toggleView,
+    },
+  ]
+})
 
 const selectedId = computed(() =>
   inspector.visible && inspector.mode === 'plugin' ? (inspector.selectedPlugin?.id ?? null) : null,
@@ -234,9 +283,9 @@ async function refreshPluginMetadata(force = false) {
       }
       await fetchEnrichedForPlugin(plugin, force)
     }
-    if (force) notify.success('Plugin metadata refreshed')
+    if (force) toast.success('Plugin metadata refreshed')
   } catch {
-    notify.error('Failed to refresh plugin metadata')
+    toast.error('Failed to refresh plugin metadata')
   } finally {
     refreshingMetadata.value = false
   }
@@ -270,21 +319,5 @@ watch(
 .plugins-body {
   flex: 1;
   min-height: 0;
-}
-
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 4rem;
-  color: var(--nb-c-text-subtle);
-  text-align: center;
-  border: 1px dashed var(--nb-c-border);
-  border-radius: 12px;
-  p {
-    margin: 0;
-    font-size: 0.875rem;
-  }
 }
 </style>

@@ -7,31 +7,31 @@
 
     <Teleport defer to="#ob-topbar-right">
       <NbButton
+        v-nb-tooltip="{ body: viewToggleLabel }"
         variant="ghost"
         size="sm"
         :icon="view === 'cards' ? 'list' : 'squares-four'"
-        :title="view === 'cards' ? 'Show as table' : 'Show as cards'"
+        :aria-label="viewToggleLabel"
         @click="toggleView"
       />
       <NbButton
+        v-nb-tooltip="{ body: 'Refresh devices' }"
         variant="ghost"
         size="sm"
         icon="arrows-clockwise"
-        title="Refresh"
+        aria-label="Refresh devices"
         :loading="refreshing"
         @click="refresh"
       />
     </Teleport>
 
-    <div v-if="totalDevices === 0" class="empty-state">
-      <NbIcon name="devices" :size="40" />
-      <p>No devices registered yet.</p>
-      <p class="empty-hint">
-        Devices appear here once a platform plugin registers accessories.
-        <br />
-        This page auto-refreshes every 3 seconds: discovery can take up to 60s.
-      </p>
-    </div>
+    <NbEmptyState
+      v-if="totalDevices === 0"
+      icon="devices"
+      bordered
+      title="No devices registered yet"
+      description="Devices appear here once a platform plugin registers accessories. This page refreshes every 3 seconds, and discovery can take up to 60 seconds."
+    />
 
     <!-- An unhealthy device is marked on the device itself, not summarised
          above the list. A page-level banner here used to sit between this
@@ -187,6 +187,7 @@
         row-key="key"
         size="sm"
         zebra
+        stack-on-phone
         :sort-state="sortState"
         @sort="sortState = $event"
         @row-click="(row: DeviceRow) => row.select()"
@@ -210,28 +211,12 @@
         </template>
       </NbDataTable>
     </div>
-
-    <!-- Confirmation dialog for safety-critical controls -->
-    <Teleport to="body">
-      <div v-if="confirmDialog.visible" class="confirm-overlay" @click.self="cancelControl">
-        <div class="confirm-dialog">
-          <div class="confirm-icon">
-            <NbIcon name="warning" :size="24" />
-          </div>
-          <p class="confirm-message">{{ confirmDialog.message }}</p>
-          <div class="confirm-actions">
-            <NbButton variant="ghost" size="sm" @click="cancelControl">Cancel</NbButton>
-            <NbButton variant="primary" size="sm" @click="confirmControl">Confirm</NbButton>
-          </div>
-        </div>
-      </div>
-    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, computed } from 'vue'
-import type { IDataTableColumn, IDataTableSortState } from '@nubisco/ui'
+import { useConfirm, type IDataTableColumn, type IDataTableSortState } from '@nubisco/ui'
 import { useRouter } from 'vue-router'
 import { useDaemonStore } from '@/stores/daemon'
 import { useInspectorStore, type NativeDevice } from '@/stores/inspector'
@@ -240,6 +225,7 @@ import { api, type Accessory } from '@/api'
 
 const daemon = useDaemonStore()
 const inspector = useInspectorStore()
+const confirm = useConfirm()
 
 const router = useRouter()
 
@@ -337,6 +323,8 @@ const nativeDevices = ref<NativeDevice[]>([])
 const VIEW_KEY = 'openbridge.devices.view'
 const view = ref<'cards' | 'table'>(localStorage.getItem(VIEW_KEY) === 'table' ? 'table' : 'cards')
 
+const viewToggleLabel = computed(() => (view.value === 'cards' ? 'Show as table' : 'Show as cards'))
+
 function toggleView() {
   view.value = view.value === 'cards' ? 'table' : 'cards'
   localStorage.setItem(VIEW_KEY, view.value)
@@ -345,9 +333,11 @@ function toggleView() {
 const sortState = ref<IDataTableSortState | null>({ key: 'name', direction: 'asc' })
 
 const deviceColumns: IDataTableColumn[] = [
-  { key: 'name', header: 'Device', sortable: true },
-  { key: 'type', header: 'Type', sortable: true, width: 160 },
-  { key: 'source', header: 'Source', sortable: true, width: 120 },
+  // On a phone each row is a card: the name is its title, and type and source
+  // share the muted line under it, as they read together ("Light, Native").
+  { key: 'name', header: 'Device', sortable: true, primary: true },
+  { key: 'type', header: 'Type', sortable: true, width: 160, phoneMeta: true },
+  { key: 'source', header: 'Source', sortable: true, width: 120, phoneMeta: true },
   { key: 'state', header: 'State', sortable: true, width: 120 },
   { key: 'detail', header: 'Reading', sortable: true, width: 160 },
 ]
@@ -633,20 +623,32 @@ async function refresh() {
 
 let pollInterval: ReturnType<typeof setInterval> | null = null
 
-// Confirmation dialog state
-const confirmDialog = ref<{ visible: boolean; deviceId: string; control: string; value: unknown; message: string }>({
-  visible: false,
-  deviceId: '',
-  control: '',
-  value: null,
-  message: '',
-})
+interface ControlConfirmation {
+  title: string
+  message: string
+  confirmLabel: string
+  tone: 'danger' | 'neutral'
+}
 
-function requiresConfirmation(dev: NativeDevice, control: string, value: unknown): string | false {
+function requiresConfirmation(dev: NativeDevice, control: string, value: unknown): ControlConfirmation | false {
   // Energy meters / circuit breakers are safety-critical
   if (dev.widgetType === 'energy_meter' && control === 'active') {
-    if (value) return `Turn on ${dev.name}? This will energise the connected circuit.`
-    return `Turn off ${dev.name}? This will cut power to the connected circuit.`
+    // Cutting power is the destructive one. Energising is consequential but
+    // not destructive, so it gets the primary button the old dialog had.
+    if (value) {
+      return {
+        title: 'Turn on circuit',
+        message: 'This will energise the connected circuit.',
+        confirmLabel: 'Turn on',
+        tone: 'neutral',
+      }
+    }
+    return {
+      title: 'Turn off circuit',
+      message: 'This will cut power to the connected circuit.',
+      confirmLabel: 'Turn off',
+      tone: 'danger',
+    }
   }
   return false
 }
@@ -660,23 +662,13 @@ async function sendControl(deviceId: string, control: string, value: unknown) {
   }
 }
 
-function requestControl(dev: NativeDevice, control: string, value: unknown) {
-  const msg = requiresConfirmation(dev, control, value)
-  if (msg) {
-    confirmDialog.value = { visible: true, deviceId: dev.id, control, value, message: msg }
-  } else {
-    sendControl(dev.id, control, value)
+async function requestControl(dev: NativeDevice, control: string, value: unknown) {
+  const ask = requiresConfirmation(dev, control, value)
+  if (ask) {
+    const ok = await confirm({ ...ask, subjectLabel: 'Device', subject: dev.name })
+    if (!ok) return
   }
-}
-
-function confirmControl() {
-  const { deviceId, control, value } = confirmDialog.value
-  confirmDialog.value.visible = false
-  sendControl(deviceId, control, value)
-}
-
-function cancelControl() {
-  confirmDialog.value.visible = false
+  void sendControl(dev.id, control, value)
 }
 
 /**
@@ -726,26 +718,6 @@ onUnmounted(() => {
 .toolbar-count {
   font-size: 0.8rem;
   color: var(--nb-c-text-muted);
-}
-
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 4rem 2rem;
-  color: var(--nb-c-text-subtle);
-  text-align: center;
-  border: 1px dashed var(--nb-c-border);
-  border-radius: 12px;
-  p {
-    margin: 0;
-    font-size: 0.875rem;
-  }
-  .empty-hint {
-    font-size: 0.8rem;
-    line-height: 1.6;
-  }
 }
 
 .cell-name {
@@ -949,49 +921,5 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.5rem;
   margin-top: 0.5rem;
-}
-// ─── Confirmation dialog ──────────────────────────────────────────────────────
-.confirm-overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--nb-c-scrim);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-.confirm-dialog {
-  background: var(--nb-c-surface);
-  border-radius: 12px;
-  padding: 1.5rem;
-  max-width: 360px;
-  width: 90%;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.75rem;
-}
-.confirm-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--nb-c-warning) 30%, var(--nb-c-surface));
-  color: var(--nb-c-warning);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.confirm-message {
-  font-size: 0.85rem;
-  color: var(--nb-c-text);
-  text-align: center;
-  margin: 0;
-  line-height: 1.5;
-}
-.confirm-actions {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 0.25rem;
 }
 </style>

@@ -152,6 +152,28 @@ Calls `POST /api/daemon/restart`. The daemon process restarts, all plugins go th
 
 ---
 
+## Notifications
+
+The bell in the sidebar, between Sponsor and Settings, lists what happened while you were away. OpenBridge adds a row when:
+
+- a device has not reported for 10 minutes (or for four of its own reporting intervals, if it reports less often), and again when it answers after such an outage
+- a plugin fails to load or stops with an error
+- a new version of OpenBridge or of an installed plugin is published (once per version)
+
+Each row opens what it is about: the device, the plugin, or Settings. The badge is the number of rows you have not read yet, counted by the daemon. Rows arrive live in every open tab. From the panel's settings button you can also turn on desktop notifications for this browser.
+
+Rows are kept in `~/.openbridge/notifications.json` (the newest 200), and read state is kept per signed-in person.
+
+Devices that never report telemetry (most Homebridge accessories) cannot be watched this way, so they never produce an offline row.
+
+---
+
+## On a phone
+
+Every page works on a phone. The sidebar becomes a drawer behind the menu button, tables become cards, page actions fold into a single menu, and inspectors open as a full-height sheet. The desktop layout is unchanged.
+
+---
+
 ## Dev vs. production URL
 
 | Mode           | URL                     | How to start                               |
