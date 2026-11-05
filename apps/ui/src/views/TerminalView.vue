@@ -1,10 +1,9 @@
 <template>
   <div class="terminal-view">
     <Teleport defer to="#ob-topbar-right">
-      <div class="conn-status">
-        <div class="conn-dot" :class="connected ? 'live' : 'dead'" />
-        <span class="conn-label">{{ connected ? 'Connected' : 'Disconnected' }}</span>
-      </div>
+      <NbBadge :variant="connected ? 'green' : 'grey'" dot role="status">
+        {{ connected ? 'Connected' : 'Disconnected' }}
+      </NbBadge>
     </Teleport>
 
     <div ref="containerEl" class="terminal-container" />
@@ -134,32 +133,6 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   min-height: 0;
-}
-
-// Teleported into the shell topbar; scoped styles still apply because the
-// scope attribute is stamped at compile time.
-.conn-status {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-.conn-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  &.live {
-    background: var(--nb-c-success);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--nb-c-success) 25%, transparent);
-  }
-  &.dead {
-    background: var(--nb-c-component-inactive);
-  }
-}
-.conn-label {
-  font-size: 0.75rem;
-  color: var(--nb-c-text-muted);
 }
 
 // The terminal surface stays dark in both themes: it renders an ANSI palette

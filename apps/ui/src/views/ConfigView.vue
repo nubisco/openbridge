@@ -6,41 +6,29 @@
       <span class="config-path">~/.openbridge/config.json</span>
     </Teleport>
 
+    <!-- On a phone the actions fold: Save stays as an icon and Format moves
+         into the overflow menu, so the path beside the breadcrumb keeps its room. -->
     <Teleport defer to="#ob-topbar-right">
-      <NbButton variant="ghost" size="sm" icon="magic-wand" title="Format JSON" @click="format">Format</NbButton>
-      <NbButton
-        variant="primary"
-        size="sm"
-        :icon="saved ? 'check' : 'floppy-disk'"
-        :loading="saving"
-        :disabled="saving"
-        title="Changes take effect after restarting the daemon"
-        @click="save"
-      >
-        {{ saved ? 'Saved!' : saving ? 'Saving…' : 'Save' }}
-      </NbButton>
+      <NbActionGroup :items="actions" size="sm" overflow="phone" />
     </Teleport>
 
-    <div v-if="error" class="error-banner">
-      <NbIcon name="warning" :size="14" />
-      {{ error }}
-    </div>
+    <NbBanner v-if="error" status="error" :title="error" flush />
 
-    <div v-if="loading" class="loading-state">
-      <NbIcon name="spinner" :size="28" />
-      <span>Loading config...</span>
-    </div>
+    <NbSpinner v-if="loading" size="lg" label="Loading config" show-label class="loading-state" />
 
     <div v-else ref="editorContainer" class="editor-container" />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, shallowRef, watch } from 'vue'
+import { computed, ref, onMounted, onBeforeUnmount, shallowRef, watch } from 'vue'
 import loader from '@monaco-editor/loader'
 import { api } from '@/api'
 import { useLayoutStore } from '@/stores/layout'
-import { useTheme } from '@nubisco/ui'
+import { useTheme, usePhoneLayout, type IActionGroupItem } from '@nubisco/ui'
+import * as iconMagicWand from '@nubisco/ui/icons/magic-wand'
+import * as iconFloppyDisk from '@nubisco/ui/icons/floppy-disk'
+import * as iconCheck from '@nubisco/ui/icons/check'
 
 const layout = useLayoutStore()
 const { resolved } = useTheme()
@@ -50,6 +38,27 @@ const saving = ref(false)
 const saved = ref(false)
 const error = ref<string | null>(null)
 const loading = ref(true)
+const { phone } = usePhoneLayout()
+
+const actions = computed<IActionGroupItem[]>(() => [
+  { id: 'format', label: 'Format', icon: iconMagicWand, variant: 'ghost', onSelect: format },
+  {
+    id: 'save',
+    label: saved.value ? 'Saved!' : saving.value ? 'Saving…' : 'Save',
+    icon: saved.value ? iconCheck : iconFloppyDisk,
+    variant: 'primary',
+    priority: 'primary',
+    loading: saving.value,
+    onSelect: save,
+  },
+])
+
+// A phone has no room for the minimap, and a line running off a 390px screen
+// can only be read by scrolling sideways, so it wraps there instead.
+const phoneEditorOptions = (isPhone: boolean) => ({
+  minimap: { enabled: !isPhone },
+  wordWrap: isPhone ? ('on' as const) : ('off' as const),
+})
 
 onMounted(async () => {
   layout.setPage('Config', undefined, { fullBleed: true })
@@ -136,19 +145,19 @@ onMounted(async () => {
     theme: resolved.value === 'dark' ? 'vs-dark' : 'vs',
     fontSize: 13,
     fontFamily: '"MesloLGS NF", monospace',
-    minimap: { enabled: true },
+    ...phoneEditorOptions(phone.value),
     scrollBeyondLastLine: false,
     formatOnPaste: true,
     formatOnType: true,
     tabSize: 2,
     automaticLayout: true,
-    wordWrap: 'off',
     bracketPairColorization: { enabled: true },
     guides: { bracketPairs: true },
     lineNumbers: 'on',
     renderLineHighlight: 'all',
     smoothScrolling: true,
   })
+  watch(phone, (isPhone) => editor.value?.updateOptions(phoneEditorOptions(isPhone)))
 })
 
 onBeforeUnmount(() => {
@@ -195,28 +204,19 @@ function format() {
   background: var(--nb-c-field-bg);
   padding: 0.25rem 0.6rem;
   border-radius: 6px;
-}
 
-// A full-width strip now that the view runs edge to edge.
-.error-banner {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  background: color-mix(in srgb, var(--nb-c-danger) 12%, var(--nb-c-surface));
-  border-bottom: 1px solid color-mix(in srgb, var(--nb-c-danger) 35%, transparent);
-  padding: 0.6rem 0.9rem;
-  font-size: 0.82rem;
-  color: var(--nb-c-danger);
-  flex-shrink: 0;
+  // The topbar is the width of the screen on a phone: the path gives way first.
+  @include variables.phone {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 
 .loading-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.75rem;
   padding: 4rem;
-  color: var(--nb-c-text-subtle);
+  justify-content: center;
 }
 
 // Edge to edge: an editor should fill its pane, not float in a rounded card.
