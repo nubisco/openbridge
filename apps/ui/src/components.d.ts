@@ -29,6 +29,8 @@ declare module 'vue' {
     NbMenuItem: typeof import('@nubisco/ui/components/MenuItem')['NbMenuItem']
     NbMessage: typeof import('@nubisco/ui/components/Message')['NbMessage']
     NbModal: typeof import('@nubisco/ui/components/Modal')['NbModal']
+    NbNotificationCenter: typeof import('@nubisco/ui/components/NotificationCenter')['NbNotificationCenter']
+    NbNotificationCenterItem: typeof import('@nubisco/ui/components/NotificationCenterItem')['NbNotificationCenterItem']
     NbNumberInput: typeof import('@nubisco/ui/components/NumberInput')['NbNumberInput']
     NbPanel: typeof import('@nubisco/ui/components/Panel')['NbPanel']
     NbProgressBar: typeof import('@nubisco/ui/components/ProgressBar')['NbProgressBar']

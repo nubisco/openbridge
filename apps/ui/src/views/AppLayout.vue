@@ -41,9 +41,8 @@
 
     <!-- ═══ Bottom actions ═══ -->
     <template #sidebar-bottom>
-      <!-- The fleet's bottom order: Documentation, Sponsor, Settings, the
-           person, then this product's own status. Openbridge has no
-           notifications yet, so that row is absent rather than empty.
+      <!-- The fleet's bottom order: Documentation, Sponsor, Notifications,
+           Settings, the person, then this product's own status.
            External links open a new tab from here because the menu item has no
            `target`, and stepping out to read must not lose the page open here. -->
       <NbSidebarMenu>
@@ -57,6 +56,9 @@
           :href="SPONSOR_URL"
           @click.prevent="openExternal(SPONSOR_URL)"
         />
+      </NbSidebarMenu>
+      <NotificationBell />
+      <NbSidebarMenu>
         <!-- Instance configuration. A self-hosted instance has no tenant above
              it, so this is the tenant-level Settings and sits in its slot. -->
         <NbSidebarMenuItem icon="gear" label="Settings" to="/settings" :active="route.name === 'settings'" />
@@ -165,6 +167,7 @@ import PluginInspector from '@/components/PluginInspector.vue'
 import MarketplacePanel from '@/components/MarketplacePanel.vue'
 import DeviceInspector from '@/components/DeviceInspector.vue'
 import LiveLogsPanel from '@/components/LiveLogsPanel.vue'
+import NotificationBell from '@/components/NotificationBell.vue'
 
 const route = useRoute()
 const daemon = useDaemonStore()
