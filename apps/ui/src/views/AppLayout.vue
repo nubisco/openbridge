@@ -4,6 +4,7 @@
        flyout label collapsed. On a phone it is the drawer, and the shell
        renders no header toggle there. -->
   <NbShell
+    ref="shell"
     :inspector-visible="inspector.visible"
     :main-padding="!layout.fullBleed"
     :sidebar-variant="nav.variant.value"
@@ -153,7 +154,8 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, watch, ref } from 'vue'
-import { useSidebarVariant } from '@nubisco/ui'
+import { usePhoneLayout, useSidebarVariant } from '@nubisco/ui'
+import type { NbShell } from '@nubisco/ui'
 import { useRoute } from 'vue-router'
 import { useDaemonStore } from '@/stores/daemon'
 import { useInspectorStore } from '@/stores/inspector'
@@ -173,6 +175,18 @@ const auth = useAuth()
 // Collapsed or expanded is the person's choice, remembered per browser, never
 // derived from the route.
 const nav = useSidebarVariant({ storageKey: 'openbridge.sidebar' })
+
+// A drawer that stays open after the page changed covers the page you went
+// to. The shell closes it when a link inside it is used. This catches the
+// rest, such as Back. Only a phone has the drawer, so the desktop is untouched.
+const shell = ref<InstanceType<typeof NbShell> | null>(null)
+const { phone } = usePhoneLayout()
+watch(
+  () => route.fullPath,
+  () => {
+    if (phone.value) shell.value?.setSidebarOpen(false)
+  },
+)
 
 const daemonLabel = computed(() => (daemon.connected ? 'Daemon connected' : 'Daemon offline'))
 
