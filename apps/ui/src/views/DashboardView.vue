@@ -32,28 +32,26 @@
       <!-- System information card -->
       <NbPanel class="sys-card">
         <div class="card-title">System Information</div>
-        <div v-if="sysInfo" class="sys-grid">
-          <span class="sys-key">OS</span>
-          <span class="sys-val">{{ sysInfo.os }}</span>
-          <span class="sys-key">Arch</span>
-          <span class="sys-val">{{ sysInfo.arch }}</span>
-          <span class="sys-key">Hostname</span>
-          <span class="sys-val">{{ sysInfo.hostname }}</span>
-          <span class="sys-key">IP Address</span>
-          <span class="sys-val">{{ sysInfo.ip }}</span>
-          <span class="sys-key">User</span>
-          <span class="sys-val">{{ sysInfo.user }}</span>
-          <span class="sys-key">Node.js</span>
-          <span class="sys-val">{{ sysInfo.nodeVersion }}</span>
-          <span class="sys-key">OpenBridge</span>
-          <span class="sys-val">v{{ daemon.health?.version ?? '—' }}</span>
-          <span class="sys-key">Config</span>
-          <span class="sys-val mono">{{ sysInfo.configPath }}</span>
-          <span class="sys-key">OB plugins</span>
-          <span class="sys-val mono">{{ sysInfo.obPluginsDir }}</span>
-          <span class="sys-key">HB plugins</span>
-          <span class="sys-val mono">{{ sysInfo.hbPluginsDir }}</span>
-        </div>
+        <!-- A fixed term width keeps every value on one edge. The library's
+             rows are separate grids, so a content-sized term would not. -->
+        <NbDefinitionList v-if="sysInfo" compact term-width="6rem">
+          <NbDefinitionListItem term="OS">{{ sysInfo.os }}</NbDefinitionListItem>
+          <NbDefinitionListItem term="Arch">{{ sysInfo.arch }}</NbDefinitionListItem>
+          <NbDefinitionListItem term="Hostname">{{ sysInfo.hostname }}</NbDefinitionListItem>
+          <NbDefinitionListItem term="IP Address">{{ sysInfo.ip }}</NbDefinitionListItem>
+          <NbDefinitionListItem term="User">{{ sysInfo.user }}</NbDefinitionListItem>
+          <NbDefinitionListItem term="Node.js">{{ sysInfo.nodeVersion }}</NbDefinitionListItem>
+          <NbDefinitionListItem term="OpenBridge">v{{ daemon.health?.version ?? '—' }}</NbDefinitionListItem>
+          <NbDefinitionListItem term="Config">
+            <span class="sys-path">{{ sysInfo.configPath }}</span>
+          </NbDefinitionListItem>
+          <NbDefinitionListItem term="OB plugins">
+            <span class="sys-path">{{ sysInfo.obPluginsDir }}</span>
+          </NbDefinitionListItem>
+          <NbDefinitionListItem term="HB plugins">
+            <span class="sys-path">{{ sysInfo.hbPluginsDir }}</span>
+          </NbDefinitionListItem>
+        </NbDefinitionList>
         <div v-else class="loading-inline">
           <NbIcon name="spinner" :size="16" />
           Loading...
@@ -492,24 +490,11 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
 }
-.sys-grid {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0.3rem 1.25rem;
-  font-size: 0.81rem;
-}
-.sys-key {
+// A path is read character by character, so it keeps the monospace face.
+.sys-path {
+  font-family: monospace;
+  font-size: 0.75rem;
   color: var(--nb-c-text-muted);
-  white-space: nowrap;
-}
-.sys-val {
-  color: var(--nb-c-text);
-  word-break: break-all;
-  &.mono {
-    font-family: monospace;
-    font-size: 0.75rem;
-    color: var(--nb-c-text-muted);
-  }
 }
 .loading-inline {
   display: flex;
