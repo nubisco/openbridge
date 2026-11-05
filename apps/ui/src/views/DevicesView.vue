@@ -25,15 +25,13 @@
       />
     </Teleport>
 
-    <div v-if="totalDevices === 0" class="empty-state">
-      <NbIcon name="devices" :size="40" />
-      <p>No devices registered yet.</p>
-      <p class="empty-hint">
-        Devices appear here once a platform plugin registers accessories.
-        <br />
-        This page auto-refreshes every 3 seconds: discovery can take up to 60s.
-      </p>
-    </div>
+    <NbEmptyState
+      v-if="totalDevices === 0"
+      icon="devices"
+      bordered
+      title="No devices registered yet"
+      description="Devices appear here once a platform plugin registers accessories. This page refreshes every 3 seconds, and discovery can take up to 60 seconds."
+    />
 
     <!-- An unhealthy device is marked on the device itself, not summarised
          above the list. A page-level banner here used to sit between this
@@ -726,26 +724,6 @@ onUnmounted(() => {
 .toolbar-count {
   font-size: 0.8rem;
   color: var(--nb-c-text-muted);
-}
-
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 4rem 2rem;
-  color: var(--nb-c-text-subtle);
-  text-align: center;
-  border: 1px dashed var(--nb-c-border);
-  border-radius: 12px;
-  p {
-    margin: 0;
-    font-size: 0.875rem;
-  }
-  .empty-hint {
-    font-size: 0.8rem;
-    line-height: 1.6;
-  }
 }
 
 .cell-name {
