@@ -11,6 +11,8 @@ import { waitForFreePort } from './port.js'
 import { rotateIfLarge } from './log-rotation.js'
 import { DeviceEventLog } from './device-events.js'
 import { ObservationStore } from './observations.js'
+import { NotificationStore, observeDevices, observePlugins, pluginLoadFailed, pluginLoaded } from './notifications.js'
+import { listDevices } from './services/bridge.js'
 import { loadConfig, defaultConfigPath } from '@nubisco/openbridge-config'
 import type { OpenBridgeConfig } from '@nubisco/openbridge-config'
 import { createServer, type HapInfo } from './server.js'
@@ -68,6 +70,8 @@ export class Daemon {
   /** Per-device event timeline, written by plugins through ctx.recordEvent */
   private deviceEvents = new DeviceEventLog(join(OPENBRIDGE_HOME, 'device-events'))
   private observations = new ObservationStore(OPENBRIDGE_HOME)
+  /** The bell: devices that stop answering, plugins that fail, updates. */
+  private notifications = new NotificationStore(join(OPENBRIDGE_HOME, 'notifications.json'))
   /**
    * Per-device providers of machine state to attach to an observation.
    *
@@ -276,8 +280,17 @@ export class Daemon {
             const pluginFn = loadHomebridgePlugin(pluginPath)
             pluginFn(homebridgeAPI as any)
             log.info(`Registered platform: ${platformConfig.platform}`)
+            pluginLoaded(this.notifications, pluginPath)
           } catch (err) {
             log.error(`Failed to load plugin ${platformConfig.plugin}: ${err}`)
+            // Configured by path in config.platforms, and never registered, so
+            // there is no inspector to open. The config is where it is fixed.
+            pluginLoadFailed(
+              this.notifications,
+              { key: pluginPath, name: String(platformConfig.platform), target: { kind: 'config' } },
+              err,
+              Date.now(),
+            )
           }
         }
 
@@ -428,8 +441,48 @@ export class Daemon {
       this.deviceEvents,
       this.observations,
       (deviceId) => this.observationContexts.get(deviceId)?.(),
+      this.notifications,
     )
     await server.listen({ port, host: '0.0.0.0' })
+
+    // ── Notifications ─────────────────────────────────────────────────────────
+    // Read from state the daemon already keeps: device health from the
+    // telemetry stamps, plugin status from the registry. Fifteen seconds is
+    // short enough to catch a plugin that errors and is restarted by the
+    // watchdog below, which waits at least a minute, and cheap, since it reads
+    // memory and writes only when something crossed a line.
+    const bridgeView = {
+      registry: this.registry,
+      home: OPENBRIDGE_HOME,
+      hapAPI: homebridgeAPI,
+      controls: this.controls,
+      restrictedControls: this.restrictedControls,
+      deviceEvents: this.deviceEvents,
+      observations: this.observations,
+      homekitServiceTypes: this.homekitServiceTypes,
+      nativeAccessoryUuid: null,
+    }
+    const watchForNotifications = () => {
+      try {
+        const now = Date.now()
+        observePlugins(
+          this.notifications,
+          this.registry.getAll().map((p) => ({
+            id: p.id,
+            name: p.platformName ?? p.manifest.name,
+            status: p.status,
+            error: p.error,
+            disabled: p.disabled,
+          })),
+          now,
+        )
+        observeDevices(this.notifications, listDevices(bridgeView), now)
+      } catch (err) {
+        log.debug(`Notification watch failed: ${err}`)
+      }
+    }
+    setInterval(watchForNotifications, 15_000).unref()
+    watchForNotifications()
 
     // ── Energy history sampling ───────────────────────────────────────────────
     setInterval(
@@ -576,10 +629,18 @@ export class Daemon {
                 }
 
                 log.info(`Loaded native plugin from marketplace: ${name} v${pkg.version ?? '?'}`)
+                pluginLoaded(this.notifications, name)
                 loaded = true
                 break
               } catch (err) {
                 log.error(`Failed to load native plugin ${name}: ${err}`)
+                // Registered as a stopped plugin below, so its inspector exists.
+                pluginLoadFailed(
+                  this.notifications,
+                  { key: name, name, target: { kind: 'plugin', id: name } },
+                  err,
+                  Date.now(),
+                )
               }
             }
           }
@@ -649,10 +710,17 @@ export class Daemon {
                 if (launched) launched.instance.packageName = name
 
                 log.info(`Loaded Homebridge plugin from marketplace: ${name} v${pkg.version ?? '?'}`)
+                pluginLoaded(this.notifications, name)
                 continue
               }
             } catch (err) {
               log.error(`Failed to load Homebridge plugin ${name}: ${err}`)
+              pluginLoadFailed(
+                this.notifications,
+                { key: name, name, target: { kind: 'plugin', id: name } },
+                err,
+                Date.now(),
+              )
             }
           }
         }
