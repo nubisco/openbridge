@@ -213,28 +213,18 @@
         </template>
       </NbDataTable>
     </div>
-
-    <!-- Confirmation dialog for safety-critical controls -->
-    <Teleport to="body">
-      <div v-if="confirmDialog.visible" class="confirm-overlay" @click.self="cancelControl">
-        <div class="confirm-dialog">
-          <div class="confirm-icon">
-            <NbIcon name="warning" :size="24" />
-          </div>
-          <p class="confirm-message">{{ confirmDialog.message }}</p>
-          <div class="confirm-actions">
-            <NbButton variant="ghost" size="sm" @click="cancelControl">Cancel</NbButton>
-            <NbButton variant="primary" size="sm" @click="confirmControl">Confirm</NbButton>
-          </div>
-        </div>
-      </div>
-    </Teleport>
   </div>
 </template>
 
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, computed } from 'vue'
-import type { IDataTableColumn, IDataTableSortState } from '@nubisco/ui'
+import { useConfirm, type IDataTableColumn, type IDataTableSortState } from '@nubisco/ui'
+// useConfirm() mounts NbConfirm itself, so no template names it and the
+// library's Vite plugin never links its stylesheet: the dialog rendered with
+// its subject strip and buttons unstyled. Linking it here until the plugin
+// does it for the composable. It is global once loaded, which also fixes the
+// confirms in DeviceInspector and AgentAccessPanel.
+import '@nubisco/ui/dist/styles/Confirm.css'
 import { useRouter } from 'vue-router'
 import { useDaemonStore } from '@/stores/daemon'
 import { useInspectorStore, type NativeDevice } from '@/stores/inspector'
@@ -243,6 +233,7 @@ import { api, type Accessory } from '@/api'
 
 const daemon = useDaemonStore()
 const inspector = useInspectorStore()
+const confirm = useConfirm()
 
 const router = useRouter()
 
@@ -640,20 +631,32 @@ async function refresh() {
 
 let pollInterval: ReturnType<typeof setInterval> | null = null
 
-// Confirmation dialog state
-const confirmDialog = ref<{ visible: boolean; deviceId: string; control: string; value: unknown; message: string }>({
-  visible: false,
-  deviceId: '',
-  control: '',
-  value: null,
-  message: '',
-})
+interface ControlConfirmation {
+  title: string
+  message: string
+  confirmLabel: string
+  tone: 'danger' | 'neutral'
+}
 
-function requiresConfirmation(dev: NativeDevice, control: string, value: unknown): string | false {
+function requiresConfirmation(dev: NativeDevice, control: string, value: unknown): ControlConfirmation | false {
   // Energy meters / circuit breakers are safety-critical
   if (dev.widgetType === 'energy_meter' && control === 'active') {
-    if (value) return `Turn on ${dev.name}? This will energise the connected circuit.`
-    return `Turn off ${dev.name}? This will cut power to the connected circuit.`
+    // Cutting power is the destructive one. Energising is consequential but
+    // not destructive, so it gets the primary button the old dialog had.
+    if (value) {
+      return {
+        title: 'Turn on circuit',
+        message: 'This will energise the connected circuit.',
+        confirmLabel: 'Turn on',
+        tone: 'neutral',
+      }
+    }
+    return {
+      title: 'Turn off circuit',
+      message: 'This will cut power to the connected circuit.',
+      confirmLabel: 'Turn off',
+      tone: 'danger',
+    }
   }
   return false
 }
@@ -667,23 +670,13 @@ async function sendControl(deviceId: string, control: string, value: unknown) {
   }
 }
 
-function requestControl(dev: NativeDevice, control: string, value: unknown) {
-  const msg = requiresConfirmation(dev, control, value)
-  if (msg) {
-    confirmDialog.value = { visible: true, deviceId: dev.id, control, value, message: msg }
-  } else {
-    sendControl(dev.id, control, value)
+async function requestControl(dev: NativeDevice, control: string, value: unknown) {
+  const ask = requiresConfirmation(dev, control, value)
+  if (ask) {
+    const ok = await confirm({ ...ask, subjectLabel: 'Device', subject: dev.name })
+    if (!ok) return
   }
-}
-
-function confirmControl() {
-  const { deviceId, control, value } = confirmDialog.value
-  confirmDialog.value.visible = false
-  sendControl(deviceId, control, value)
-}
-
-function cancelControl() {
-  confirmDialog.value.visible = false
+  void sendControl(dev.id, control, value)
 }
 
 /**
@@ -956,49 +949,5 @@ onUnmounted(() => {
   align-items: center;
   gap: 0.5rem;
   margin-top: 0.5rem;
-}
-// ─── Confirmation dialog ──────────────────────────────────────────────────────
-.confirm-overlay {
-  position: fixed;
-  inset: 0;
-  background: var(--nb-c-scrim);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-.confirm-dialog {
-  background: var(--nb-c-surface);
-  border-radius: 12px;
-  padding: 1.5rem;
-  max-width: 360px;
-  width: 90%;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.75rem;
-}
-.confirm-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--nb-c-warning) 30%, var(--nb-c-surface));
-  color: var(--nb-c-warning);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.confirm-message {
-  font-size: 0.85rem;
-  color: var(--nb-c-text);
-  text-align: center;
-  margin: 0;
-  line-height: 1.5;
-}
-.confirm-actions {
-  display: flex;
-  gap: 0.5rem;
-  margin-top: 0.25rem;
 }
 </style>
