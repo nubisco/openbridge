@@ -585,6 +585,36 @@ Disconnects an application, cutting every sign-in it holds, refresh tokens inclu
 
 ---
 
+## Notifications
+
+### `GET /api/notifications`
+
+The newest rows for the person asking, newest first, with their read state. `limit` defaults to 50. `unread` counts every unread row the daemon holds, not only the ones returned. `kind` is one of `device.offline`, `device.online`, `plugin.failed`, `update.openbridge` or `update.plugin`. `target` says where the row leads (`device`, `plugin`, `settings` or `config`), and is `null` when it leads nowhere.
+
+```json
+{
+  "notifications": [
+    {
+      "id": "3f6b2c1e-8a4d-4f0e-9c1a-2b7d5e8f0a13",
+      "kind": "device.offline",
+      "title": "Pool pump is not responding",
+      "body": "No response for 10 minutes.",
+      "variant": "warning",
+      "target": { "kind": "device", "id": "shelly-ec6260887f18-switch1" },
+      "createdAt": "2026-11-05T10:00:00.000Z",
+      "read": false
+    }
+  ],
+  "unread": 1
+}
+```
+
+### `POST /api/notifications/read`
+
+Marks rows read for the person asking. Send `{ "ids": ["3f6b2c1e-8a4d-4f0e-9c1a-2b7d5e8f0a13"] }` for specific rows, or an empty body for all of them. Returns `{ "unread": 0 }`.
+
+---
+
 ## WebSocket streams
 
 All WebSocket endpoints are at `ws://localhost:8582/ws/*`. Connect using any standard WebSocket client.
@@ -603,6 +633,12 @@ Streams live log entries as they are emitted. Each message is a JSON-serialized 
 ```
 
 There is no filtering at the WebSocket level — the client receives all entries and filters locally. Use `GET /api/logs?plugin=` for server-side filtering of historical entries.
+
+---
+
+### `WS /ws/notifications`
+
+Sends `{ "type": "changed" }` whenever a row is added, or when the same person reads one in another tab. Re-read `GET /api/notifications` when it arrives.
 
 ---
 
