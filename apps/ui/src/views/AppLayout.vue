@@ -310,5 +310,11 @@ onUnmounted(() => daemon.disconnectLiveLogs())
   display: flex;
   align-items: center;
   gap: 0.5rem;
+
+  // On a phone the left slot (page path) must be allowed to shrink, or at
+  // 360px it runs under the page actions on the right.
+  @include variables.phone {
+    min-width: 0;
+  }
 }
 </style>

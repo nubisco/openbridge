@@ -6,6 +6,10 @@ import App from './App.vue'
 import { router } from './router'
 import { registerRuntimeIcons } from './icons'
 import './styles/main.scss'
+// useConfirm() mounts NbConfirm itself, so no template names it and the
+// library's Vite plugin never links its stylesheet. Without this every confirm
+// dialog renders unstyled. Remove once the plugin links it for the composable.
+import '@nubisco/ui/dist/styles/Confirm.css'
 import PluginConfigField from './components/PluginConfigField.vue'
 
 // Keep the key the local composable used, so nobody's stored preference is

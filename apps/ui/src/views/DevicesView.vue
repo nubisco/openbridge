@@ -217,12 +217,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, computed } from 'vue'
 import { useConfirm, type IDataTableColumn, type IDataTableSortState } from '@nubisco/ui'
-// useConfirm() mounts NbConfirm itself, so no template names it and the
-// library's Vite plugin never links its stylesheet: the dialog rendered with
-// its subject strip and buttons unstyled. Linking it here until the plugin
-// does it for the composable. It is global once loaded, which also fixes the
-// confirms in DeviceInspector and AgentAccessPanel.
-import '@nubisco/ui/dist/styles/Confirm.css'
 import { useRouter } from 'vue-router'
 import { useDaemonStore } from '@/stores/daemon'
 import { useInspectorStore, type NativeDevice } from '@/stores/inspector'
