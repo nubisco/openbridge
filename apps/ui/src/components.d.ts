@@ -11,6 +11,7 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    NbActionGroup: typeof import('@nubisco/ui/components/ActionGroup')['NbActionGroup']
     NbBadge: typeof import('@nubisco/ui/components/Badge')['NbBadge']
     NbBanner: typeof import('@nubisco/ui/components/Banner')['NbBanner']
     NbBarChart: typeof import('@nubisco/ui/components/Charts/BarChart')['NbBarChart']
