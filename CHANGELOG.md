@@ -1,3 +1,10 @@
+# [1.7.0](https://github.com/nubisco/openbridge/compare/v1.6.0...v1.7.0) (2026-11-05)
+
+
+### Features
+
+* **ui:** phones, @nubisco/ui 5.47 and a notification bell ([#5](https://github.com/nubisco/openbridge/issues/5)) ([85ceb9f](https://github.com/nubisco/openbridge/commit/85ceb9f58c0710c757e14234a90496ecf6b88ade))
+
 # [1.6.0](https://github.com/nubisco/openbridge/compare/v1.5.2...v1.6.0) (2026-10-30)
 
 
