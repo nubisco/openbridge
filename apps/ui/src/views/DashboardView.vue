@@ -20,10 +20,7 @@
                  daemon. Those are not the same thing: the daemon serves this
                  page perfectly well with no HomeKit bridge behind it, and
                  reading "Bridge running" in that state is worse than useless. -->
-            <div class="hk-status">
-              <span class="dot" :class="hapDotClass" />
-              {{ hapStatusLabel }}
-            </div>
+            <NbBadge class="hk-status" dot :variant="hapVariant">{{ hapStatusLabel }}</NbBadge>
             <div v-if="hapError" class="hk-error">{{ hapError }}</div>
           </div>
         </div>
@@ -52,10 +49,7 @@
             <span class="sys-path">{{ sysInfo.hbPluginsDir }}</span>
           </NbDefinitionListItem>
         </NbDefinitionList>
-        <div v-else class="loading-inline">
-          <NbIcon name="spinner" :size="16" />
-          Loading...
-        </div>
+        <NbSpinner v-else size="sm" show-label label="Loading..." />
       </NbPanel>
 
       <!-- Plugins mini-list card -->
@@ -64,7 +58,7 @@
           Plugins
           <span class="plugins-counts">
             <NbBadge variant="green">{{ daemon.runningCount }} running</NbBadge>
-            <span v-if="daemon.errorCount" class="pill red">{{ daemon.errorCount }} error</span>
+            <NbBadge v-if="daemon.errorCount" variant="red">{{ daemon.errorCount }} error</NbBadge>
           </span>
         </div>
         <div v-if="daemon.plugins.length === 0" class="empty-inline">No plugins loaded yet.</div>
@@ -143,7 +137,7 @@
             outlined
             style="width: 100%; justify-content: center"
             :loading="restarting"
-            :icon="restartDone ? 'check' : restarting ? 'spinner' : 'arrows-clockwise'"
+            :icon="restartDone ? 'check' : 'arrows-clockwise'"
             @click="restartOpenBridge"
           >
             {{ restartDone ? 'Restarted' : restarting ? 'Restarting…' : 'Restart OpenBridge' }}
@@ -237,8 +231,8 @@ const pincode = ref('')
 /** Why HomeKit is unavailable, as reported by the daemon. */
 const hapError = ref('')
 
-const hapDotClass = computed(() => {
-  if (!daemon.connected) return 'gray'
+const hapVariant = computed(() => {
+  if (!daemon.connected) return 'grey'
   return hapError.value ? 'red' : 'green'
 })
 
@@ -454,28 +448,7 @@ onUnmounted(() => {
   margin-top: 2px;
 }
 .hk-status {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.75rem;
-  color: var(--nb-c-text-muted);
   margin-top: 0.5rem;
-}
-.dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  &.green {
-    background: var(--nb-c-success);
-    box-shadow: 0 0 4px color-mix(in srgb, var(--nb-c-success) 60%, transparent);
-  }
-  &.gray {
-    background: var(--nb-c-border);
-  }
-  &.red {
-    background: var(--nb-c-danger);
-    box-shadow: 0 0 4px color-mix(in srgb, var(--nb-c-danger) 60%, transparent);
-  }
 }
 
 .hk-error {
@@ -496,14 +469,6 @@ onUnmounted(() => {
   font-size: 0.75rem;
   color: var(--nb-c-text-muted);
 }
-.loading-inline {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: var(--nb-c-text-subtle);
-  font-size: 0.82rem;
-}
-
 // Plugins mini-list
 .plugins-card {
   display: flex;
