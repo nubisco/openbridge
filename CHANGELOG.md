@@ -1,3 +1,10 @@
+## [1.7.1](https://github.com/nubisco/openbridge/compare/v1.7.0...v1.7.1) (2026-11-05)
+
+
+### Bug Fixes
+
+* **auth:** require Accord tokens to be issued to OpenBridge ([9fb0710](https://github.com/nubisco/openbridge/commit/9fb07109cac72a4c2ff6ea18160003a553c15a12))
+
 # [1.7.0](https://github.com/nubisco/openbridge/compare/v1.6.0...v1.7.0) (2026-11-05)
 
 
