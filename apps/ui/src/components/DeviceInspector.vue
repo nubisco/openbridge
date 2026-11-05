@@ -23,13 +23,21 @@
               @keyup.escape="editingName = false"
             />
             <NbButton
+              v-nb-tooltip="{ body: 'Save name' }"
               variant="primary"
               size="sm"
               icon="check"
               aria-label="Save name"
               @click="saveRename((selected as any).dev.id)"
             />
-            <NbButton variant="ghost" size="sm" icon="x" aria-label="Cancel rename" @click="editingName = false" />
+            <NbButton
+              v-nb-tooltip="{ body: 'Cancel rename' }"
+              variant="ghost"
+              size="sm"
+              icon="x"
+              aria-label="Cancel rename"
+              @click="editingName = false"
+            />
           </div>
           <div class="detail-type">{{ widgetLabel(effectiveType((selected as any).dev)) }}</div>
         </div>
@@ -183,21 +191,27 @@
         fluid
       >
         <!-- Period tabs -->
-        <div class="history-tabs">
-          <button
-            v-for="p in ['day', 'month', 'year']"
-            :key="p"
-            class="history-tab"
-            :class="{ active: historyPeriod === p }"
-            @click="historyPeriod = p as any"
-          >
-            {{ p }}
-          </button>
-        </div>
+        <NbTabs
+          :model-value="historyPeriod"
+          :items="HISTORY_PERIODS"
+          variant="contained"
+          size="sm"
+          full-width
+          aria-label="Energy history period"
+          class="history-tabs"
+          @update:model-value="(id: string) => (historyPeriod = id as THistoryPeriod)"
+        />
 
         <!-- Total + navigation -->
         <div v-if="historyData" class="history-nav">
-          <NbButton variant="ghost" size="xs" icon="caret-left" title="Previous" @click="navigateHistory(-1)" />
+          <NbButton
+            v-nb-tooltip="{ body: 'Previous period' }"
+            variant="ghost"
+            size="xs"
+            icon="caret-left"
+            aria-label="Previous period"
+            @click="navigateHistory(-1)"
+          />
           <div class="history-nav-center">
             <span class="history-total">
               {{ historyData.totalKwh.toFixed(2) }}
@@ -205,7 +219,14 @@
             </span>
             <span class="history-date">{{ historyData.date }}</span>
           </div>
-          <NbButton variant="ghost" size="xs" icon="caret-right" title="Next" @click="navigateHistory(1)" />
+          <NbButton
+            v-nb-tooltip="{ body: 'Next period' }"
+            variant="ghost"
+            size="xs"
+            icon="caret-right"
+            aria-label="Next period"
+            @click="navigateHistory(1)"
+          />
         </div>
 
         <!-- Bar chart -->
@@ -392,13 +413,21 @@
               @keyup.escape="editingName = false"
             />
             <NbButton
+              v-nb-tooltip="{ body: 'Save name' }"
               variant="primary"
               size="sm"
               icon="check"
               aria-label="Save name"
               @click="saveRename((selected as any).acc.uuid)"
             />
-            <NbButton variant="ghost" size="sm" icon="x" aria-label="Cancel rename" @click="editingName = false" />
+            <NbButton
+              v-nb-tooltip="{ body: 'Cancel rename' }"
+              variant="ghost"
+              size="sm"
+              icon="x"
+              aria-label="Cancel rename"
+              @click="editingName = false"
+            />
           </div>
           <div class="detail-type">{{ categoryInfo((selected as any).acc.category).label }}</div>
         </div>
@@ -489,7 +518,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { useConfirm } from '@nubisco/ui'
+import { useConfirm, type ITabItem } from '@nubisco/ui'
 import { useInspectorStore, type NativeDevice } from '@/stores/inspector'
 import {
   api,
@@ -977,7 +1006,13 @@ function telemetryEntries(dev: NativeDevice) {
 }
 
 // ─── Energy history ──────────────────────────────────────────────────────────
-const historyPeriod = ref<'day' | 'month' | 'year'>('day')
+type THistoryPeriod = 'day' | 'month' | 'year'
+const historyPeriod = ref<THistoryPeriod>('day')
+const HISTORY_PERIODS: ITabItem[] = [
+  { id: 'day', label: 'Day' },
+  { id: 'month', label: 'Month' },
+  { id: 'year', label: 'Year' },
+]
 const historyDate = ref(new Date().toISOString().slice(0, 10))
 const historyData = ref<{
   period: string
@@ -1280,6 +1315,12 @@ const historyChartSeries = computed(() => {
   position: sticky;
   top: 0;
   background: var(--nb-c-surface);
+
+  // On a phone the sheet's 44px dismiss button floats over this header's
+  // right edge, so a long name stops short of it instead of running under it.
+  @include variables.phone {
+    padding-inline-end: calc(var(--nb-shell-inspector-dismiss-inset, 0px) + 0.5rem);
+  }
 }
 
 .detail-icon {
@@ -1489,27 +1530,7 @@ const historyChartSeries = computed(() => {
 }
 
 .history-tabs {
-  display: flex;
-  gap: 0.25rem;
   margin-bottom: 0.75rem;
-}
-.history-tab {
-  flex: 1;
-  padding: 0.25rem;
-  font-size: 0.72rem;
-  font-weight: 600;
-  text-transform: capitalize;
-  border-radius: 6px;
-  border: 1px solid var(--nb-c-border);
-  background: var(--nb-c-surface);
-  color: var(--nb-c-text-muted);
-  cursor: pointer;
-  transition: all 0.15s;
-  &.active {
-    background: color-mix(in srgb, var(--nb-c-primary) 12%, var(--nb-c-surface));
-    border-color: var(--nb-c-primary);
-    color: var(--nb-c-primary);
-  }
 }
 
 .history-nav {
