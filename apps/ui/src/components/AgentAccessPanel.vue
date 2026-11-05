@@ -119,13 +119,12 @@
  * household, so this lists every token on it, not only the viewer's.
  */
 import { computed, onMounted, ref } from 'vue'
-import { useConfirm } from '@nubisco/ui'
+import { useConfirm, useToast } from '@nubisco/ui'
 import { api, type AccessConnection, type AccessToken } from '@/api'
-import { useNotifications } from '@/composables/useNotifications'
 import NewTokenModal from '@/components/NewTokenModal.vue'
 
 const confirm = useConfirm()
-const notify = useNotifications()
+const toast = useToast()
 
 /** Null until the daemon has answered, so neither state flashes first. */
 const enabled = ref<boolean | null>(null)
@@ -214,10 +213,10 @@ async function revokeToken(id: string, name: string) {
   if (!ok) return
   try {
     await api.access.revokeToken(id)
-    notify.success('Token revoked')
+    toast.success('Token revoked')
     await load()
   } catch (e) {
-    notify.error((e as Error).message, { title: 'Could not revoke' })
+    toast.error((e as Error).message, { title: 'Could not revoke' })
   }
 }
 
@@ -232,10 +231,10 @@ async function disconnect(clientId: string, name: string) {
   if (!ok) return
   try {
     await api.access.revokeConnection(clientId)
-    notify.success(`${name} disconnected`)
+    toast.success(`${name} disconnected`)
     await load()
   } catch (e) {
-    notify.error((e as Error).message, { title: 'Could not disconnect' })
+    toast.error((e as Error).message, { title: 'Could not disconnect' })
   }
 }
 </script>

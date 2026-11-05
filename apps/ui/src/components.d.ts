@@ -46,6 +46,7 @@ declare module 'vue' {
     NbSwitch: typeof import('@nubisco/ui/components/Switch')['NbSwitch']
     NbTabs: typeof import('@nubisco/ui/components/Tabs')['NbTabs']
     NbTextInput: typeof import('@nubisco/ui/components/TextInput')['NbTextInput']
+    NbToaster: typeof import('@nubisco/ui/components/Toaster')['NbToaster']
     NbUserMenu: typeof import('@nubisco/ui/components/UserMenu')['NbUserMenu']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']

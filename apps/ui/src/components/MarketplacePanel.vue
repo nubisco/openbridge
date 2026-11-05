@@ -200,12 +200,12 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { useToast } from '@nubisco/ui'
 import { useDaemonStore } from '@/stores/daemon'
 import { api, type NpmPackage, type LocalPlugin } from '@/api'
-import { useNotifications } from '@/composables/useNotifications'
 
 const daemon = useDaemonStore()
-const notify = useNotifications()
+const toast = useToast()
 const uninstalling = ref<string | null>(null)
 
 // The public marketplace. Kept as a constant rather than read from the
@@ -310,10 +310,10 @@ async function install(pkg: NpmPackage) {
     justInstalled.value = { name: pkg.name, mainFile: res.mainFile }
     await api.pluginsRefresh()
     await daemon.fetchPlugins()
-    notify.success(`Installed ${pkg.name}`)
+    toast.success(`Installed ${pkg.name}`)
   } catch (e) {
     error.value = `Failed to install ${pkg.name}: ${e}`
-    notify.error(`Failed to install ${pkg.name}`)
+    toast.error(`Failed to install ${pkg.name}`)
   } finally {
     installing.value = null
   }
@@ -327,10 +327,10 @@ async function uninstall(name: string) {
     await api.marketplace.uninstall(name)
     installed.value.delete(name)
     await daemon.fetchPlugins()
-    notify.success(`Removed ${name}`)
+    toast.success(`Removed ${name}`)
   } catch (e) {
     error.value = `Failed to uninstall ${name}: ${e}`
-    notify.error(`Failed to remove ${name}`)
+    toast.error(`Failed to remove ${name}`)
   } finally {
     uninstalling.value = null
   }
@@ -346,10 +346,10 @@ async function activateLocal(local: LocalPlugin) {
     installed.value.set(local.name, `${local.path}/dist/index.js`)
     justInstalled.value = { name: local.name, mainFile: `${local.path}/dist/index.js` }
     await daemon.fetchPlugins()
-    notify.success(`Activated ${local.name}`)
+    toast.success(`Activated ${local.name}`)
   } catch (e) {
     error.value = `Failed to activate ${local.name}: ${e}`
-    notify.error(`Failed to activate ${local.name}`)
+    toast.error(`Failed to activate ${local.name}`)
   } finally {
     installing.value = null
   }

@@ -44,18 +44,18 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { useToast } from '@nubisco/ui'
 import { useDaemonStore } from '@/stores/daemon'
 import { useInspectorStore } from '@/stores/inspector'
 import { useLayoutStore } from '@/stores/layout'
 import { api, type NpmPackage } from '@/api'
-import { useNotifications } from '@/composables/useNotifications'
 import PluginList, { type PluginRow } from '@/components/PluginList.vue'
 import type { PluginInstance } from '@/api'
 
 const daemon = useDaemonStore()
 const inspector = useInspectorStore()
 const layout = useLayoutStore()
-const notify = useNotifications()
+const toast = useToast()
 const search = ref('')
 const enriched = ref(new Map<string, NpmPackage>())
 const loadingEnriched = ref(new Set<string>())
@@ -234,9 +234,9 @@ async function refreshPluginMetadata(force = false) {
       }
       await fetchEnrichedForPlugin(plugin, force)
     }
-    if (force) notify.success('Plugin metadata refreshed')
+    if (force) toast.success('Plugin metadata refreshed')
   } catch {
-    notify.error('Failed to refresh plugin metadata')
+    toast.error('Failed to refresh plugin metadata')
   } finally {
     refreshingMetadata.value = false
   }
