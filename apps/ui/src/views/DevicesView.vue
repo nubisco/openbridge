@@ -7,17 +7,19 @@
 
     <Teleport defer to="#ob-topbar-right">
       <NbButton
+        v-nb-tooltip="{ body: viewToggleLabel }"
         variant="ghost"
         size="sm"
         :icon="view === 'cards' ? 'list' : 'squares-four'"
-        :title="view === 'cards' ? 'Show as table' : 'Show as cards'"
+        :aria-label="viewToggleLabel"
         @click="toggleView"
       />
       <NbButton
+        v-nb-tooltip="{ body: 'Refresh devices' }"
         variant="ghost"
         size="sm"
         icon="arrows-clockwise"
-        title="Refresh"
+        aria-label="Refresh devices"
         :loading="refreshing"
         @click="refresh"
       />
@@ -187,6 +189,7 @@
         row-key="key"
         size="sm"
         zebra
+        stack-on-phone
         :sort-state="sortState"
         @sort="sortState = $event"
         @row-click="(row: DeviceRow) => row.select()"
@@ -337,6 +340,8 @@ const nativeDevices = ref<NativeDevice[]>([])
 const VIEW_KEY = 'openbridge.devices.view'
 const view = ref<'cards' | 'table'>(localStorage.getItem(VIEW_KEY) === 'table' ? 'table' : 'cards')
 
+const viewToggleLabel = computed(() => (view.value === 'cards' ? 'Show as table' : 'Show as cards'))
+
 function toggleView() {
   view.value = view.value === 'cards' ? 'table' : 'cards'
   localStorage.setItem(VIEW_KEY, view.value)
@@ -345,9 +350,11 @@ function toggleView() {
 const sortState = ref<IDataTableSortState | null>({ key: 'name', direction: 'asc' })
 
 const deviceColumns: IDataTableColumn[] = [
-  { key: 'name', header: 'Device', sortable: true },
-  { key: 'type', header: 'Type', sortable: true, width: 160 },
-  { key: 'source', header: 'Source', sortable: true, width: 120 },
+  // On a phone each row is a card: the name is its title, and type and source
+  // share the muted line under it, as they read together ("Light, Native").
+  { key: 'name', header: 'Device', sortable: true, primary: true },
+  { key: 'type', header: 'Type', sortable: true, width: 160, phoneMeta: true },
+  { key: 'source', header: 'Source', sortable: true, width: 120, phoneMeta: true },
   { key: 'state', header: 'State', sortable: true, width: 120 },
   { key: 'detail', header: 'Reading', sortable: true, width: 160 },
 ]
