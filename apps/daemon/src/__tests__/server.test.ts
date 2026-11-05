@@ -745,6 +745,15 @@ describe('OpenBridge Server API', () => {
       })
     })
 
+    it('rejects a token that names no app at all', async () => {
+      await withAuthServer(async (base) => {
+        const { app: _app, ...claims } = baseClaims()
+        const res = await postCallback(base, { token: await signJwt(claims) })
+        expect(res.status).toBe(401)
+        expect((await res.json()).error).toBe('wrong_app')
+      })
+    })
+
     it('rejects a token issued to a different app', async () => {
       await withAuthServer(async (base) => {
         const res = await postCallback(base, { token: await signJwt({ ...baseClaims(), app: 'analytics' }) })

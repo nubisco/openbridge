@@ -136,7 +136,10 @@ export function loadAuthConfig(): TAuthConfig {
     enabled,
     issuer,
     authOrigin: resolveAuthOrigin(issuer, process.env.PLATFORM_AUTH_ORIGIN),
-    appId: process.env.PLATFORM_APP_ID ?? null,
+    // The UI asks Accord for tokens as `openbridge` unless told otherwise, so
+    // the daemon expects the same. Never null: the app check below must not
+    // have an "off" setting.
+    appId: process.env.PLATFORM_APP_ID?.trim() || 'openbridge',
     secret: loadOrCreateSecret(),
   }
 }
@@ -215,7 +218,10 @@ export async function registerAuthRoutes(app: FastifyInstance, config: TAuthConf
     // Multi-account rule 1: only trust tokens issued to THIS app. A valid
     // platform token minted for a different relying party must not open a
     // session here.
-    if (config.appId && claims.app && claims.app !== config.appId) {
+    // It used to be skipped when PLATFORM_APP_ID was unset (the default) and
+    // for any token without an `app` claim, which let a token issued to any
+    // other app sign someone in here.
+    if (!issuedToApp(claims, config.appId)) {
       return reply.code(401).send({ error: 'wrong_app' })
     }
 
@@ -334,4 +340,12 @@ export function requiresSession(routeUrl: string | undefined, rawUrl: string): b
   const path = normalizeRequestPath(rawUrl)
   if (path === null) return true
   return isGatedPath(path)
+}
+
+/** Accord names the app in `app` and, since 2026-11-05, in `aud`. */
+export function issuedToApp(claims: { app?: string; aud?: string | string[] }, appId: string | null): boolean {
+  if (!appId) return false
+  if (claims.app !== undefined) return claims.app === appId
+  const aud = claims.aud
+  return Array.isArray(aud) ? aud.includes(appId) : aud === appId
 }

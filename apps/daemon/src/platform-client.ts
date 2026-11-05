@@ -29,6 +29,8 @@ export interface TJwtClaims {
   app_id?: string
   /** App slug the token was issued to: matches the app_id used in the SSO request. */
   app?: string
+  /** The same slug, as the standard audience claim. */
+  aud?: string | string[]
   plan?: string
   plan_status?: string
   iat: number
