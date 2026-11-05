@@ -13,9 +13,9 @@
     <div class="inspector-body">
       <NbShellPanel v-model:size="sections.status" title="Status" fluid>
         <NbField label="Status" control="fit">
-          <span class="status-badge" :class="inspector.selectedPlugin.status">
+          <NbBadge :variant="statusVariant(inspector.selectedPlugin.status)">
             {{ statusLabel[inspector.selectedPlugin.status] }}
-          </span>
+          </NbBadge>
         </NbField>
         <NbField v-if="inspector.selectedPlugin.startedAt" label="Started" control="fit">
           <span class="field-value">{{ new Date(inspector.selectedPlugin.startedAt).toLocaleString() }}</span>
@@ -88,39 +88,25 @@
           OpenBridge needs a restart afterwards.
           <template #action>
             <NbButton variant="ghost" size="sm" @click="confirmingRemove = false">Cancel</NbButton>
-            <NbButton
-              variant="primary"
-              size="sm"
-              :loading="removing"
-              style="background: var(--nb-c-danger); border-color: var(--nb-c-danger)"
-              @click="removePlugin"
-            >
-              Remove
-            </NbButton>
+            <NbButton variant="danger" size="sm" :loading="removing" @click="removePlugin">Remove</NbButton>
           </template>
         </NbBanner>
       </NbShellPanel>
 
       <!-- ── Platform config editor for all Homebridge-source plugins ───────── -->
       <NbShellPanel v-if="isHomebridge" v-model:size="sections.config" title="Platform config" fluid>
-        <div v-if="loadingInfo" class="setup-loading">
-          <NbIcon name="spinner" :size="14" />
-          Loading config…
-        </div>
+        <NbInlineLoading v-if="loadingInfo" status="active" label="Loading config…" />
 
         <template v-else>
           <!-- Multiple platforms discovered → tabs -->
-          <div v-if="pluginInfo && pluginInfo.platforms.length > 1" class="platform-tabs">
-            <button
-              v-for="p in pluginInfo.platforms"
-              :key="p"
-              class="platform-tab"
-              :class="{ active: selectedPlatform === p }"
-              @click="selectPlatform(p)"
-            >
-              {{ p }}
-            </button>
-          </div>
+          <NbTabs
+            v-if="pluginInfo && pluginInfo.platforms.length > 1"
+            :model-value="selectedPlatform"
+            :items="pluginInfo.platforms.map((p) => ({ id: p, label: p }))"
+            aria-label="Platforms"
+            size="sm"
+            @update:model-value="(id: string) => selectPlatform(id)"
+          />
 
           <!-- No platform detected at all -->
           <!-- Callout: true of this plugin for as long as the entry is missing,
@@ -190,7 +176,7 @@
                 size="sm"
                 outlined
                 :loading="restarting"
-                :icon="restarting ? 'spinner' : 'arrows-clockwise'"
+                icon="arrows-clockwise"
                 @click="restartOpenBridge"
               >
                 {{ restarting ? 'Restarting…' : 'Restart OpenBridge' }}
@@ -231,7 +217,7 @@
             size="sm"
             outlined
             :loading="restarting"
-            :icon="restarting ? 'spinner' : 'arrows-clockwise'"
+            icon="arrows-clockwise"
             @click="restartOpenBridge"
           >
             {{ restarting ? 'Restarting…' : 'Restart OpenBridge' }}
@@ -426,6 +412,14 @@ const WIDGET_ICON: Record<string, string> = {
 
 function widgetIcon(widgetType: string): string {
   return WIDGET_ICON[widgetType] ?? 'cube'
+}
+
+// Same colours the plugin list uses for the status, so the two agree.
+function statusVariant(status: string) {
+  if (status === 'running') return 'green'
+  if (status === 'error') return 'red'
+  if (status === 'loading') return 'blue'
+  return 'grey'
 }
 
 const statusLabel: Record<string, string> = {
@@ -895,6 +889,18 @@ async function save() {
   font-weight: 700;
   color: var(--nb-c-text);
 }
+
+// The phone sheet puts its dismiss button over the top right corner, so the
+// header keeps clear of it and a long package name wraps instead of running
+// under it.
+@include variables.phone {
+  .inspector-header {
+    padding-right: calc(1.1rem + var(--nb-shell-inspector-dismiss-inset, 0px));
+  }
+  .inspector-name {
+    overflow-wrap: anywhere;
+  }
+}
 .inspector-version {
   font-size: 0.75rem;
   color: var(--nb-c-text-subtle);
@@ -938,77 +944,16 @@ async function save() {
   word-break: break-word;
 }
 
-.status-badge {
-  font-size: 0.72rem;
-  font-weight: 700;
-  padding: 0.15rem 0.55rem;
-  border-radius: 20px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  background: var(--nb-c-layer-1);
-  color: var(--nb-c-text-muted);
-  &.running {
-    background: color-mix(in srgb, var(--nb-c-success) 30%, var(--nb-c-surface));
-    color: var(--nb-c-success);
-  }
-  &.error {
-    background: color-mix(in srgb, var(--nb-c-danger) 30%, var(--nb-c-surface));
-    color: var(--nb-c-danger);
-  }
-  &.loading {
-    background: color-mix(in srgb, var(--nb-c-warning) 30%, var(--nb-c-surface));
-    color: var(--nb-c-warning);
-  }
-}
-
 // ─── Setup / config section ───────────────────────────────────────────────────
 .error-text {
   font-family: monospace;
   word-break: break-word;
 }
 
-.setup-loading {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.8rem;
-  color: var(--nb-c-text-muted);
-  code {
-    background: var(--nb-c-border);
-    padding: 0.1rem 0.3rem;
-    border-radius: 3px;
-    font-size: 0.76rem;
-  }
-}
 .visual-editor-wrap {
   max-height: 340px;
   overflow-y: auto;
   padding: 0.25rem 0;
-}
-
-.platform-tabs {
-  display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
-}
-.platform-tab {
-  font-size: 0.75rem;
-  font-weight: 600;
-  padding: 0.25rem 0.65rem;
-  border-radius: 6px;
-  border: 1.5px solid var(--nb-c-border);
-  cursor: pointer;
-  background: var(--nb-c-surface);
-  color: var(--nb-c-text-muted);
-  transition: all 0.12s;
-  &.active {
-    border-color: var(--nb-c-primary);
-    background: color-mix(in srgb, var(--nb-c-primary) 12%, var(--nb-c-surface));
-    color: var(--nb-c-primary);
-  }
-  &:hover:not(.active) {
-    border-color: var(--nb-c-primary);
-  }
 }
 
 .config-editor-wrap {

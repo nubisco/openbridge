@@ -67,6 +67,7 @@
     row-key="id"
     size="sm"
     zebra
+    stack-on-phone
     :sort-state="sortState"
     @sort="sortState = $event"
     @row-click="(row: TableRow) => emit('select', row.plugin)"
@@ -133,11 +134,14 @@ function statusVariant(status: string) {
 // it is handed, so the ordering is applied here rather than inside it.
 const sortState = ref<IDataTableSortState | null>({ key: 'name', direction: 'asc' })
 
+// On a phone each row is a card: the plugin is its title, version, source and
+// status share the line under it, and the author is the one labelled pair.
+// The widths only apply to the desktop table.
 const columns: IDataTableColumn[] = [
-  { key: 'name', header: 'Plugin', sortable: true },
-  { key: 'version', header: 'Version', sortable: true, width: 140 },
-  { key: 'source', header: 'Source', sortable: true, width: 120 },
-  { key: 'status', header: 'Status', sortable: true, width: 120 },
+  { key: 'name', header: 'Plugin', sortable: true, primary: true },
+  { key: 'version', header: 'Version', sortable: true, width: 140, phoneMeta: true },
+  { key: 'source', header: 'Source', sortable: true, width: 120, phoneMeta: true },
+  { key: 'status', header: 'Status', sortable: true, width: 120, phoneMeta: true },
   { key: 'author', header: 'Author', sortable: true },
 ]
 
