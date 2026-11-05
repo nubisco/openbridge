@@ -38,17 +38,15 @@
 
       <template v-else>
         <div class="chart-toolbar">
-          <div class="range-tabs">
-            <button
-              v-for="range in RANGES"
-              :key="range.key"
-              class="range-tab"
-              :class="{ active: range.key === selectedRange }"
-              @click="selectRange(range.key)"
-            >
-              {{ range.label }}
-            </button>
-          </div>
+          <NbTabs
+            class="range-tabs"
+            :items="rangeTabs"
+            :model-value="selectedRange"
+            variant="contained"
+            size="sm"
+            aria-label="History range"
+            @update:model-value="selectRange($event as RangeKey)"
+          />
           <span v-if="resolutionLabel" class="resolution-note">{{ resolutionLabel }}</span>
         </div>
 
@@ -57,7 +55,7 @@
           <NbLineChart
             v-if="chartSeries.length > 0 && chartSeries[0].data.length > 0"
             :series="chartSeries"
-            :height="320"
+            :height="phone ? 220 : 320"
             :show-legend="chartSeries.length > 1"
             :show-grid="true"
             :show-tooltip="true"
@@ -79,12 +77,13 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
-import type { IBreadcrumbItem } from '@nubisco/ui'
+import { usePhoneLayout, type IBreadcrumbItem, type ITabItem } from '@nubisco/ui'
 import { api, type DeviceDescriptor, type MetricDescriptor } from '@/api'
 
 type NativeDevice = DeviceDescriptor & { telemetry: Record<string, unknown> }
 
 const route = useRoute()
+const { phone } = usePhoneLayout()
 
 const deviceId = computed(() => String(route.params.id ?? ''))
 const device = ref<NativeDevice | null>(null)
@@ -110,6 +109,7 @@ const RANGES = [
   { key: '1y', label: '1 year', seconds: 365 * 86400 },
 ] as const
 type RangeKey = (typeof RANGES)[number]['key']
+const rangeTabs: ITabItem[] = RANGES.map((r) => ({ id: r.key, label: r.label }))
 const selectedRange = ref<RangeKey>('24h')
 
 // The device list is the parent, so the trail is the way back to it.
@@ -119,6 +119,20 @@ const crumbs = computed<IBreadcrumbItem[]>(() => [
 ])
 
 const currentMetric = computed(() => metrics.value.find((m) => m.key === selectedMetric.value) ?? null)
+
+/**
+ * The chart prints a Date with its full `toString()`, time zone name and all,
+ * which runs off a phone's edge. A phone gets a short label for the range
+ * instead. The desktop keeps the Date it always had.
+ */
+function xValue(t: number): Date | string {
+  const d = new Date(t * 1000)
+  if (!phone.value) return d
+  const short = selectedRange.value === '1h' || selectedRange.value === '24h'
+  return short
+    ? d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+    : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
 
 /**
  * Chart series. Instant metrics that track extremes get a min and max band
@@ -131,7 +145,7 @@ const chartSeries = computed(() => {
 
   const main = {
     name: metric.label,
-    data: points.value.map((p) => ({ x: new Date(p.t * 1000), y: p.value ?? 0 })),
+    data: points.value.map((p) => ({ x: xValue(p.t), y: p.value ?? 0 })),
   }
 
   const hasBand = points.value.some((p) => p.min !== undefined && p.min !== null && p.min !== p.value)
@@ -139,8 +153,8 @@ const chartSeries = computed(() => {
 
   return [
     main,
-    { name: 'Min', data: points.value.map((p) => ({ x: new Date(p.t * 1000), y: p.min ?? p.value ?? 0 })) },
-    { name: 'Max', data: points.value.map((p) => ({ x: new Date(p.t * 1000), y: p.max ?? p.value ?? 0 })) },
+    { name: 'Min', data: points.value.map((p) => ({ x: xValue(p.t), y: p.min ?? p.value ?? 0 })) },
+    { name: 'Max', data: points.value.map((p) => ({ x: xValue(p.t), y: p.max ?? p.value ?? 0 })) },
   ]
 })
 
@@ -237,12 +251,18 @@ watch(deviceId, async () => {
 })
 </script>
 
-<style scoped>
+<style lang="scss" scoped>
 .device-detail {
   display: flex;
   flex-direction: column;
   gap: 1rem;
   padding: 1rem 1.25rem;
+
+  // The shell already keeps a phone's gutter. A second one on top cost the
+  // tiles and the chart 40px of a 360px screen.
+  @include variables.phone {
+    padding-inline: 0;
+  }
 }
 
 .detail-header {
@@ -266,6 +286,12 @@ watch(deviceId, async () => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 0.75rem;
+
+  // One tile per row filled a phone's first screen with four numbers. A
+  // narrower minimum fits two side by side at 360px, and more when sideways.
+  @include variables.phone {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  }
 }
 
 .summary-tile {
@@ -318,25 +344,12 @@ watch(deviceId, async () => {
   flex-wrap: wrap;
 }
 
+// NbTabs fills its row by default, which pushed the resolution note onto a
+// line of its own. Sized to its tabs, the note stays beside them.
 .range-tabs {
-  display: inline-flex;
-  gap: 0.25rem;
-}
-
-.range-tab {
-  border: 1px solid transparent;
-  background: transparent;
-  border-radius: 7px;
-  padding: 0.3rem 0.65rem;
-  font-size: 0.82rem;
-  cursor: pointer;
-  color: var(--nb-color-text-muted, var(--nb-c-text-muted));
-}
-
-.range-tab.active {
-  border-color: var(--nb-color-border, var(--nb-c-border));
-  color: var(--nb-color-text, var(--nb-c-text));
-  font-weight: 600;
+  width: auto;
+  min-width: 0;
+  flex: 0 1 auto;
 }
 
 .resolution-note {
@@ -350,6 +363,11 @@ watch(deviceId, async () => {
   padding: 0.75rem;
   min-height: 340px;
   overflow-x: auto;
+
+  // A 320px chart under the tiles leaves a phone held sideways no room to see it.
+  @include variables.phone {
+    min-height: 240px;
+  }
 }
 
 .chart-empty {
@@ -360,5 +378,9 @@ watch(deviceId, async () => {
   font-size: 0.9rem;
   text-align: center;
   padding: 0 2rem;
+
+  @include variables.phone {
+    height: 220px;
+  }
 }
 </style>

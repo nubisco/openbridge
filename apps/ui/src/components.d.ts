@@ -19,6 +19,8 @@ declare module 'vue' {
     NbCheckbox: typeof import('@nubisco/ui/components/Checkbox')['NbCheckbox']
     NbCopyButton: typeof import('@nubisco/ui/components/CopyButton')['NbCopyButton']
     NbDataTable: typeof import('@nubisco/ui/components/DataTable')['NbDataTable']
+    NbDefinitionList: typeof import('@nubisco/ui/components/DefinitionList')['NbDefinitionList']
+    NbDefinitionListItem: typeof import('@nubisco/ui/components/DefinitionListItem')['NbDefinitionListItem']
     NbEmptyState: typeof import('@nubisco/ui/components/EmptyState')['NbEmptyState']
     NbField: typeof import('@nubisco/ui/components/Field')['NbField']
     NbForm: typeof import('@nubisco/ui/components/Form')['NbForm']

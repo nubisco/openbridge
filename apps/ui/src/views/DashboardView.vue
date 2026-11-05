@@ -20,10 +20,7 @@
                  daemon. Those are not the same thing: the daemon serves this
                  page perfectly well with no HomeKit bridge behind it, and
                  reading "Bridge running" in that state is worse than useless. -->
-            <div class="hk-status">
-              <span class="dot" :class="hapDotClass" />
-              {{ hapStatusLabel }}
-            </div>
+            <NbBadge class="hk-status" dot :variant="hapVariant">{{ hapStatusLabel }}</NbBadge>
             <div v-if="hapError" class="hk-error">{{ hapError }}</div>
           </div>
         </div>
@@ -32,32 +29,27 @@
       <!-- System information card -->
       <NbPanel class="sys-card">
         <div class="card-title">System Information</div>
-        <div v-if="sysInfo" class="sys-grid">
-          <span class="sys-key">OS</span>
-          <span class="sys-val">{{ sysInfo.os }}</span>
-          <span class="sys-key">Arch</span>
-          <span class="sys-val">{{ sysInfo.arch }}</span>
-          <span class="sys-key">Hostname</span>
-          <span class="sys-val">{{ sysInfo.hostname }}</span>
-          <span class="sys-key">IP Address</span>
-          <span class="sys-val">{{ sysInfo.ip }}</span>
-          <span class="sys-key">User</span>
-          <span class="sys-val">{{ sysInfo.user }}</span>
-          <span class="sys-key">Node.js</span>
-          <span class="sys-val">{{ sysInfo.nodeVersion }}</span>
-          <span class="sys-key">OpenBridge</span>
-          <span class="sys-val">v{{ daemon.health?.version ?? '—' }}</span>
-          <span class="sys-key">Config</span>
-          <span class="sys-val mono">{{ sysInfo.configPath }}</span>
-          <span class="sys-key">OB plugins</span>
-          <span class="sys-val mono">{{ sysInfo.obPluginsDir }}</span>
-          <span class="sys-key">HB plugins</span>
-          <span class="sys-val mono">{{ sysInfo.hbPluginsDir }}</span>
-        </div>
-        <div v-else class="loading-inline">
-          <NbIcon name="spinner" :size="16" />
-          Loading...
-        </div>
+        <!-- A fixed term width keeps every value on one edge. The library's
+             rows are separate grids, so a content-sized term would not. -->
+        <NbDefinitionList v-if="sysInfo" compact term-width="6rem">
+          <NbDefinitionListItem term="OS">{{ sysInfo.os }}</NbDefinitionListItem>
+          <NbDefinitionListItem term="Arch">{{ sysInfo.arch }}</NbDefinitionListItem>
+          <NbDefinitionListItem term="Hostname">{{ sysInfo.hostname }}</NbDefinitionListItem>
+          <NbDefinitionListItem term="IP Address">{{ sysInfo.ip }}</NbDefinitionListItem>
+          <NbDefinitionListItem term="User">{{ sysInfo.user }}</NbDefinitionListItem>
+          <NbDefinitionListItem term="Node.js">{{ sysInfo.nodeVersion }}</NbDefinitionListItem>
+          <NbDefinitionListItem term="OpenBridge">v{{ daemon.health?.version ?? '—' }}</NbDefinitionListItem>
+          <NbDefinitionListItem term="Config">
+            <span class="sys-path">{{ sysInfo.configPath }}</span>
+          </NbDefinitionListItem>
+          <NbDefinitionListItem term="OB plugins">
+            <span class="sys-path">{{ sysInfo.obPluginsDir }}</span>
+          </NbDefinitionListItem>
+          <NbDefinitionListItem term="HB plugins">
+            <span class="sys-path">{{ sysInfo.hbPluginsDir }}</span>
+          </NbDefinitionListItem>
+        </NbDefinitionList>
+        <NbSpinner v-else size="sm" show-label label="Loading..." />
       </NbPanel>
 
       <!-- Plugins mini-list card -->
@@ -66,7 +58,7 @@
           Plugins
           <span class="plugins-counts">
             <NbBadge variant="green">{{ daemon.runningCount }} running</NbBadge>
-            <span v-if="daemon.errorCount" class="pill red">{{ daemon.errorCount }} error</span>
+            <NbBadge v-if="daemon.errorCount" variant="red">{{ daemon.errorCount }} error</NbBadge>
           </span>
         </div>
         <div v-if="daemon.plugins.length === 0" class="empty-inline">No plugins loaded yet.</div>
@@ -145,7 +137,7 @@
             outlined
             style="width: 100%; justify-content: center"
             :loading="restarting"
-            :icon="restartDone ? 'check' : restarting ? 'spinner' : 'arrows-clockwise'"
+            :icon="restartDone ? 'check' : 'arrows-clockwise'"
             @click="restartOpenBridge"
           >
             {{ restartDone ? 'Restarted' : restarting ? 'Restarting…' : 'Restart OpenBridge' }}
@@ -239,8 +231,8 @@ const pincode = ref('')
 /** Why HomeKit is unavailable, as reported by the daemon. */
 const hapError = ref('')
 
-const hapDotClass = computed(() => {
-  if (!daemon.connected) return 'gray'
+const hapVariant = computed(() => {
+  if (!daemon.connected) return 'grey'
   return hapError.value ? 'red' : 'green'
 })
 
@@ -397,6 +389,12 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: 220px 1fr 1fr;
   gap: 1rem;
+
+  // Three columns leave the system card a sliver on a phone, so its values
+  // broke after every few letters. One card per row instead.
+  @include variables.phone {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 // HomeKit card
@@ -450,28 +448,7 @@ onUnmounted(() => {
   margin-top: 2px;
 }
 .hk-status {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.75rem;
-  color: var(--nb-c-text-muted);
   margin-top: 0.5rem;
-}
-.dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  &.green {
-    background: var(--nb-c-success);
-    box-shadow: 0 0 4px color-mix(in srgb, var(--nb-c-success) 60%, transparent);
-  }
-  &.gray {
-    background: var(--nb-c-border);
-  }
-  &.red {
-    background: var(--nb-c-danger);
-    box-shadow: 0 0 4px color-mix(in srgb, var(--nb-c-danger) 60%, transparent);
-  }
 }
 
 .hk-error {
@@ -486,33 +463,12 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
 }
-.sys-grid {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0.3rem 1.25rem;
-  font-size: 0.81rem;
-}
-.sys-key {
+// A path is read character by character, so it keeps the monospace face.
+.sys-path {
+  font-family: monospace;
+  font-size: 0.75rem;
   color: var(--nb-c-text-muted);
-  white-space: nowrap;
 }
-.sys-val {
-  color: var(--nb-c-text);
-  word-break: break-all;
-  &.mono {
-    font-family: monospace;
-    font-size: 0.75rem;
-    color: var(--nb-c-text-muted);
-  }
-}
-.loading-inline {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: var(--nb-c-text-subtle);
-  font-size: 0.82rem;
-}
-
 // Plugins mini-list
 .plugins-card {
   display: flex;
@@ -580,6 +536,12 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 1rem;
+
+  // Two side by side still squeezes the network card's two rates past its
+  // edge at 360px, so the metrics stack too.
+  @include variables.phone {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .metric-card {
