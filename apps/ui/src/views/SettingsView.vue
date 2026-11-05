@@ -31,10 +31,11 @@
           <div class="pin-row">
             <NbTextInput v-model="bridge.pincode" size="sm" placeholder="031-45-154" />
             <NbButton
+              v-nb-tooltip="{ body: 'Generate random PIN' }"
               variant="ghost"
               size="sm"
               icon="arrows-clockwise"
-              title="Generate random PIN"
+              aria-label="Generate random PIN"
               @click="generatePin"
             />
           </div>
@@ -58,14 +59,7 @@
         <NbButton variant="primary" size="sm" :loading="saving" :icon="saved ? 'check' : 'floppy-disk'" @click="save">
           {{ saved ? 'Saved!' : 'Save' }}
         </NbButton>
-        <NbButton
-          variant="secondary"
-          size="sm"
-          outlined
-          :loading="restarting"
-          :icon="restarting ? 'spinner' : 'arrows-clockwise'"
-          @click="restart"
-        >
+        <NbButton variant="secondary" size="sm" outlined :loading="restarting" icon="arrows-clockwise" @click="restart">
           {{ restarting ? 'Restarting…' : 'Save & Restart OpenBridge' }}
         </NbButton>
         <span v-if="saved && !restarting" class="action-hint">
@@ -117,7 +111,7 @@
             variant="primary"
             size="sm"
             :loading="applying"
-            :icon="applying ? 'spinner' : 'arrow-circle-up'"
+            icon="arrow-circle-up"
             @click="applyUpdate"
           >
             {{ applying ? 'Updating…' : 'Install update' }}
