@@ -29,6 +29,8 @@ import {
   type BridgeContext,
 } from './services/bridge.js'
 import { AccessStore } from './access.js'
+import { registerNotificationRoutes } from './notification-routes.js'
+import { openBridgeUpdate, pluginUpdate, type NotificationStore } from './notifications.js'
 import { isMcpEnabled, registerMcpRoutes } from './mcp/index.js'
 import { registerOauthRoutes } from './mcp/oauth.js'
 
@@ -135,6 +137,8 @@ export async function createServer(
    * same number and opposite evidence.
    */
   observationContext: ((deviceId: string) => Record<string, unknown> | undefined) | null = null,
+  /** The bell. Absent in tests that do not exercise it, and then no routes are added. */
+  notifications: NotificationStore | null = null,
 ) {
   const app = Fastify({ logger: false })
 
@@ -170,6 +174,9 @@ export async function createServer(
       `Platform auth enabled, issuer=${authConfig.issuer ?? 'unset'} authOrigin=${authConfig.authOrigin ?? 'unset'} appId=${authConfig.appId ?? 'unset'}`,
     )
   }
+
+  // ─── Notifications (the bell) ─────────────────────────────────────────────
+  if (notifications) registerNotificationRoutes(app, notifications, authConfig)
 
   // ─── MCP ──────────────────────────────────────────────────────────────────
   // A second door onto the same functions, for AI agents. Off unless
@@ -236,6 +243,7 @@ export async function createServer(
     }
 
     const latest = lastKnownLatest?.version ?? null
+    if (notifications) openBridgeUpdate(notifications, OPENBRIDGE_VERSION, latest)
     const install = detectInstall()
 
     return {
@@ -254,6 +262,21 @@ export async function createServer(
       releaseNotes: lastKnownLatest?.notes ?? null,
     }
   })
+
+  // The bell hears about a new OpenBridge version without anybody opening the
+  // dashboard, on the same six-hour rhythm as the plugin check below. The key
+  // is the version, so every check after the first finds nothing to say.
+  if (notifications) {
+    const checkOwnUpdate = async () => {
+      try {
+        openBridgeUpdate(notifications, OPENBRIDGE_VERSION, await fetchLatestVersion())
+      } catch {
+        /* offline: the next check will try again */
+      }
+    }
+    setTimeout(() => void checkOwnUpdate(), 90_000).unref()
+    setInterval(() => void checkOwnUpdate(), 6 * 60 * 60_000).unref()
+  }
 
   // ─── Update progress WebSocket ────────────────────────────────────────────
   app.get('/ws/updates', { websocket: true }, (ws: WebSocket) => {
@@ -1363,6 +1386,7 @@ export async function createServer(
         if (latest !== currentVersion) {
           plugin.availableUpdate = latest
           updatesFound++
+          if (notifications) pluginUpdate(notifications, { id: plugin.id, name, current: currentVersion }, latest)
         } else {
           plugin.availableUpdate = undefined
         }
