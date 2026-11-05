@@ -397,6 +397,12 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: 220px 1fr 1fr;
   gap: 1rem;
+
+  // Three columns leave the system card a sliver on a phone, so its values
+  // broke after every few letters. One card per row instead.
+  @include variables.phone {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 // HomeKit card
@@ -580,6 +586,12 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 1rem;
+
+  // Two side by side still squeezes the network card's two rates past its
+  // edge at 360px, so the metrics stack too.
+  @include variables.phone {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .metric-card {
