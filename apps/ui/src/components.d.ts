@@ -11,6 +11,7 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    NbActionGroup: typeof import('@nubisco/ui/components/ActionGroup')['NbActionGroup']
     NbBadge: typeof import('@nubisco/ui/components/Badge')['NbBadge']
     NbBanner: typeof import('@nubisco/ui/components/Banner')['NbBanner']
     NbBarChart: typeof import('@nubisco/ui/components/Charts/BarChart')['NbBarChart']
@@ -24,6 +25,7 @@ declare module 'vue' {
     NbForm: typeof import('@nubisco/ui/components/Form')['NbForm']
     NbGrid: typeof import('@nubisco/ui/components/Grid')['NbGrid']
     NbIcon: typeof import('@nubisco/ui/components/Icon')['NbIcon']
+    NbInlineLoading: typeof import('@nubisco/ui/components/InlineLoading')['NbInlineLoading']
     NbInterpolationChart: typeof import('@nubisco/ui/components/Charts/InterpolationChart')['NbInterpolationChart']
     NbLineChart: typeof import('@nubisco/ui/components/Charts/LineChart')['NbLineChart']
     NbMenuItem: typeof import('@nubisco/ui/components/MenuItem')['NbMenuItem']
