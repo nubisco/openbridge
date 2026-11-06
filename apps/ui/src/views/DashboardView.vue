@@ -1,17 +1,25 @@
 <template>
-  <!-- The dashboard pattern. A summary strip, then HomeKit pairing as the one
-       raised region (a new bridge is opened to be paired), with system
-       information beside it, then the plugins and the live metrics as flat
-       supporting tiles. The trail names the page, so there is no heading
-       repeating it. -->
+  <!-- The dashboard pattern, kept compact (Jose, 2026-11-06). A summary
+       strip, then HomeKit pairing as the one raised region beside system
+       information, then the live metrics as flat tiles. There is no plugin
+       list: the strip already says how many run and how many failed, a
+       failing plugin rings the bell, and the list was a copy of the Plugins
+       page, which the two plugin figures link to. The trail names the page,
+       so there is no heading repeating it. -->
   <div class="dashboard">
     <!-- Three figures from data the page already has. Hue is status: a tile
          turns red only when something is wrong. -->
     <NbCardGrid min="160px" gap="md">
-      <NbStat size="sm" label="Plugins running" :value="`${daemon.runningCount} of ${daemon.plugins.length}`" />
+      <NbStat
+        size="sm"
+        label="Plugins running"
+        :value="`${daemon.runningCount} of ${daemon.plugins.length}`"
+        to="/plugins"
+      />
       <NbStat
         size="sm"
         label="Plugin errors"
+        to="/plugins"
         :value="daemon.errorCount"
         :status="daemon.errorCount ? 'danger' : 'neutral'"
       />
@@ -24,9 +32,9 @@
 
     <!-- Pairing first (Jose, 2026-11-06): a new bridge is opened to be added
          to the Home app, so the QR code is the page's one raised region and
-         sits where nobody has to scroll for it. System information is its
-         flat neighbour. -->
-    <NbCardGrid min="320px" gap="lg" fill="auto-fit">
+         sits where nobody has to scroll for it. It takes the width of the
+         code, and system information, its flat neighbour, takes the rest. -->
+    <div class="setup">
       <NbPanel title="HomeKit pairing">
         <div class="hk">
           <div v-if="qrDataUrl" class="hk__qr">
@@ -67,25 +75,7 @@
         </NbDefinitionList>
         <NbSpinner v-else size="sm" show-label label="Loading..." />
       </NbPanel>
-    </NbCardGrid>
-
-    <!-- What talks to the devices, flat on the ground: the strip above
-         already says whether any is in error. -->
-    <NbPanel flat title="Plugins">
-      <template #actions>
-        <NbButton size="sm" variant="tertiary" to="/plugins">Manage plugins</NbButton>
-      </template>
-      <p v-if="daemon.plugins.length === 0" class="empty-inline type-body-compact">No plugins loaded yet.</p>
-      <NbContainedList v-else aria-label="Plugins" size="md">
-        <NbContainedListItem v-for="p in daemon.plugins" :key="p.id" :title="p.manifest.name">
-          <template #trailing>
-            <span class="plugin-ver type-body-sm tabular">v{{ p.manifest.version }}</span>
-            <NbBadge v-if="p.source === 'homebridge'" variant="neutral" size="sm">HB</NbBadge>
-            <NbBadge :variant="statusVariant(p.status)" size="sm">{{ p.status }}</NbBadge>
-          </template>
-        </NbContainedListItem>
-      </NbContainedList>
-    </NbPanel>
+    </div>
 
     <!-- Live metrics: diagnostics, peers of each other, flat on the ground.
          A plain grid rather than NbCardGrid: four, two or one to a row, never
@@ -175,13 +165,6 @@ import * as iconRestart from '@nubisco/ui/icons/arrows-clockwise'
 
 const daemon = useDaemonStore()
 const layout = useLayoutStore()
-
-function statusVariant(status: string) {
-  if (status === 'running') return 'success'
-  if (status === 'error') return 'danger'
-  if (status === 'loading') return 'info'
-  return 'neutral'
-}
 
 // ─── Restart OpenBridge ───────────────────────────────────────────────────────
 const restarting = ref(false)
@@ -376,13 +359,16 @@ onUnmounted(() => {
   }
 }
 
-.empty-inline {
-  margin: 0;
-  color: var(--nb-c-text-muted);
-}
+// Pairing is as wide as its code, system information takes the rest. On a
+// phone they stack.
+.setup {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--nb-spacing-24);
 
-.plugin-ver {
-  color: var(--nb-c-text-muted);
+  @include variables.phone {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 // ─── Metrics ─────────────────────────────────────────────────────────────────

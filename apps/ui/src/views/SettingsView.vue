@@ -1,78 +1,115 @@
 <template>
-  <!-- The settings pattern: one column, sections on the page ground under a
-       heading and a lede, 32px apart. No page title, the trail already says
-       Settings. The two tables in AI agents paint their own surface, so
-       nothing here is boxed. -->
+  <!-- The settings pattern: tabs in the shell's fixed bar, one per area, and
+       sections on the page ground under a heading and a lede. No page title,
+       the trail already says Settings. The page uses the width the frame
+       gives it ("Content uses the whole width it is given"): the Bridge form
+       has the pairing steps beside it, and the AI agents tables run full
+       width. -->
   <div class="settings">
-    <!-- Bridge: a form with an explicit Save at its foot. -->
-    <section class="settings__section" aria-labelledby="settings-bridge-title">
-      <header>
-        <h2 id="settings-bridge-title" class="type-heading-02 settings__title">Bridge</h2>
-        <p class="type-body-sm settings__lede">
-          HomeKit bridge identity and network settings. They take effect when OpenBridge restarts.
-        </p>
-      </header>
+    <component :is="fixedbar.Outlet">
+      <NbTabs v-model="tab" :items="tabs" aria-label="Settings sections" variant="line" />
+    </component>
 
-      <!-- NbField supplies the label column every row lines up on, so the
+    <!-- Bridge: a form with an explicit Save at its foot, and the pairing
+         steps it is about beside it. -->
+    <NbPageLayout v-if="tab === 'bridge'" aside-width="2:1">
+      <section class="settings__section" aria-labelledby="settings-bridge-title">
+        <header>
+          <h2 id="settings-bridge-title" class="type-heading-02 settings__title">Bridge</h2>
+          <p class="type-body-sm settings__lede">
+            HomeKit bridge identity and network settings. They take effect when OpenBridge restarts.
+          </p>
+        </header>
+
+        <!-- NbField supplies the label column every row lines up on, so the
            fields need no width or alignment CSS of their own. -->
-      <NbGrid dir="col" gap="md" class="settings__form settings__fields">
-        <NbField label="Bridge name" hint="Displayed in the Home app">
-          <NbTextInput v-model="bridge.name" placeholder="OpenBridge" />
-        </NbField>
+        <NbGrid dir="col" gap="md" class="settings__fields">
+          <NbField label="Bridge name" hint="Displayed in the Home app">
+            <NbTextInput v-model="bridge.name" placeholder="OpenBridge" />
+          </NbField>
 
-        <NbField label="HTTP port" hint="OpenBridge web UI &amp; API" control="fit">
-          <NbNumberInput v-model="bridge.port" :min="1024" :max="65535" />
-        </NbField>
+          <NbField label="HTTP port" hint="OpenBridge web UI &amp; API" control="fit">
+            <NbNumberInput v-model="bridge.port" :min="1024" :max="65535" />
+          </NbField>
 
-        <NbField label="HAP port" hint="HomeKit accessory protocol port" control="fit">
-          <NbNumberInput v-model="bridge.hapPort" :min="1024" :max="65535" />
-        </NbField>
+          <NbField label="HAP port" hint="HomeKit accessory protocol port" control="fit">
+            <NbNumberInput v-model="bridge.hapPort" :min="1024" :max="65535" />
+          </NbField>
 
-        <NbField label="PIN code" hint="Format: XXX-XX-XXX, used to pair with HomeKit">
-          <div class="settings__pin">
-            <NbTextInput v-model="bridge.pincode" class="tabular" placeholder="031-45-154" />
-            <NbButton
-              v-nb-tooltip="{ body: 'Generate random PIN' }"
-              variant="ghost"
-              icon="arrows-clockwise"
-              aria-label="Generate random PIN"
-              @click="generatePin"
-            />
-          </div>
-        </NbField>
+          <NbField label="PIN code" hint="Format: XXX-XX-XXX, used to pair with HomeKit">
+            <div class="settings__pin">
+              <NbTextInput v-model="bridge.pincode" class="tabular" placeholder="031-45-154" />
+              <NbButton
+                v-nb-tooltip="{ body: 'Generate random PIN' }"
+                variant="ghost"
+                icon="arrows-clockwise"
+                aria-label="Generate random PIN"
+                @click="generatePin"
+              />
+            </div>
+          </NbField>
 
-        <NbField
-          label="Bridge MAC"
-          hint="Leave empty to auto-generate. Change this only if pairing with HomeKit fails."
-        >
-          <NbTextInput v-model="bridge.username" class="settings__mono" placeholder="AA:BB:CC:DD:EE:FF" />
-        </NbField>
+          <NbField
+            label="Bridge MAC"
+            hint="Leave empty to auto-generate. Change this only if pairing with HomeKit fails."
+          >
+            <NbTextInput v-model="bridge.username" class="settings__mono" placeholder="AA:BB:CC:DD:EE:FF" />
+          </NbField>
 
-        <NbField label="Log level" control="fit">
-          <NbSelect v-model="bridge.logLevel" :options="logLevelOptions" />
-        </NbField>
-      </NbGrid>
+          <NbField label="Log level" control="fit">
+            <NbSelect v-model="bridge.logLevel" :options="logLevelOptions" />
+          </NbField>
+        </NbGrid>
 
-      <NbMessage v-if="error" variant="error" class="settings__form">{{ error }}</NbMessage>
+        <NbMessage v-if="error" variant="error">{{ error }}</NbMessage>
 
-      <!-- Save is the section's one filled button. Restarting is a separate
+        <!-- Save is the section's one filled button. Restarting is a separate
            step, so it stays quiet beside it. -->
-      <div class="settings__actions">
-        <NbButton variant="primary" :loading="saving" :icon="saved ? 'check' : undefined" @click="save">
-          {{ saved ? 'Saved' : 'Save' }}
-        </NbButton>
-        <NbButton variant="tertiary" :loading="restarting" icon="arrows-clockwise" @click="saveAndRestart">
-          {{ restarting ? 'Restarting…' : 'Save & Restart OpenBridge' }}
-        </NbButton>
-        <span v-if="saved && !restarting" class="type-body-sm settings__hint">
-          <NbIcon name="info" size="sm" />
-          Restart the daemon for changes to take effect
-        </span>
-      </div>
-    </section>
+        <div class="settings__actions">
+          <NbButton variant="primary" :loading="saving" :icon="saved ? 'check' : undefined" @click="save">
+            {{ saved ? 'Saved' : 'Save' }}
+          </NbButton>
+          <NbButton variant="tertiary" :loading="restarting" icon="arrows-clockwise" @click="saveAndRestart">
+            {{ restarting ? 'Restarting…' : 'Save & Restart OpenBridge' }}
+          </NbButton>
+          <span v-if="saved && !restarting" class="type-body-sm settings__hint">
+            <NbIcon name="info" size="sm" />
+            Restart the daemon for changes to take effect
+          </span>
+        </div>
+      </section>
+
+      <template #aside>
+        <!-- HAP pairing: guidance, not a setting, so it reads as prose. -->
+        <section class="settings__section" aria-labelledby="settings-pairing-title">
+          <header>
+            <h2 id="settings-pairing-title" class="type-heading-02 settings__title">Pair with HomeKit</h2>
+          </header>
+          <ol class="type-body-md settings__steps">
+            <li>
+              Open the
+              <strong>Home</strong>
+              app on your iPhone or iPad
+            </li>
+            <li>
+              Tap
+              <strong>+</strong>
+              →
+              <strong>Add Accessory</strong>
+            </li>
+            <li>
+              Scan the QR code from the Dashboard, or tap
+              <strong>More options</strong>
+              and enter the PIN code manually
+            </li>
+            <li>If you change the PIN or username, unpair first from the Home app, then re-pair</li>
+          </ol>
+        </section>
+      </template>
+    </NbPageLayout>
 
     <!-- Updates: a status and the one action it allows. -->
-    <section class="settings__section" aria-labelledby="settings-updates-title">
+    <section v-else-if="tab === 'updates'" class="settings__section" aria-labelledby="settings-updates-title">
       <header>
         <h2 id="settings-updates-title" class="type-heading-02 settings__title">Updates</h2>
         <p class="type-body-sm settings__lede">OpenBridge daemon and UI.</p>
@@ -112,7 +149,6 @@
            indeterminate, which NbProgressBar shows by omitting `value`. -->
       <NbProgressBar
         v-if="applying && updateStage"
-        class="settings__form"
         :label="updateMessage"
         :value="updateStage === 'downloading' && updateProgressPct > 0 ? updateProgressPct : undefined"
         :max="100"
@@ -144,19 +180,23 @@
       </div>
     </section>
 
-    <AgentAccessPanel />
+    <AgentAccessPanel v-else-if="tab === 'agents'" />
 
     <!-- Appearance. Theme is a personal setting and lives in the user menu,
          but with sign-in off (the self-hosted default) there is no user menu,
          so this is the only place left to set it. It applies at once, so the
          section has no Save. -->
-    <section v-if="!hasUserMenu" class="settings__section" aria-labelledby="settings-appearance-title">
+    <section
+      v-else-if="tab === 'appearance' && !hasUserMenu"
+      class="settings__section"
+      aria-labelledby="settings-appearance-title"
+    >
       <header>
         <h2 id="settings-appearance-title" class="type-heading-02 settings__title">Appearance</h2>
         <p class="type-body-sm settings__lede">Theme for this browser. A change applies as soon as you make it.</p>
       </header>
 
-      <NbGrid dir="col" gap="md" class="settings__form settings__fields">
+      <NbGrid dir="col" gap="md" class="settings__fields">
         <NbField label="Theme">
           <NbRadio
             name="settings-theme"
@@ -167,38 +207,13 @@
         </NbField>
       </NbGrid>
     </section>
-
-    <!-- HAP pairing: guidance, not a setting, so it reads as prose. -->
-    <section class="settings__section" aria-labelledby="settings-pairing-title">
-      <header>
-        <h2 id="settings-pairing-title" class="type-heading-02 settings__title">Pair with HomeKit</h2>
-      </header>
-      <ol class="type-body-md settings__form settings__steps">
-        <li>
-          Open the
-          <strong>Home</strong>
-          app on your iPhone or iPad
-        </li>
-        <li>
-          Tap
-          <strong>+</strong>
-          →
-          <strong>Add Accessory</strong>
-        </li>
-        <li>
-          Scan the QR code from the Dashboard, or tap
-          <strong>More options</strong>
-          and enter the PIN code manually
-        </li>
-        <li>If you change the PIN or username, unpair first from the Home app, then re-pair</li>
-      </ol>
-    </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted, onUnmounted } from 'vue'
-import { useTheme, type TTheme } from '@nubisco/ui'
+import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { useShellSlot, useTheme, type TTheme } from '@nubisco/ui'
 import { api, type BridgeConfig, type UpdateStatus } from '@/api'
 import { useAuth } from '@/composables/useAuth'
 import { useLayoutStore } from '@/stores/layout'
@@ -206,11 +221,34 @@ import AgentAccessPanel from '@/components/AgentAccessPanel.vue'
 
 const layout = useLayoutStore()
 const auth = useAuth()
+const route = useRoute()
+const router = useRouter()
+const fixedbar = useShellSlot('fixedbar')
 
 // The same condition AppLayout renders NbUserMenu on, so the theme always has
 // exactly one home: the menu when there is one, this panel when there is not.
 const hasUserMenu = computed(() => Boolean(auth.config.value?.enabled && auth.user.value))
 const themeController = useTheme()
+
+// One tab per area (the settings pattern). Appearance exists only while there
+// is no user menu to hold the theme.
+const tabs = computed(() => [
+  { id: 'bridge', label: 'Bridge' },
+  { id: 'updates', label: 'Updates' },
+  { id: 'agents', label: 'AI agents' },
+  ...(hasUserMenu.value ? [] : [{ id: 'appearance', label: 'Appearance' }]),
+])
+
+/** The tab is in the URL, so a link lands on it and a reload stays there. */
+function tabFrom(raw: unknown): string {
+  return typeof raw === 'string' && tabs.value.some((t) => t.id === raw) ? raw : 'bridge'
+}
+const tab = ref(tabFrom(route.query.tab))
+watch([() => route.query.tab, tabs], ([raw]) => (tab.value = tabFrom(raw)))
+watch(tab, (id) => {
+  if (route.query.tab === id) return
+  void router.replace({ query: { ...route.query, tab: id } })
+})
 // Worded as NbUserMenu's built-in Appearance section, so both read the same.
 const themeOptions = [
   { label: 'Light', value: 'light' },
@@ -448,14 +486,12 @@ function generatePin() {
 </script>
 
 <style lang="scss" scoped>
-// The settings pattern: one column capped near 56rem so the AI agents tables
-// keep their columns, forms at 40rem so a field never stretches across a
-// desktop, sections 32px apart on the page ground.
+// No cap on the view: it fills what the frame gives it (AGENTS.md, "Content
+// uses the whole width it is given"). The tabs keep each area to one screen.
 .settings {
   display: flex;
   flex-direction: column;
-  gap: var(--nb-spacing-32);
-  max-inline-size: 56rem;
+  gap: var(--nb-spacing-24);
   padding-block-end: var(--nb-spacing-32);
 
   &__section {
@@ -473,10 +509,6 @@ function generatePin() {
     max-inline-size: var(--nb-measure);
     margin: var(--nb-spacing-4) 0 0;
     color: var(--nb-c-text-muted);
-  }
-
-  &__form {
-    max-inline-size: 40rem;
   }
 
   // The label column NbField aligns every row on.

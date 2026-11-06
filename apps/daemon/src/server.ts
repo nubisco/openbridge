@@ -83,6 +83,7 @@ import { OPENBRIDGE_HOME, OB_PLUGINS_DIR, HB_PLUGINS_DIR } from './daemon.js'
 import { DeviceEventLog } from './device-events.js'
 import { ObservationStore, validateObservation } from './observations.js'
 import type { HomeKitVisibility } from './homekit-visibility.js'
+import { resolveShell } from './shell.js'
 import {
   CONVERTIBLE_SERVICES,
   isConvertible,
@@ -1872,13 +1873,15 @@ export async function createServer(
     }
     try {
       const nodePty = _req('node-pty')
-      const shell = process.env.SHELL || (process.platform === 'win32' ? 'cmd.exe' : '/bin/sh')
+      const shell = resolveShell()
       pty = nodePty.spawn(shell, [], {
         name: 'xterm-256color',
         cols: 80,
         rows: 24,
         cwd: process.env.HOME ?? process.cwd(),
-        env: { ...process.env },
+        // The shell reads $SHELL too (subshells, editors), so it gets the one
+        // that was resolved, even when the daemon itself had none.
+        env: { ...process.env, SHELL: shell },
       })
 
       pty.onData((data: string) => {
