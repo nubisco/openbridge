@@ -5,7 +5,7 @@
            moves into the page and Refresh and the view toggle fold into the
            group's menu. Desktop renders the same controls as before. -->
       <template v-if="!phone">
-        <NbTextInput v-model="search" placeholder="Search plugins..." size="sm" style="width: 200px" />
+        <NbTextInput v-model="search" placeholder="Search plugins..." size="sm" class="plugins-search" />
         <NbButton
           v-nb-tooltip="{ body: 'Refresh metadata' }"
           variant="ghost"
@@ -37,8 +37,10 @@
       :title="search ? `No plugins matching &quot;${search}&quot;` : 'No plugins loaded yet'"
       bordered
     >
+      <!-- The topbar already holds the page's one primary, Browse plugins, so
+           the empty state's way in steps down to tertiary. -->
       <template v-if="!search" #actions>
-        <NbButton variant="primary" size="sm" icon="magnifying-glass" @click="inspector.openMarketplace()">
+        <NbButton variant="tertiary" size="sm" icon="magnifying-glass" @click="inspector.openMarketplace()">
           Browse &amp; install plugins
         </NbButton>
       </template>
@@ -314,7 +316,11 @@ watch(
   display: flex;
   flex-direction: column;
   min-height: 0;
-  gap: 1rem;
+  gap: var(--nb-spacing-16);
+}
+
+.plugins-search {
+  width: 200px;
 }
 
 // Grows past the cards so there is empty area to click for dismissal.

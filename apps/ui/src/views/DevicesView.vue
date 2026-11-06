@@ -1,12 +1,5 @@
 <template>
   <div class="devices-view">
-    <component :is="topbarLeft.Outlet">
-      <template v-if="totalDevices > 0">
-      <span class="toolbar-count">{{ totalDevices }} device{{ totalDevices !== 1 ? 's' : '' }}</span>
-      <NbBadge v-if="nativeDevices.length > 0">{{ nativeDevices.length }} native</NbBadge>
-      </template>
-    </component>
-
     <component :is="topbarRight.Outlet">
       <NbButton
         v-nb-tooltip="{ body: viewToggleLabel }"
@@ -45,69 +38,93 @@
     <!-- self on the layout, not the grid: the click must land on the empty
          area around the cards, and a card click stops at the card itself. -->
     <div v-else class="devices-layout" @click.self="inspector.close()">
-      <!-- Device grid -->
-      <div v-if="view === 'cards'" class="device-grid" @click.self="inspector.close()">
+      <!-- The cards are peers, so they are flat tiles on the page ground, not
+           each a raised region. NbCard draws the title, the support line, the
+           hover and the selection. Only health and the reading live here. -->
+      <NbCardGrid v-if="view === 'cards'" min="200px" gap="md" @click.self="inspector.close()">
         <!-- Native plugin devices -->
-        <NbPanel
+        <NbCard
           v-for="dev in nativeDevices"
           :key="'native:' + dev.id"
-          class="device-card native-card"
-          :class="{ selected: selectedDeviceId === dev.id, unhealthy: isUnhealthy(dev) }"
           v-nb-tooltip="isUnhealthy(dev) ? cardTooltip(healthTooltip(dev)) : {}"
-          @click="selectNative(dev)"
+          flat
+          clickable
+          :orientation="phone ? 'horizontal' : 'vertical'"
+          class="device-card"
+          :class="{ unhealthy: isUnhealthy(dev) }"
+          :icon="widgetIcon(effectiveType(dev))"
+          :description="widgetLabel(effectiveType(dev))"
+          :selected="selectedDeviceId === dev.id"
+          @select="selectNative(dev)"
           @dblclick="openDetail(dev)"
         >
-          <span class="device-card__accent" />
-          <div class="device-icon native-icon">
-            <NbIcon :name="widgetIcon(effectiveType(dev))" :size="22" />
-          </div>
-          <div class="device-info">
-            <div class="device-name">
+          <template #title>
+            <span class="device-name">
               <!-- The same `warning` icon the page banner used, kept so the
                    signal people learned there still means the same thing. -->
-              <NbIcon v-if="isUnhealthy(dev)" name="warning" :size="14" class="name-health-icon" />
+              <NbIcon v-if="isUnhealthy(dev)" name="warning" size="sm" class="name-health-icon" />
               <span>{{ dev.name }}</span>
-            </div>
-            <div class="device-type">{{ widgetLabel(effectiveType(dev)) }}</div>
-            <!-- Inline widget summary -->
-            <div class="device-summary">
-              <!-- Energy meter -->
-              <template v-if="dev.widgetType === 'energy_meter' && dev.telemetry.power !== undefined">
-                <span class="summary-primary">{{ fmtNum(dev.telemetry.power, 1) }} W</span>
-              </template>
-              <!-- Thermostat -->
-              <template v-else-if="dev.widgetType === 'thermostat' && dev.telemetry.currentTemperature !== undefined">
-                <span class="summary-primary">{{ fmtNum(dev.telemetry.currentTemperature, 1) }}°C</span>
-                <span v-if="dev.telemetry.targetTemperature !== undefined" class="summary-secondary">
-                  target {{ fmtNum(dev.telemetry.targetTemperature, 1) }}°C
-                </span>
-              </template>
-              <!-- Dehumidifier -->
-              <template v-else-if="dev.widgetType === 'dehumidifier' && dev.telemetry.currentHumidity !== undefined">
-                <span class="summary-primary">{{ fmtNum(dev.telemetry.currentHumidity, 0) }}%</span>
-              </template>
-              <!-- Active state for switch/light -->
-              <template v-else-if="dev.telemetry.active !== undefined">
-                <span class="summary-status" :class="dev.telemetry.active ? 'on' : 'off'">
-                  {{ dev.telemetry.active ? 'On' : 'Off' }}
-                </span>
-              </template>
-            </div>
-            <!-- On/off toggle for all controllable devices -->
-            <div v-if="dev.telemetry.active !== undefined" class="card-controls" @click.stop>
+            </span>
+          </template>
+          <!-- Health, not plugin status. The two came apart during a real
+               outage: the plugin kept running perfectly while the devices it
+               polls had moved and stopped answering, so every dot stayed
+               green for thirty-six hours and the failure was found in
+               HomeKit instead. -->
+          <template #meta>
+            <span
+              class="device-reachability"
+              :class="healthClass(dev)"
+              role="img"
+              :aria-label="healthLabel(dev)"
+              :title="dev.health?.reason ?? healthLabel(dev)"
+            />
+          </template>
+
+          <!-- The reading: the one figure the card is for. -->
+          <div class="device-summary">
+            <template v-if="dev.widgetType === 'energy_meter' && dev.telemetry.power !== undefined">
+              <span class="summary-primary type-heading-02 tabular">{{ fmtNum(dev.telemetry.power, 1) }} W</span>
+            </template>
+            <template v-else-if="dev.widgetType === 'thermostat' && dev.telemetry.currentTemperature !== undefined">
+              <span class="summary-primary type-heading-02 tabular">
+                {{ fmtNum(dev.telemetry.currentTemperature, 1) }}°C
+              </span>
+              <span v-if="dev.telemetry.targetTemperature !== undefined" class="type-body-sm tabular">
+                target {{ fmtNum(dev.telemetry.targetTemperature, 1) }}°C
+              </span>
+            </template>
+            <template v-else-if="dev.widgetType === 'dehumidifier' && dev.telemetry.currentHumidity !== undefined">
+              <span class="summary-primary type-heading-02 tabular">
+                {{ fmtNum(dev.telemetry.currentHumidity, 0) }}%
+              </span>
+            </template>
+            <!-- Active state for switch/light -->
+            <NbBadge
+              v-else-if="dev.telemetry.active !== undefined"
+              size="sm"
+              :variant="dev.telemetry.active ? 'success' : 'neutral'"
+            >
+              {{ dev.telemetry.active ? 'On' : 'Off' }}
+            </NbBadge>
+          </div>
+
+          <template v-if="hasControls(dev)" #footer>
+            <!-- The card is a button: clicks and keys on its controls stop
+                 here, or Space on the switch would also open the inspector. -->
+            <div class="card-controls" @click.stop @keydown.stop @dblclick.stop>
+              <!-- On/off toggle for all controllable devices -->
               <NbSwitch
+                v-if="dev.telemetry.active !== undefined"
                 :name="`device-active-${dev.id}`"
                 :model-value="!!dev.telemetry.active"
+                :label="dev.name"
+                hide-label
                 @update:model-value="requestControl(dev, 'active', $event)"
               />
-            </div>
-            <!-- Thermostat target -->
-            <div
-              v-if="dev.widgetType === 'thermostat' && dev.telemetry.targetTemperature !== undefined"
-              class="card-controls"
-              @click.stop
-            >
+              <!-- Thermostat target -->
               <NbNumberInput
+                v-if="dev.widgetType === 'thermostat' && dev.telemetry.targetTemperature !== undefined"
                 :model-value="Number(dev.telemetry.targetTemperature)"
                 size="xs"
                 :min="5"
@@ -115,14 +132,9 @@
                 :step="1"
                 @update:model-value="(v: number | null) => v !== null && sendControl(dev.id, 'targetTemperature', v)"
               />
-            </div>
-            <!-- Dehumidifier target -->
-            <div
-              v-if="dev.widgetType === 'dehumidifier' && dev.telemetry.targetHumidity !== undefined"
-              class="card-controls"
-              @click.stop
-            >
+              <!-- Dehumidifier target -->
               <NbNumberInput
+                v-if="dev.widgetType === 'dehumidifier' && dev.telemetry.targetHumidity !== undefined"
                 :model-value="Number(dev.telemetry.targetHumidity)"
                 size="xs"
                 :min="30"
@@ -131,56 +143,58 @@
                 @update:model-value="(v: number | null) => v !== null && sendControl(dev.id, 'targetHumidity', v)"
               />
             </div>
-          </div>
-          <!-- Health, not plugin status. The two came apart during a real
-               outage: the plugin kept running perfectly while the devices it
-               polls had moved and stopped answering, so every dot stayed
-               green for thirty-six hours and the failure was found in
-               HomeKit instead. -->
-          <div class="device-reachability" :class="healthClass(dev)" :title="dev.health?.reason ?? healthLabel(dev)" />
-        </NbPanel>
+          </template>
+        </NbCard>
 
-        <!-- HAP / Homebridge accessories -->
-        <NbPanel
+        <!-- HAP / Homebridge accessories. The source goes in the support line,
+             since a native device is the norm and this is the exception. -->
+        <NbCard
           v-for="acc in daemon.accessories"
           :key="acc.uuid"
-          class="device-card hap-card"
-          :class="{
-            selected: selectedDeviceId === acc.uuid,
-            unreachable: !acc.reachable,
-            unhealthy: !acc.reachable,
-          }"
           v-nb-tooltip="acc.reachable ? {} : cardTooltip(HAP_UNREACHABLE_TOOLTIP)"
-          @click="selectHap(acc)"
+          flat
+          clickable
+          :orientation="phone ? 'horizontal' : 'vertical'"
+          class="device-card"
+          :class="{ unhealthy: !acc.reachable }"
+          :icon="categoryInfo(acc.category).icon"
+          :description="`${categoryInfo(acc.category).label} · HomeKit`"
+          :selected="selectedDeviceId === acc.uuid"
+          @select="selectHap(acc)"
         >
-          <div class="device-icon hap-icon" :class="{ unreachable: !acc.reachable }">
-            <NbIcon :name="categoryInfo(acc.category).icon" :size="22" />
-          </div>
-          <div class="device-info">
-            <div class="device-name">
-              <NbIcon v-if="!acc.reachable" name="warning" :size="14" class="name-health-icon" />
+          <template #title>
+            <span class="device-name">
+              <NbIcon v-if="!acc.reachable" name="warning" size="sm" class="name-health-icon" />
               <span>{{ acc.displayName }}</span>
-            </div>
-            <div class="device-type">{{ categoryInfo(acc.category).label }}</div>
-            <div v-if="hapPrimaryValue(acc)" class="device-summary">
-              <span class="summary-primary">{{ hapPrimaryValue(acc) }}</span>
-            </div>
-            <!-- On/Off toggle for controllable accessories -->
-            <div v-if="hapOnCharacteristic(acc)" class="card-controls" @click.stop>
+            </span>
+          </template>
+          <template #meta>
+            <span
+              class="device-reachability"
+              :class="acc.reachable ? 'online' : 'stale'"
+              role="img"
+              :aria-label="acc.reachable ? 'Responding' : 'Not responding'"
+              :title="acc.reachable ? 'Responding' : HAP_UNREACHABLE_TOOLTIP"
+            />
+          </template>
+
+          <div v-if="hapPrimaryValue(acc)" class="device-summary">
+            <span class="summary-primary type-heading-02 tabular">{{ hapPrimaryValue(acc) }}</span>
+          </div>
+
+          <template v-if="hapOnCharacteristic(acc)" #footer>
+            <div class="card-controls" @click.stop @keydown.stop>
               <NbSwitch
                 :name="`hap-on-${acc.uuid}`"
                 :model-value="!!hapOnCharacteristic(acc)?.value"
+                :label="acc.displayName"
+                hide-label
                 @update:model-value="toggleHapCharacteristic(acc, !!$event)"
               />
             </div>
-          </div>
-          <div
-            class="device-reachability"
-            :class="acc.reachable ? 'online' : 'stale'"
-            :title="acc.reachable ? 'Responding' : HAP_UNREACHABLE_TOOLTIP"
-          />
-        </NbPanel>
-      </div>
+          </template>
+        </NbCard>
+      </NbCardGrid>
 
       <NbDataTable
         v-else
@@ -196,13 +210,13 @@
       >
         <template #cell-name="{ row }">
           <div class="cell-name" :title="row.healthTooltip || undefined">
-            <NbIcon :name="row.icon" :size="16" />
+            <NbIcon :name="row.icon" size="sm" />
             <span>{{ row.name }}</span>
             <!-- NbDataTable exposes no per-row class or data attribute, so the
                  row highlight below hangs off this icon via `:has()` rather
                  than off the row itself. Giving the table a `rowClass` prop in
                  @nubisco/ui would be the cleaner fix. -->
-            <NbIcon v-if="row.unhealthy" name="warning" :size="14" class="cell-health-icon" />
+            <NbIcon v-if="row.unhealthy" name="warning" size="sm" class="cell-health-icon" />
           </div>
         </template>
         <template #cell-state="{ row }">
@@ -211,22 +225,37 @@
           </NbBadge>
           <span v-else>—</span>
         </template>
+        <template #cell-detail="{ row }">
+          <span class="tabular">{{ row.detail }}</span>
+        </template>
       </NbDataTable>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, computed } from 'vue'
-import { useConfirm, type IDataTableColumn, type IDataTableSortState, type ITooltipOptions, useShellSlot } from '@nubisco/ui'
+import { onMounted, onUnmounted, ref, computed, watch } from 'vue'
+import {
+  useConfirm,
+  usePhoneLayout,
+  type IDataTableColumn,
+  type IDataTableSortState,
+  type ITooltipOptions,
+  useShellSlot,
+} from '@nubisco/ui'
 import { useRouter } from 'vue-router'
 import { useDaemonStore } from '@/stores/daemon'
 import { useInspectorStore, type NativeDevice } from '@/stores/inspector'
 import { useLayoutStore } from '@/stores/layout'
 import { api, type Accessory } from '@/api'
-// Controls this view puts in the shell topbar.
-const topbarLeft = useShellSlot('topbar-left')
+// Controls this view puts in the shell topbar. Only on the right: the left
+// is the frame's trail, and the device count rides on it through setPage, the
+// same way the plugins page carries its own.
 const topbarRight = useShellSlot('topbar-right')
+
+// On a phone the grid is one column, so each card turns on its side: the icon
+// beside the name rather than above it, and a list of tiles to scan.
+const { phone } = usePhoneLayout()
 
 const daemon = useDaemonStore()
 const inspector = useInspectorStore()
@@ -613,6 +642,16 @@ function fmtNum(val: unknown, decimals = 1): string {
 // ─── Total device count ───────────────────────────────────────────────────────
 const totalDevices = computed(() => daemon.accessories.length + nativeDevices.value.length)
 
+/** Whether a native card has anything to operate in its footer. */
+function hasControls(dev: NativeDevice): boolean {
+  const t = dev.telemetry
+  return (
+    t.active !== undefined ||
+    (dev.widgetType === 'thermostat' && t.targetTemperature !== undefined) ||
+    (dev.widgetType === 'dehumidifier' && t.targetHumidity !== undefined)
+  )
+}
+
 // ─── Data fetching ────────────────────────────────────────────────────────────
 async function fetchNativeDevices() {
   try {
@@ -710,8 +749,20 @@ async function poll() {
   }
 }
 
+// The count is the frame's, beside the page name, as on the plugins page. It
+// used to sit in the topbar's left slot with a "native" badge, but that slot
+// is the trail and nothing else. The source is on each HomeKit card's support
+// line and in the table's Source column instead.
+watch(
+  totalDevices,
+  (n) => {
+    // Hidden at zero, as before: the empty state already says there are none.
+    layout.setPage('Devices', n > 0 ? n : undefined)
+  },
+  { immediate: true },
+)
+
 onMounted(async () => {
-  layout.setPage('Devices')
   await poll()
   pollInterval = setInterval(poll, 3000)
 })
@@ -729,16 +780,10 @@ onUnmounted(() => {
   min-height: 0;
 }
 
-// Contributed beside the breadcrumb in the shell topbar.
-.toolbar-count {
-  font-size: 0.8rem;
-  color: var(--nb-c-text-muted);
-}
-
 .cell-name {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--nb-spacing-8);
 }
 
 .cell-health-icon {
@@ -758,112 +803,25 @@ onUnmounted(() => {
 .devices-layout {
   min-height: 0;
   flex: 1;
-  margin-top: 0.75rem;
 }
 
-.device-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 0.75rem;
-  align-content: start;
+// Warning, not danger, matching the dot: a device that has stopped answering
+// is usually a network or power problem outside OpenBridge and is often
+// transient. The card stays fully interactive, because its inspector holds
+// the address and the recent events needed to fix it.
+//
+// Not on a selected card, so selecting an unhealthy device still shows the
+// selection edge rather than leaving the two competing for the border.
+.device-card.unhealthy:not(.nb-card--selected) {
+  border-color: var(--nb-c-warning);
+  box-shadow: inset 3px 0 0 0 var(--nb-c-warning);
 }
 
-// NbPanel supplies the surface, border and layer: the same primitive the
-// plugin cards use, so the two pages read as one system. Only selection,
-// the native/HAP accent and the inner rhythm live here.
-.device-card {
-  position: relative;
-  overflow: hidden;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.5rem;
-  transition:
-    border-color 0.15s,
-    background 0.15s;
-
-  &:hover {
-    background: var(--nb-c-surface-hover);
-  }
-  &.selected {
-    border-color: var(--nb-c-primary);
-    box-shadow: 0 0 0 1px var(--nb-c-primary);
-  }
-  &.unreachable {
-    opacity: 0.55;
-  }
-
-  // Warning, not danger, matching the dot: a device that has stopped answering
-  // is usually a network or power problem outside OpenBridge and is often
-  // transient. The card stays fully interactive, because its inspector holds
-  // the address and the recent events needed to fix it.
-  //
-  // Placed after `.selected` so selecting an unhealthy device still shows the
-  // selection colour rather than leaving the two competing for the border.
-  &.unhealthy:not(.selected) {
-    border-color: var(--nb-c-warning);
-    box-shadow: inset 3px 0 0 0 var(--nb-c-warning);
-  }
-
-  // An unreachable HAP card dims to 0.55, which would take the warning border
-  // down with it. The mark has to stay legible.
-  &.unhealthy {
-    opacity: 1;
-  }
-}
-
-.name-health-icon {
-  color: var(--nb-c-warning);
-  flex-shrink: 0;
-}
-
-// Marks a device served by a native OpenBridge plugin, mirroring the status
-// accent on the plugin cards.
-.device-card__accent {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 3px;
-  background: var(--nb-c-primary);
-}
-
-.device-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--nb-c-primary) 12%, var(--nb-c-surface));
-  color: var(--nb-c-primary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  &.unreachable {
-    background: var(--nb-c-layer-1);
-    color: var(--nb-c-text-subtle);
-  }
-  &.native-icon {
-    background: color-mix(in srgb, var(--nb-c-primary) 12%, var(--nb-c-surface));
-    color: var(--nb-c-primary);
-  }
-  &.hap-icon {
-    background: var(--nb-c-layer-1);
-    color: var(--nb-c-text-muted);
-  }
-}
-
-.device-info {
-  flex: 1;
-  min-width: 0;
-  width: 100%;
-}
 .device-name {
   display: flex;
   align-items: center;
-  gap: 0.3rem;
+  gap: var(--nb-spacing-4);
   min-width: 0;
-  font-weight: 600;
-  font-size: 0.875rem;
-  color: var(--nb-c-text);
 
   // Truncation belongs to the text now that the name can carry a health icon.
   // Left on the container, the ellipsis would eat the icon before the name.
@@ -873,48 +831,30 @@ onUnmounted(() => {
     text-overflow: ellipsis;
   }
 }
-.device-type {
-  font-size: 0.74rem;
-  color: var(--nb-c-text-subtle);
-  margin-top: 2px;
+
+.name-health-icon {
+  color: var(--nb-c-warning);
+  flex-shrink: 0;
 }
+
+// The reading, then its qualifier ("target 20.0°C") on the same baseline.
 .device-summary {
-  margin-top: 0.35rem;
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 0.4rem;
+  gap: var(--nb-spacing-8);
 }
+
 .summary-primary {
-  font-size: 1.1rem;
-  font-weight: 700;
   color: var(--nb-c-text);
-}
-.summary-secondary {
-  font-size: 0.72rem;
-  color: var(--nb-c-text-subtle);
-}
-.summary-status {
-  font-size: 0.75rem;
-  font-weight: 600;
-  padding: 0.1rem 0.4rem;
-  border-radius: 4px;
-  &.on {
-    background: color-mix(in srgb, var(--nb-c-success) 30%, var(--nb-c-surface));
-    color: var(--nb-c-success);
-  }
-  &.off {
-    background: var(--nb-c-layer-1);
-    color: var(--nb-c-text-subtle);
-  }
 }
 
 .device-reachability {
+  display: block;
   width: 8px;
   height: 8px;
   border-radius: 50%;
   flex-shrink: 0;
-  align-self: flex-start;
-  margin-top: 0.25rem;
   &.online {
     background: var(--nb-c-success);
   }
@@ -930,11 +870,11 @@ onUnmounted(() => {
   }
 }
 
-// ─── Card controls ─────────────────────────────────────────────────────────────
 .card-controls {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.5rem;
+  gap: var(--nb-spacing-8);
+  width: 100%;
 }
 </style>

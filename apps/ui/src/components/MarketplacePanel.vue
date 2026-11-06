@@ -1,189 +1,198 @@
 <template>
+  <!-- Renders inside the shell inspector, so it takes the inspector's density:
+       xs fields, 12 of padding, 8 between controls. -->
   <div class="mp-panel">
-    <!-- Header -->
     <div class="mp-header">
-      <span class="mp-title">Browse Plugins</span>
+      <h2 class="mp-title type-heading-01">Browse plugins</h2>
       <!-- This panel searches npm and is deliberately narrow: install what you
            already know you want. The marketplace site ranks, reviews and
            compares, which needs room this drawer does not have, so it opens in
            its own tab rather than trying to reproduce it here. -->
-      <a
-        class="mp-external"
+      <NbButton
+        v-nb-tooltip="{ body: 'Open the full marketplace in a new tab' }"
+        variant="link"
+        size="xs"
+        icon="arrow-square-out"
         :href="MARKETPLACE_URL"
         target="_blank"
-        rel="noopener noreferrer"
-        title="Open the full marketplace in a new tab"
       >
-        <NbIcon name="arrow-square-out" :size="12" />
         Marketplace
-      </a>
+      </NbButton>
     </div>
 
-    <!-- Search -->
-    <div class="mp-search-wrap">
-      <NbTextInput v-model="query" placeholder="Search plugins" size="sm" @update:model-value="onInput" />
+    <div class="mp-top">
+      <NbTextInput
+        v-model="query"
+        placeholder="Search plugins"
+        size="xs"
+        aria-label="Search plugins"
+        @update:model-value="onInput"
+      />
+
+      <NbBanner
+        v-if="justInstalled"
+        status="success"
+        dismissible
+        :title="`${justInstalled.name} installed`"
+        @dismiss="justInstalled = null"
+      >
+        Click it in your plugins list to configure it.
+      </NbBanner>
+
+      <NbMessage v-if="error" variant="error">{{ error }}</NbMessage>
     </div>
 
-    <div v-if="total > 0" class="mp-count">{{ total.toLocaleString() }} plugins found</div>
+    <div class="mp-scroll">
+      <!-- Local plugins (from configured sources) -->
+      <NbContainedList v-if="localPlugins.length > 0" title="Local plugins" class="mp-list">
+        <NbContainedListItem v-for="local in localPlugins" :key="local.name">
+          <template #leading>
+            <span class="mp-avatar">
+              <NbIcon name="diamond" size="sm" />
+            </span>
+          </template>
+          {{ local.name }}
+          <template #line>
+            <span class="mp-detail">
+              <span class="mp-badges">
+                <NbBadge variant="neutral" size="sm" icon="diamond">Native</NbBadge>
+                <NbBadge variant="info" size="sm" icon="folder">Local</NbBadge>
+                <span class="tabular">v{{ local.version }}</span>
+              </span>
+              <span v-if="local.description" class="mp-desc">{{ local.description }}</span>
+              <span v-if="local.author">{{ local.author }}</span>
+            </span>
+          </template>
+          <template #trailing>
+            <NbButton
+              v-if="installed.has(local.name)"
+              v-nb-tooltip="{ body: 'Already active' }"
+              variant="tertiary"
+              size="sm"
+              disabled
+              icon="check"
+            >
+              Active
+            </NbButton>
+            <NbButton
+              v-else
+              v-nb-tooltip="!local.platform ? { body: 'No platform declared in package.json openbridge.platform' } : {}"
+              variant="tertiary"
+              size="sm"
+              :loading="installing === local.name"
+              :disabled="!!installing || !local.platform"
+              :aria-label="`Activate ${local.name}`"
+              @click="activateLocal(local)"
+            >
+              Activate
+            </NbButton>
+          </template>
+        </NbContainedListItem>
+      </NbContainedList>
 
-    <!-- Just-installed banner -->
-    <NbBanner
-      v-if="justInstalled"
-      status="success"
-      dismissible
-      class="mp-installed-banner"
-      :title="`${justInstalled.name} installed`"
-      @dismiss="justInstalled = null"
-    >
-      Click it in your plugins list to configure it.
-    </NbBanner>
-
-    <NbMessage v-if="error" variant="error" class="mp-error">{{ error }}</NbMessage>
-
-    <!-- Local plugins (from configured sources) -->
-    <div v-if="localPlugins.length > 0" class="mp-local-section">
-      <div class="mp-local-heading">
-        <NbIcon name="diamond" :size="11" />
-        Local plugins
-      </div>
-      <NbPanel v-for="local in localPlugins" :key="local.name" class="mp-row mp-row--ob mp-row--local">
-        <div class="mp-avatar mp-avatar--ob">
-          <NbIcon name="diamond" :size="16" />
-        </div>
-        <div class="mp-info">
-          <div class="mp-name-row">
-            <span class="mp-name">{{ local.name }}</span>
-            <NbBadge variant="primary" size="sm" icon="diamond">Native</NbBadge>
-            <NbBadge variant="info" size="sm" icon="folder">Local</NbBadge>
-            <span class="mp-ver">v{{ local.version }}</span>
-          </div>
-          <p v-if="local.description" class="mp-desc">{{ local.description }}</p>
-          <div class="mp-meta">
-            <span v-if="local.author">{{ local.author }}</span>
-          </div>
-        </div>
-        <div class="mp-action">
-          <NbButton v-if="installed.has(local.name)" variant="ghost" size="sm" disabled icon="check">Active</NbButton>
-          <NbButton
-            v-else
-            variant="primary"
-            size="sm"
-            :loading="installing === local.name"
-            :disabled="!!installing || !local.platform"
-            :title="!local.platform ? 'No platform declared in package.json openbridge.platform' : ''"
-            @click="activateLocal(local)"
-          >
-            Activate
-          </NbButton>
-        </div>
-      </NbPanel>
-    </div>
-
-    <!-- Results -->
-    <div class="mp-list">
+      <!-- Results -->
       <div v-if="loading && results.length === 0" class="mp-loading">
         <NbInlineLoading status="active" label="Searching npm…" />
       </div>
 
-      <NbPanel v-for="pkg in results" :key="pkg.name" class="mp-row" :class="{ 'mp-row--ob': isOpenBridge(pkg) }">
-        <!-- Avatar -->
-        <div class="mp-avatar" :class="{ 'mp-avatar--ob': isOpenBridge(pkg) }">
-          <img
-            v-if="githubAvatarUrl(pkg)"
-            :src="githubAvatarUrl(pkg)!"
-            :alt="pkg.name"
-            class="mp-avatar-img"
-            @error="($event.target as HTMLImageElement).style.display = 'none'"
-          />
-          <!-- fallback icon -->
-          <NbIcon v-if="isOpenBridge(pkg)" name="diamond" :size="16" />
-          <NbIcon v-else name="puzzle-piece" :size="16" />
-        </div>
-
-        <!-- Info -->
-        <div class="mp-info">
-          <div class="mp-name-row">
-            <span class="mp-name">{{ pkg.name }}</span>
-            <span class="mp-ver">v{{ pkg.version }}</span>
-          </div>
-          <p v-if="pkg.description" class="mp-desc">{{ pkg.description }}</p>
-          <div class="mp-meta">
-            <span v-if="authorName(pkg)">{{ authorName(pkg) }}</span>
-            <span v-if="authorName(pkg)" class="mp-sep">·</span>
-            <span>{{ relativeDate(pkg.date) }}</span>
-          </div>
-          <!-- Enriched metadata row -->
-          <div class="mp-enriched">
-            <span v-if="pkg.weeklyDownloads" class="mp-stat">
-              <NbIcon name="cloud-arrow-down" :size="11" />
-              {{ formatDownloads(pkg.weeklyDownloads) }}
+      <NbContainedList v-if="results.length > 0" title="Plugins" class="mp-list">
+        <template v-if="total > 0" #meta>
+          <span class="tabular">{{ total.toLocaleString() }} found</span>
+        </template>
+        <NbContainedListItem v-for="pkg in results" :key="pkg.name">
+          <template #leading>
+            <span class="mp-avatar">
+              <img
+                v-if="githubAvatarUrl(pkg)"
+                :src="githubAvatarUrl(pkg)!"
+                :alt="pkg.name"
+                class="mp-avatar-img"
+                @error="($event.target as HTMLImageElement).style.display = 'none'"
+              />
+              <!-- fallback icon -->
+              <NbIcon :name="isOpenBridge(pkg) ? 'diamond' : 'puzzle-piece'" size="sm" />
             </span>
-            <span v-if="pkg.githubStars" class="mp-stat">
-              <NbIcon name="star" weight="fill" :size="11" />
-              {{ formatDownloads(pkg.githubStars) }}
+          </template>
+          {{ pkg.name }}
+          <template #line>
+            <span class="mp-detail">
+              <span v-if="pkg.description" class="mp-desc">{{ pkg.description }}</span>
+              <span class="mp-meta">
+                <span class="tabular">v{{ pkg.version }}</span>
+                <span v-if="authorName(pkg)">· {{ authorName(pkg) }}</span>
+                <span>· {{ relativeDate(pkg.date) }}</span>
+                <span v-if="pkg.weeklyDownloads" class="tabular">
+                  · {{ formatDownloads(pkg.weeklyDownloads) }} weekly downloads
+                </span>
+                <span v-if="pkg.githubStars" class="tabular">· {{ formatDownloads(pkg.githubStars) }} stars</span>
+              </span>
+              <span class="mp-links">
+                <NbButton
+                  v-if="pkg.githubSponsorsUrl"
+                  variant="link"
+                  size="xs"
+                  :href="pkg.githubSponsorsUrl"
+                  target="_blank"
+                  :aria-label="`Sponsor ${pkg.name}`"
+                >
+                  Sponsor
+                </NbButton>
+                <NbButton
+                  v-if="pkg.documentationUrl"
+                  variant="link"
+                  size="xs"
+                  :href="pkg.documentationUrl"
+                  target="_blank"
+                  :aria-label="`Docs for ${pkg.name}`"
+                >
+                  Docs
+                </NbButton>
+                <NbButton
+                  variant="link"
+                  size="xs"
+                  icon="arrow-square-out"
+                  :href="`https://marketplace.openbridge.nubisco.io/plugins/${pkg.name}`"
+                  target="_blank"
+                  :aria-label="`Marketplace page for ${pkg.name}`"
+                >
+                  Marketplace
+                </NbButton>
+              </span>
             </span>
-            <a
-              v-if="pkg.githubSponsorsUrl"
-              :href="pkg.githubSponsorsUrl"
-              target="_blank"
-              rel="noopener"
-              class="mp-stat mp-stat--link"
-            >
-              <NbIcon name="heart" weight="fill" :size="11" />
-              Sponsor
-            </a>
-            <a
-              v-if="pkg.documentationUrl"
-              :href="pkg.documentationUrl"
-              target="_blank"
-              rel="noopener"
-              class="mp-stat mp-stat--link"
-            >
-              <NbIcon name="book-open" :size="11" />
-              Docs
-            </a>
-            <a
-              :href="`https://marketplace.openbridge.nubisco.io/plugins/${pkg.name}`"
-              target="_blank"
-              rel="noopener"
-              class="mp-stat mp-stat--link mp-stat--marketplace"
-            >
-              <NbIcon name="arrow-square-out" :size="11" />
-              Marketplace
-            </a>
-          </div>
-        </div>
-
-        <!-- Action -->
-        <div class="mp-action">
-          <template v-if="installed.has(pkg.name)">
+          </template>
+          <!-- Many rows, so no row's action is filled: install steps down to
+               tertiary, and remove is the outlined danger it already was. -->
+          <template #trailing>
             <NbButton
+              v-if="installed.has(pkg.name)"
               variant="danger"
               size="sm"
               outlined
               :loading="uninstalling === pkg.name"
               :disabled="!!uninstalling"
+              :aria-label="`Remove ${pkg.name}`"
               @click="uninstall(pkg.name)"
             >
               Remove
             </NbButton>
+            <NbButton
+              v-else
+              variant="tertiary"
+              size="sm"
+              :loading="installing === pkg.name"
+              :disabled="!!installing"
+              :aria-label="`Install ${pkg.name}`"
+              @click="install(pkg)"
+            >
+              Install
+            </NbButton>
           </template>
-          <NbButton
-            v-else
-            variant="primary"
-            size="sm"
-            :loading="installing === pkg.name"
-            :disabled="!!installing"
-            @click="install(pkg)"
-          >
-            Install
-          </NbButton>
-        </div>
-      </NbPanel>
+        </NbContainedListItem>
+      </NbContainedList>
 
       <!-- Load more -->
-      <div v-if="results.length > 0 && results.length < total" class="mp-load-more-wrap">
-        <NbButton variant="ghost" size="sm" :loading="loading" :disabled="loading" @click="loadMore">
+      <div v-if="results.length > 0 && results.length < total" class="mp-load-more">
+        <NbButton variant="tertiary" size="sm" :loading="loading" :disabled="loading" @click="loadMore">
           {{ loading ? 'Loading…' : `Load more (${total - results.length} remaining)` }}
         </NbButton>
       </div>
@@ -407,108 +416,68 @@ onMounted(async () => {
   overflow: hidden;
 }
 
-.mp-external {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  font-size: 0.72rem;
-  color: var(--nb-c-text-subtle);
-  text-decoration: none;
-  &:hover {
-    color: var(--nb-c-primary);
-  }
-}
-
+// Pinned above the scrolling list, like every inspector's own header.
 .mp-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.5rem;
-
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 1rem 1.1rem;
+  gap: var(--nb-spacing-8);
+  padding: var(--nb-spacing-12);
   border-bottom: 1px solid var(--nb-c-layer-1);
   flex-shrink: 0;
 }
 
-// On a phone the sheet's dismiss button sits over the top right corner, where
-// the Marketplace link is, so the header keeps clear of it. The error line
-// takes the panel gutter there too.
-@include variables.phone {
-  .mp-header {
-    padding-right: calc(1.1rem + var(--nb-shell-inspector-dismiss-inset, 0px));
-  }
-  .mp-error {
-    margin: 0.5rem 1.1rem 0;
-  }
-}
-
 .mp-title {
-  font-size: 0.9rem;
-  font-weight: 700;
+  margin: 0;
   color: var(--nb-c-text);
 }
 
-.mp-search-wrap {
-  padding: 0.75rem 1.1rem 0;
+.mp-top {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nb-spacing-8);
+  padding: var(--nb-spacing-12) var(--nb-spacing-12) 0;
   flex-shrink: 0;
 }
 
-.mp-installed-banner {
-  margin: 0.5rem 1.1rem 0;
-  flex-shrink: 0;
+// On a phone the sheet's dismiss button sits over the top right corner, where
+// the Marketplace link is, so the header keeps clear of it.
+@include variables.phone {
+  .mp-header {
+    padding-right: calc(var(--nb-spacing-12) + var(--nb-shell-inspector-dismiss-inset, 0px));
+  }
 }
 
-.mp-count {
-  padding: 0.35rem 1.1rem 0;
-  font-size: 0.72rem;
-  color: var(--nb-c-text-subtle);
-  flex-shrink: 0;
-}
-
-.mp-list {
+// The rows carry 8 of their own inset, so 4 here puts their text on the same
+// 12 edge as the header and the search above.
+.mp-scroll {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
-  padding: 0.5rem 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nb-spacing-12);
+  padding: var(--nb-spacing-12) var(--nb-spacing-4);
 }
 
 .mp-loading {
   display: flex;
   justify-content: center;
-  padding: 3rem 1rem;
-}
-
-// ─── Result row ───────────────────────────────────────────────────────────────
-.mp-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.6rem;
-
-  // Marks a native OpenBridge plugin, mirroring the accent on the plugin cards.
-  &--ob {
-    border-left: 3px solid var(--nb-c-primary);
-  }
+  padding: var(--nb-spacing-48) var(--nb-spacing-16);
 }
 
 .mp-avatar {
-  width: 36px;
-  height: 36px;
+  position: relative;
+  width: 32px;
+  height: 32px;
   flex-shrink: 0;
-  border-radius: 8px;
-  background: var(--nb-c-layer-1);
-  color: var(--nb-c-text-subtle);
+  border-radius: var(--nb-radius-md);
+  background: var(--nb-c-layer-2);
+  color: var(--nb-c-text-muted);
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  position: relative;
-
-  &.mp-avatar--ob {
-    background: linear-gradient(135deg, var(--nb-c-primary), var(--nb-c-primary));
-    color: var(--nb-c-primary-a11y);
-  }
 }
 
 .mp-avatar-img {
@@ -517,131 +486,45 @@ onMounted(async () => {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 8px;
   z-index: 1;
 }
 
-.mp-info {
-  flex: 1;
-  min-width: 0;
+// NbContainedListItem keeps its line to one, ellipsised. A result needs its
+// description, its facts and its links, so this block wraps inside it.
+.mp-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nb-spacing-4);
+  padding-top: var(--nb-spacing-2);
+  white-space: normal;
 }
 
-.mp-name-row {
+.mp-badges,
+.mp-meta,
+.mp-links {
   display: flex;
-  align-items: center;
-  gap: 0.35rem;
   flex-wrap: wrap;
-  margin-bottom: 0.2rem;
+  align-items: center;
+  gap: var(--nb-spacing-4);
 }
-.mp-name {
-  font-size: 0.82rem;
-  font-weight: 600;
-  color: var(--nb-c-text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.mp-ver {
-  font-size: 0.68rem;
+
+.mp-meta {
   color: var(--nb-c-text-subtle);
 }
 
+.mp-links {
+  gap: var(--nb-spacing-8);
+}
+
 .mp-desc {
-  font-size: 0.75rem;
-  color: var(--nb-c-text-muted);
-  margin: 0 0 0.2rem;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.mp-meta {
-  font-size: 0.68rem;
-  color: var(--nb-c-text-subtle);
-  display: flex;
-  gap: 0.3rem;
-  .mp-sep {
-    color: var(--nb-c-border);
-  }
-}
 
-.mp-enriched {
-  font-size: 0.68rem;
-  color: var(--nb-c-text-subtle);
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 0.25rem;
-  flex-wrap: wrap;
-}
-
-.mp-stat {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  padding: 0.15rem 0.4rem;
-  background: var(--nb-c-layer-1);
-  border-radius: 4px;
-  color: var(--nb-c-text-muted);
-  font-size: 0.65rem;
-  white-space: nowrap;
-
-  &.mp-stat--link {
-    cursor: pointer;
-    color: var(--nb-c-primary);
-    background: color-mix(in srgb, var(--nb-c-primary) 8%, transparent);
-    border: 1px solid color-mix(in srgb, var(--nb-c-primary) 20%, transparent);
-    text-decoration: none;
-    transition: all 0.15s;
-    &:hover {
-      background: color-mix(in srgb, var(--nb-c-primary) 12%, transparent);
-      border-color: color-mix(in srgb, var(--nb-c-primary) 30%, transparent);
-    }
-  }
-
-  &.mp-stat--marketplace {
-    font-weight: 600;
-  }
-}
-
-.mp-action {
-  flex-shrink: 0;
-  padding-top: 2px;
-}
-
-// ─── Local plugins section ────────────────────────────────────────────────────
-.mp-local-section {
-  flex-shrink: 0;
-  border-bottom: 1px solid var(--nb-c-layer-1);
-  padding-bottom: 0.25rem;
-}
-
-.mp-local-heading {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.68rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--nb-c-primary);
-  padding: 0.5rem 1.1rem 0.25rem;
-}
-
-.mp-row--local {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--nb-c-primary) 6%, transparent) 0%, transparent 100%);
-  &:hover {
-    background: linear-gradient(
-      90deg,
-      color-mix(in srgb, var(--nb-c-primary) 10%, transparent) 0%,
-      var(--nb-c-layer-1) 100%
-    );
-  }
-}
-
-.mp-load-more-wrap {
+.mp-load-more {
   display: flex;
   justify-content: center;
-  padding: 0.5rem 1.1rem;
 }
 </style>
