@@ -1,3 +1,10 @@
+# [1.8.0](https://github.com/nubisco/openbridge/compare/v1.7.1...v1.8.0) (2026-11-06)
+
+
+### Features
+
+* **ui:** adopt @nubisco/ui 5.48.0 foundations, density and page hierarchy ([#8](https://github.com/nubisco/openbridge/issues/8)) ([37f4642](https://github.com/nubisco/openbridge/commit/37f464296643962381e8263369b92b6ee4c9f953)), closes [#ob-topbar-left](https://github.com/nubisco/openbridge/issues/ob-topbar-left) [#ob-topbar-right](https://github.com/nubisco/openbridge/issues/ob-topbar-right)
+
 ## [1.7.1](https://github.com/nubisco/openbridge/compare/v1.7.0...v1.7.1) (2026-11-05)
 
 
