@@ -1,3 +1,10 @@
+## [1.8.1](https://github.com/nubisco/openbridge/compare/v1.8.0...v1.8.1) (2026-11-06)
+
+
+### Bug Fixes
+
+* terminal runs the login shell, a one-screen dashboard, and Settings with tabs ([#9](https://github.com/nubisco/openbridge/issues/9)) ([630bc0c](https://github.com/nubisco/openbridge/commit/630bc0c8d1afc3ed0a0280ec1218710f81196905))
+
 # [1.8.0](https://github.com/nubisco/openbridge/compare/v1.7.1...v1.8.0) (2026-11-06)
 
 
