@@ -2,19 +2,30 @@
   <div v-if="selected" class="inspector-content nb-inspector">
     <!-- Native device detail -->
     <template v-if="selected.kind === 'native'">
+      <!-- The inspector's own pinned header. It is not a page, so it does not
+           take NbPageHeader: the name stays in reach while the sections scroll. -->
       <div class="detail-header">
-        <div class="detail-icon native-icon">
-          <NbIcon :name="widgetIcon(effectiveType((selected as any).dev))" :size="26" />
+        <div class="detail-icon">
+          <NbIcon :name="widgetIcon(effectiveType((selected as any).dev))" size="lg" />
         </div>
-        <div style="flex: 1; min-width: 0">
-          <h2
-            v-if="!editingName"
-            class="detail-name"
-            title="Click to rename"
-            @click="startRename((selected as any).dev.name)"
-          >
-            {{ (selected as any).dev.name }}
-          </h2>
+        <div class="detail-heading">
+          <div v-if="!editingName" class="detail-title-row">
+            <h2
+              class="detail-name type-heading-01"
+              title="Click to rename"
+              @click="startRename((selected as any).dev.name)"
+            >
+              {{ (selected as any).dev.name }}
+            </h2>
+            <NbButton
+              v-nb-tooltip="{ body: 'Rename' }"
+              variant="ghost"
+              size="sm"
+              icon="pencil-simple"
+              :aria-label="`Rename ${(selected as any).dev.name}`"
+              @click="startRename((selected as any).dev.name)"
+            />
+          </div>
           <div v-else class="rename-row">
             <NbTextInput
               v-model="renameValue"
@@ -39,7 +50,7 @@
               @click="editingName = false"
             />
           </div>
-          <div class="detail-type">{{ widgetLabel(effectiveType((selected as any).dev)) }}</div>
+          <div class="detail-type type-body-sm">{{ widgetLabel(effectiveType((selected as any).dev)) }}</div>
         </div>
       </div>
 
@@ -48,13 +59,16 @@
         <!-- Actions sit in the header of the thing they act on, and only the
              ones this device's plugin actually declared are rendered: a reboot
              is spelled differently on a Shelly Gen1 and Gen2 and does not
-             exist at all on a Wiz bulb, so the product cannot hard-code one. -->
+             exist at all on a Wiz bulb, so the product cannot hard-code one.
+             A destructive one is outlined danger: the confirmation it opens
+             carries the filled one. -->
         <template v-if="deviceActions.length > 0" #toolbar>
           <NbButton
             v-for="action in deviceActions"
             :key="action.id"
             size="xs"
             :variant="action.danger ? 'danger' : 'ghost'"
+            :outlined="!!action.danger"
             :disabled="actionBusy !== ''"
             :loading="actionBusy === action.id"
             @click="runDeviceAction(action)"
@@ -69,103 +83,86 @@
           v-if="deviceHealth && deviceHealth.status === 'stale'"
           status="warning"
           :title="healthTitle"
-          style="margin-bottom: 0.5rem"
+          class="section-banner"
         >
           {{ deviceHealth.reason }}
         </NbBanner>
-        <NbBanner v-if="actionNotice" :status="actionStatus" :title="actionNotice" style="margin-bottom: 0.5rem" />
-        <div class="info-grid">
-          <span class="info-key">Plugin</span>
-          <span class="info-val">{{ (selected as any).dev.pluginId }}</span>
-          <template v-if="(selected as any).dev.manufacturer">
-            <span class="info-key">Manufacturer</span>
-            <span class="info-val">{{ (selected as any).dev.manufacturer }}</span>
-          </template>
-          <template v-if="(selected as any).dev.model">
-            <span class="info-key">Model</span>
-            <span class="info-val">{{ (selected as any).dev.model }}</span>
-          </template>
-          <span class="info-key">Status</span>
-          <span class="info-val">{{ (selected as any).dev.pluginStatus }}</span>
-          <span class="info-key">ID</span>
-          <span class="info-val mono">{{ (selected as any).dev.id }}</span>
-        </div>
+        <NbBanner v-if="actionNotice" :status="actionStatus" :title="actionNotice" class="section-banner" />
+        <NbDefinitionList compact>
+          <NbDefinitionListItem term="Plugin">{{ (selected as any).dev.pluginId }}</NbDefinitionListItem>
+          <NbDefinitionListItem v-if="(selected as any).dev.manufacturer" term="Manufacturer">
+            {{ (selected as any).dev.manufacturer }}
+          </NbDefinitionListItem>
+          <NbDefinitionListItem v-if="(selected as any).dev.model" term="Model">
+            {{ (selected as any).dev.model }}
+          </NbDefinitionListItem>
+          <NbDefinitionListItem term="Status">{{ (selected as any).dev.pluginStatus }}</NbDefinitionListItem>
+          <NbDefinitionListItem term="ID">
+            <code class="detail-code type-code-sm">{{ (selected as any).dev.id }}</code>
+          </NbDefinitionListItem>
+        </NbDefinitionList>
       </NbShellPanel>
 
       <!-- Widget view -->
       <NbShellPanel title="State" fluid>
-        <!-- Energy meter widget -->
+        <!-- Energy meter widget: the power is the reading people open it for,
+             so it is the one large figure, and the rest are facts under it. -->
         <div v-if="(selected as any).dev.widgetType === 'energy_meter'" class="widget-energy">
           <div class="energy-primary">
-            <span class="energy-value">{{ fmtNum((selected as any).dev.telemetry.power, 1) }}</span>
-            <span class="energy-unit">W</span>
+            <span class="type-heading-04 tabular">{{ fmtNum((selected as any).dev.telemetry.power, 1) }}</span>
+            <span class="reading-unit type-body-md">W</span>
           </div>
-          <div class="energy-secondary">
-            <template v-if="(selected as any).dev.telemetry.voltage !== undefined">
-              <span class="energy-item">
-                <span class="energy-label">Voltage</span>
-                <span class="energy-item-val">{{ fmtNum((selected as any).dev.telemetry.voltage, 1) }} V</span>
-              </span>
-            </template>
-            <template v-if="(selected as any).dev.telemetry.current !== undefined">
-              <span class="energy-item">
-                <span class="energy-label">Current</span>
-                <span class="energy-item-val">{{ fmtNum((selected as any).dev.telemetry.current, 3) }} A</span>
-              </span>
-            </template>
-          </div>
+          <NbDefinitionList compact>
+            <NbDefinitionListItem v-if="(selected as any).dev.telemetry.voltage !== undefined" term="Voltage">
+              <span class="tabular">{{ fmtNum((selected as any).dev.telemetry.voltage, 1) }} V</span>
+            </NbDefinitionListItem>
+            <NbDefinitionListItem v-if="(selected as any).dev.telemetry.current !== undefined" term="Current">
+              <span class="tabular">{{ fmtNum((selected as any).dev.telemetry.current, 3) }} A</span>
+            </NbDefinitionListItem>
+          </NbDefinitionList>
         </div>
 
         <!-- Thermostat widget -->
-        <div v-else-if="(selected as any).dev.widgetType === 'thermostat'" class="widget-thermo">
-          <div class="thermo-row">
-            <span class="thermo-label">Current</span>
-            <span class="thermo-value">{{ fmtNum((selected as any).dev.telemetry.currentTemperature, 1) }}°C</span>
-          </div>
-          <div class="thermo-row">
-            <span class="thermo-label">Target</span>
-            <span class="thermo-value accent">
-              {{ fmtNum((selected as any).dev.telemetry.targetTemperature, 1) }}°C
-            </span>
-          </div>
-          <div class="thermo-row">
-            <span class="thermo-label">Active</span>
-            <span class="thermo-value" :class="(selected as any).dev.telemetry.active ? 'on' : 'off'">
+        <NbDefinitionList v-else-if="(selected as any).dev.widgetType === 'thermostat'" compact>
+          <NbDefinitionListItem term="Current">
+            <span class="tabular">{{ fmtNum((selected as any).dev.telemetry.currentTemperature, 1) }}°C</span>
+          </NbDefinitionListItem>
+          <NbDefinitionListItem term="Target">
+            <span class="tabular">{{ fmtNum((selected as any).dev.telemetry.targetTemperature, 1) }}°C</span>
+          </NbDefinitionListItem>
+          <NbDefinitionListItem term="Active">
+            <span :class="(selected as any).dev.telemetry.active ? 'state-on' : 'state-off'">
               {{ (selected as any).dev.telemetry.active ? 'On' : 'Off' }}
             </span>
-          </div>
-        </div>
+          </NbDefinitionListItem>
+        </NbDefinitionList>
 
         <!-- Dehumidifier widget -->
-        <div v-else-if="(selected as any).dev.widgetType === 'dehumidifier'" class="widget-thermo">
-          <div class="thermo-row">
-            <span class="thermo-label">Humidity</span>
-            <span class="thermo-value">{{ fmtNum((selected as any).dev.telemetry.currentHumidity, 0) }}%</span>
-          </div>
-          <div class="thermo-row">
-            <span class="thermo-label">Target</span>
-            <span class="thermo-value accent">{{ fmtNum((selected as any).dev.telemetry.targetHumidity, 0) }}%</span>
-          </div>
-          <div class="thermo-row">
-            <span class="thermo-label">Active</span>
-            <span class="thermo-value" :class="(selected as any).dev.telemetry.active ? 'on' : 'off'">
+        <NbDefinitionList v-else-if="(selected as any).dev.widgetType === 'dehumidifier'" compact>
+          <NbDefinitionListItem term="Humidity">
+            <span class="tabular">{{ fmtNum((selected as any).dev.telemetry.currentHumidity, 0) }}%</span>
+          </NbDefinitionListItem>
+          <NbDefinitionListItem term="Target">
+            <span class="tabular">{{ fmtNum((selected as any).dev.telemetry.targetHumidity, 0) }}%</span>
+          </NbDefinitionListItem>
+          <NbDefinitionListItem term="Active">
+            <span :class="(selected as any).dev.telemetry.active ? 'state-on' : 'state-off'">
               {{ (selected as any).dev.telemetry.active ? 'On' : 'Off' }}
             </span>
-          </div>
-        </div>
+          </NbDefinitionListItem>
+        </NbDefinitionList>
 
         <!-- Generic sensor / switch / light -->
-        <div v-else class="widget-generic">
-          <template
-            v-if="Object.keys((selected as any).dev.telemetry).filter((k: string) => !k.startsWith('_')).length === 0"
-          >
-            <span class="no-telemetry">No telemetry yet</span>
-          </template>
-          <div v-for="[k, v] in telemetryEntries((selected as any).dev)" :key="k" class="char-row">
-            <span class="char-name">{{ k }}</span>
-            <span class="char-value">{{ String(v) }}</span>
-          </div>
-        </div>
+        <template v-else>
+          <p v-if="telemetryEntries((selected as any).dev).length === 0" class="quiet-note type-body-sm">
+            No telemetry yet
+          </p>
+          <NbDefinitionList v-else compact>
+            <NbDefinitionListItem v-for="[k, v] in telemetryEntries((selected as any).dev)" :key="k" :term="k">
+              <span class="tabular">{{ String(v) }}</span>
+            </NbDefinitionListItem>
+          </NbDefinitionList>
+        </template>
       </NbShellPanel>
 
       <!-- Recent activity: what happened, and what asked for it. Shown only
@@ -174,22 +171,17 @@
       <NbShellPanel v-if="deviceEvents.length > 0" title="Recent activity" fluid>
         <ul class="event-list">
           <li v-for="(event, i) in deviceEvents" :key="`${event.at}-${i}`" class="event">
-            <span class="event-time" :title="event.at">{{ shortTime(event.at) }}</span>
+            <span class="event-time type-body-sm tabular" :title="event.at">{{ shortTime(event.at) }}</span>
             <span class="event-body">
-              <span class="event-message">{{ event.message }}</span>
-              <span v-if="event.source" class="event-source">{{ event.source }}</span>
+              <span class="event-message type-body-compact">{{ event.message }}</span>
+              <span v-if="event.source" class="event-source type-body-sm">{{ event.source }}</span>
             </span>
           </li>
         </ul>
       </NbShellPanel>
 
       <!-- Energy history chart (energy_meter devices only) -->
-      <NbShellPanel
-        v-if="(selected as any).dev.widgetType === 'energy_meter'"
-        title="Energy history"
-        class="energy-history"
-        fluid
-      >
+      <NbShellPanel v-if="(selected as any).dev.widgetType === 'energy_meter'" title="Energy history" fluid>
         <!-- Period tabs -->
         <NbTabs
           :model-value="historyPeriod"
@@ -207,22 +199,22 @@
           <NbButton
             v-nb-tooltip="{ body: 'Previous period' }"
             variant="ghost"
-            size="xs"
+            size="sm"
             icon="caret-left"
             aria-label="Previous period"
             @click="navigateHistory(-1)"
           />
           <div class="history-nav-center">
             <span class="history-total">
-              {{ historyData.totalKwh.toFixed(2) }}
-              <span class="history-unit">kWh</span>
+              <span class="type-heading-02 tabular">{{ historyData.totalKwh.toFixed(2) }}</span>
+              <span class="reading-unit type-body-sm">kWh</span>
             </span>
-            <span class="history-date">{{ historyData.date }}</span>
+            <span class="history-date type-body-sm tabular">{{ historyData.date }}</span>
           </div>
           <NbButton
             v-nb-tooltip="{ body: 'Next period' }"
             variant="ghost"
-            size="xs"
+            size="sm"
             icon="caret-right"
             aria-label="Next period"
             @click="navigateHistory(1)"
@@ -238,18 +230,18 @@
           :show-tooltip="true"
         />
 
-        <div v-if="historyData && historyData.totalKwh === 0" class="no-history">
+        <p v-if="historyData && historyData.totalKwh === 0" class="no-history type-body-sm">
           No consumption recorded for this period. Data accumulates every 5 minutes.
-        </div>
+        </p>
 
-        <div v-if="!historyData && !historyLoading" class="no-history">No data available for this period.</div>
+        <p v-if="!historyData && !historyLoading" class="no-history type-body-sm">No data available for this period.</p>
 
-        <div v-if="historyLoading" class="no-history">Loading history…</div>
+        <p v-if="historyLoading" class="no-history type-body-sm">Loading history…</p>
       </NbShellPanel>
 
       <!-- Reporting what the device cannot measure -->
       <NbShellPanel v-if="(selected as any).dev.observations" title="Report" fluid>
-        <p class="obs-help">
+        <p class="obs-help type-body-sm">
           {{ (selected as any).dev.observations.help ?? 'Tell the plugin what this device cannot measure itself.' }}
         </p>
         <div class="obs-form">
@@ -261,32 +253,39 @@
             :step="0.5"
             :label="`${(selected as any).dev.observations.label} (${(selected as any).dev.observations.unit})`"
           />
-          <div class="obs-verdicts">
+          <!-- A pressed verdict is the secondary fill, not a primary: the one
+               filled primary in this section is Save report. -->
+          <div class="obs-verdicts" role="group" aria-label="How it feels">
             <NbButton
               v-for="v in OBSERVATION_VERDICTS"
               :key="v.id"
               size="sm"
-              :variant="obsComfort === v.id ? 'primary' : 'ghost'"
+              :variant="obsComfort === v.id ? 'secondary' : 'ghost'"
+              :aria-pressed="obsComfort === v.id"
               @click="obsComfort = v.id"
             >
               {{ v.label }}
             </NbButton>
           </div>
           <NbTextInput v-model="obsNote" size="sm" placeholder="Anything worth noting (sunny, window open)" />
-          <NbButton size="sm" variant="primary" :disabled="obsValue === null || obsBusy" @click="submitObservation">
-            Save report
-          </NbButton>
+          <div class="obs-submit">
+            <NbButton size="sm" variant="primary" :disabled="obsValue === null || obsBusy" @click="submitObservation">
+              Save report
+            </NbButton>
+          </div>
         </div>
         <NbMessage v-if="obsError" variant="error">{{ obsError }}</NbMessage>
         <div v-if="observations.length > 0" class="obs-list">
-          <div class="obs-list-head">{{ observationTotal }} report{{ observationTotal === 1 ? '' : 's' }} so far</div>
+          <div class="obs-list-head type-overline">
+            {{ observationTotal }} report{{ observationTotal === 1 ? '' : 's' }} so far
+          </div>
           <div v-for="(o, i) in observations" :key="i" class="obs-row">
-            <span class="obs-when">{{ new Date(o.at).toLocaleString() }}</span>
-            <span class="obs-temp">{{ o.roomTemperature }}°</span>
+            <span class="obs-when type-body-sm tabular">{{ new Date(o.at).toLocaleString() }}</span>
+            <span class="type-body-compact tabular">{{ o.roomTemperature }}°</span>
             <NbBadge :variant="o.comfort === 'ok' ? 'success' : o.comfort === 'cold' ? 'info' : 'warning'" size="sm">
               {{ o.comfort }}
             </NbBadge>
-            <span v-if="o.note" class="obs-note">{{ o.note }}</span>
+            <span v-if="o.note" class="obs-note type-body-sm">{{ o.note }}</span>
           </div>
         </div>
       </NbShellPanel>
@@ -311,36 +310,37 @@
           :show-grid="true"
           :show-tooltip="true"
         />
-        <div class="calibration-hint">Drag points to adjust. Double-click to add. Right-click to remove.</div>
+        <p class="calibration-hint type-helper-text">
+          Drag points to adjust. Double-click to add. Right-click to remove.
+        </p>
         <div class="calibration-actions">
+          <NbButton variant="secondary" size="sm" :disabled="!interpolationDirty" @click="resetInterpolation">
+            Reset
+          </NbButton>
           <NbButton
             variant="primary"
             size="sm"
             :disabled="!interpolationDirty || interpolationSaving"
             @click="saveInterpolation"
           >
-            {{ interpolationSaving ? 'Saving...' : 'Save' }}
-          </NbButton>
-          <NbButton variant="ghost" size="sm" :disabled="!interpolationDirty" @click="resetInterpolation">
-            Reset
+            {{ interpolationSaving ? 'Saving…' : 'Save' }}
           </NbButton>
         </div>
-        <NbBanner v-if="interpolationSaved" status="success" title="Configuration saved">
+        <NbBanner v-if="interpolationSaved" status="success" title="Configuration saved" class="section-banner-after">
           Restart the plugin to apply the new mapping.
         </NbBanner>
       </NbShellPanel>
       <NbShellPanel v-else-if="(selected as any).dev.interpolation && interpolationLoading" title="Calibration" fluid>
-        <div class="no-history">Loading calibration data...</div>
+        <p class="no-history type-body-sm">Loading calibration data…</p>
       </NbShellPanel>
 
       <!-- All telemetry data -->
       <NbShellPanel v-if="telemetryEntries((selected as any).dev).length > 0" title="All telemetry" fluid>
-        <div class="char-list">
-          <div v-for="[k, v] in telemetryEntries((selected as any).dev)" :key="k" class="char-row">
-            <span class="char-name">{{ k }}</span>
-            <span class="char-value">{{ String(v) }}</span>
-          </div>
-        </div>
+        <NbDefinitionList compact>
+          <NbDefinitionListItem v-for="[k, v] in telemetryEntries((selected as any).dev)" :key="k" :term="k">
+            <span class="tabular">{{ String(v) }}</span>
+          </NbDefinitionListItem>
+        </NbDefinitionList>
       </NbShellPanel>
 
       <!-- HomeKit, when the plugin published an accessory for this device.
@@ -348,45 +348,41 @@
            and its accessory are two views of one thing and the controls belong
            here rather than on a separate card. -->
       <NbShellPanel v-if="nativeAccessory" title="HomeKit" fluid>
-        <div
-          v-for="svc in mainServices(nativeAccessory)"
-          v-show="canRetype(svc.uuid)"
-          :key="svc.uuid"
-          class="homekit-row"
-        >
-          <div class="homekit-copy">
-            <span class="homekit-title">Show in HomeKit as</span>
-            <span class="homekit-hint">
-              A plugin cannot know what a generic relay drives. Set it here and OpenBridge re-applies it on every
-              restart, so the Home app stops reverting to a switch.
-            </span>
-          </div>
-          <NbSelect
-            :model-value="serviceTypeFor(nativeAccessory.uuid, svc.uuid)"
-            :options="serviceTypeOptions"
-            :disabled="homekitBusy"
-            size="sm"
-            @update:model-value="(v: TSelectValue) => setServiceType(nativeAccessory!.uuid, svc.uuid, String(v))"
-          />
-        </div>
-        <div v-if="serviceTypeNotice" class="homekit-notice">{{ serviceTypeNotice }}</div>
+        <div class="homekit-fields">
+          <template v-for="svc in mainServices(nativeAccessory)" :key="svc.uuid">
+            <NbField
+              v-show="canRetype(svc.uuid)"
+              label="Show in HomeKit as"
+              orientation="stack"
+              hint="A plugin cannot know what a generic relay drives. Set it here and OpenBridge re-applies it on every restart, so the Home app stops reverting to a switch."
+            >
+              <NbSelect
+                :model-value="serviceTypeFor(nativeAccessory.uuid, svc.uuid)"
+                :options="serviceTypeOptions"
+                :disabled="homekitBusy"
+                size="sm"
+                @update:model-value="(v: TSelectValue) => setServiceType(nativeAccessory!.uuid, svc.uuid, String(v))"
+              />
+            </NbField>
+          </template>
+          <p v-if="serviceTypeNotice" class="quiet-note type-body-sm">{{ serviceTypeNotice }}</p>
 
-        <div class="homekit-row">
-          <div class="homekit-copy">
-            <span class="homekit-title">Expose to HomeKit</span>
-            <span class="homekit-hint">
+          <div>
+            <NbField label="Expose to HomeKit" control="fit">
+              <NbSwitch
+                :name="`homekit-visible-${nativeAccessory.uuid}`"
+                :model-value="isHomekitVisible(nativeAccessory.uuid)"
+                :disabled="homekitBusy"
+                @update:model-value="(v?: boolean) => setHomekitVisible(nativeAccessory!.uuid, !!v)"
+              />
+            </NbField>
+            <p class="field-hint type-helper-text">
               Hide devices the Home app cannot represent usefully. OpenBridge keeps its telemetry and history either
               way.
-            </span>
+            </p>
           </div>
-          <NbSwitch
-            :name="`homekit-visible-${nativeAccessory.uuid}`"
-            :model-value="isHomekitVisible(nativeAccessory.uuid)"
-            :disabled="homekitBusy"
-            @update:model-value="(v?: boolean) => setHomekitVisible(nativeAccessory!.uuid, !!v)"
-          />
+          <p v-if="homekitNotice" class="quiet-note type-body-sm">{{ homekitNotice }}</p>
         </div>
-        <div v-if="homekitNotice" class="homekit-notice">{{ homekitNotice }}</div>
       </NbShellPanel>
     </template>
 
@@ -394,17 +390,26 @@
     <template v-else-if="selected.kind === 'hap'">
       <div class="detail-header">
         <div class="detail-icon">
-          <NbIcon :name="categoryInfo((selected as any).acc.category).icon" :size="26" />
+          <NbIcon :name="categoryInfo((selected as any).acc.category).icon" size="lg" />
         </div>
-        <div style="flex: 1; min-width: 0">
-          <h2
-            v-if="!editingName"
-            class="detail-name"
-            title="Click to rename"
-            @click="startRename((selected as any).acc.displayName)"
-          >
-            {{ (selected as any).acc.displayName }}
-          </h2>
+        <div class="detail-heading">
+          <div v-if="!editingName" class="detail-title-row">
+            <h2
+              class="detail-name type-heading-01"
+              title="Click to rename"
+              @click="startRename((selected as any).acc.displayName)"
+            >
+              {{ (selected as any).acc.displayName }}
+            </h2>
+            <NbButton
+              v-nb-tooltip="{ body: 'Rename' }"
+              variant="ghost"
+              size="sm"
+              icon="pencil-simple"
+              :aria-label="`Rename ${(selected as any).acc.displayName}`"
+              @click="startRename((selected as any).acc.displayName)"
+            />
+          </div>
           <div v-else class="rename-row">
             <NbTextInput
               v-model="renameValue"
@@ -429,18 +434,13 @@
               @click="editingName = false"
             />
           </div>
-          <div class="detail-type">{{ categoryInfo((selected as any).acc.category).label }}</div>
+          <div class="detail-type type-body-sm">{{ categoryInfo((selected as any).acc.category).label }}</div>
         </div>
       </div>
 
       <!-- Manufacturer info -->
       <NbShellPanel v-if="manufacturerInfo((selected as any).acc)" title="Device info" fluid>
-        <div class="info-grid">
-          <template v-for="[k, v] in Object.entries(manufacturerInfo((selected as any).acc)!)" :key="k">
-            <span v-if="v" class="info-key">{{ k }}</span>
-            <span v-if="v" class="info-val">{{ v }}</span>
-          </template>
-        </div>
+        <NbDefinitionList compact :items="manufacturerFacts((selected as any).acc)" />
       </NbShellPanel>
 
       <!-- Services & characteristics -->
@@ -452,14 +452,13 @@
       >
         <!-- Present-as override. Offered only for the interchangeable on/off
              service types, which is what the daemon will accept. -->
-        <div v-if="canRetype(svc.uuid)" class="homekit-row">
-          <div class="homekit-copy">
-            <span class="homekit-title">Show in HomeKit as</span>
-            <span class="homekit-hint">
-              A plugin cannot know what a generic relay drives. Set it here and OpenBridge re-applies it on every
-              restart, so the Home app stops reverting to a switch.
-            </span>
-          </div>
+        <NbField
+          v-if="canRetype(svc.uuid)"
+          label="Show in HomeKit as"
+          orientation="stack"
+          hint="A plugin cannot know what a generic relay drives. Set it here and OpenBridge re-applies it on every restart, so the Home app stops reverting to a switch."
+          class="service-type"
+        >
           <NbSelect
             :model-value="serviceTypeFor((selected as any).acc.uuid, svc.uuid)"
             :options="serviceTypeOptions"
@@ -467,58 +466,50 @@
             size="sm"
             @update:model-value="(v: TSelectValue) => setServiceType((selected as any).acc.uuid, svc.uuid, String(v))"
           />
-        </div>
-        <div v-if="serviceTypeNotice" class="homekit-notice">{{ serviceTypeNotice }}</div>
+        </NbField>
+        <p v-if="serviceTypeNotice" class="quiet-note type-body-sm">{{ serviceTypeNotice }}</p>
 
-        <div class="char-list">
-          <div v-for="ch in svc.characteristics" :key="ch.uuid" class="char-row">
-            <span class="char-name">{{ ch.name }}</span>
+        <NbDefinitionList compact>
+          <NbDefinitionListItem v-for="ch in svc.characteristics" :key="ch.uuid" :term="ch.name">
             <!-- Writable bool → inline toggle -->
-            <template v-if="isWritable(ch) && ch.format === 'bool'">
-              <NbSwitch
-                :name="`hap-char-${svc.uuid}-${ch.uuid}`"
-                :model-value="!!ch.value"
-                @update:model-value="
-                  setHapCharacteristic((selected as any).acc.uuid, svc.uuid, ch.uuid, $event ? 1 : 0)
-                "
-              />
-            </template>
+            <NbSwitch
+              v-if="isWritable(ch) && ch.format === 'bool'"
+              :name="`hap-char-${svc.uuid}-${ch.uuid}`"
+              :model-value="!!ch.value"
+              @update:model-value="setHapCharacteristic((selected as any).acc.uuid, svc.uuid, ch.uuid, $event ? 1 : 0)"
+            />
             <!-- Read-only or non-bool writable → display value -->
-            <span v-else class="char-value" :class="{ on: ch.format === 'bool' && ch.value }">
+            <span v-else class="tabular" :class="{ 'state-on': ch.format === 'bool' && ch.value }">
               {{ formatValue(ch) }}
             </span>
-          </div>
-        </div>
+          </NbDefinitionListItem>
+        </NbDefinitionList>
       </NbShellPanel>
 
       <!-- HomeKit visibility -->
       <NbShellPanel title="HomeKit" fluid>
-        <div class="homekit-row">
-          <div class="homekit-copy">
-            <span class="homekit-title">Expose to HomeKit</span>
-            <span class="homekit-hint">
-              Hide devices the Home app cannot represent usefully. OpenBridge keeps its telemetry and history either
-              way.
-            </span>
-          </div>
+        <NbField label="Expose to HomeKit" control="fit">
           <NbSwitch
             :name="`homekit-visible-${(selected as any).acc.uuid}`"
             :model-value="isHomekitVisible((selected as any).acc.uuid)"
             :disabled="homekitBusy"
             @update:model-value="(v?: boolean) => setHomekitVisible((selected as any).acc.uuid, !!v)"
           />
-        </div>
-        <div v-if="homekitNotice" class="homekit-notice">{{ homekitNotice }}</div>
+        </NbField>
+        <p class="field-hint type-helper-text">
+          Hide devices the Home app cannot represent usefully. OpenBridge keeps its telemetry and history either way.
+        </p>
+        <p v-if="homekitNotice" class="quiet-note type-body-sm">{{ homekitNotice }}</p>
       </NbShellPanel>
 
-      <div class="detail-uuid">UUID: {{ (selected as any).acc.uuid }}</div>
+      <div class="detail-uuid type-code-sm">UUID: {{ (selected as any).acc.uuid }}</div>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { useConfirm, type ITabItem } from '@nubisco/ui'
+import { useConfirm, type IDefinitionListItem, type ITabItem } from '@nubisco/ui'
 import { useInspectorStore, type NativeDevice } from '@/stores/inspector'
 import {
   api,
@@ -546,7 +537,7 @@ async function loadHomekitHidden() {
     const { hidden } = await api.homekitHidden()
     hiddenAccessories.value = new Set(hidden)
   } catch {
-    /* bridge may be unavailable; treat everything as visible */
+    /* The bridge may be unavailable. Treat everything as visible. */
   }
 }
 
@@ -616,7 +607,7 @@ async function loadNativeAccessory(deviceId: string) {
     const { accessory } = await api.deviceAccessory(deviceId)
     nativeAccessory.value = accessory
   } catch {
-    /* bridge unavailable; the HomeKit panel simply does not render */
+    /* The bridge is unavailable, so the HomeKit panel simply does not render. */
   }
 }
 
@@ -626,7 +617,7 @@ async function loadServiceTypes() {
     serviceTypeOverrides.value = overrides
     availableServiceTypes.value = available
   } catch {
-    /* bridge may be unavailable; the picker simply does not render */
+    /* The bridge may be unavailable, and then the picker simply does not render. */
   }
 }
 
@@ -869,6 +860,15 @@ function manufacturerInfo(acc: Accessory) {
     serial: get('SerialNumber') ?? get('Serial'),
     firmware: get('FirmwareRevision') ?? get('Firmware'),
   }
+}
+
+/** The accessory's information service as facts, with the empty ones left out. */
+function manufacturerFacts(acc: Accessory): IDefinitionListItem[] {
+  const info = manufacturerInfo(acc)
+  if (!info) return []
+  return Object.entries(info)
+    .filter(([, v]) => v !== undefined && v !== null && v !== '')
+    .map(([k, v]) => ({ term: k.charAt(0).toUpperCase() + k.slice(1), value: String(v) }))
 }
 
 function formatValue(ch: { value: unknown; format: string }): string {
@@ -1254,21 +1254,148 @@ const historyChartSeries = computed(() => {
 </script>
 
 <style lang="scss" scoped>
+// An inspector is dense: controls are `sm`, rows 8 apart, and a section's
+// groups 12 apart (the xs and sm rows of the density pairing table).
+.inspector-content {
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  height: 100%;
+}
+
+// ─── Pinned header ─────────────────────────────────────────────────────────────
+.detail-header {
+  display: flex;
+  align-items: center;
+  gap: var(--nb-spacing-12);
+  padding: var(--nb-spacing-16);
+  border-bottom: 1px solid var(--nb-c-border);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--nb-c-surface);
+
+  // On a phone the sheet's 44px dismiss button floats over this header's
+  // right edge, so a long name stops short of it instead of running under it.
+  @include variables.phone {
+    padding-inline-end: calc(var(--nb-shell-inspector-dismiss-inset, 0px) + var(--nb-spacing-8));
+  }
+}
+
+.detail-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--nb-radius-panel);
+  background: color-mix(in srgb, var(--nb-c-primary) 12%, var(--nb-c-surface));
+  color: var(--nb-c-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.detail-heading {
+  flex: 1;
+  min-width: 0;
+}
+
+.detail-title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--nb-spacing-4);
+  min-width: 0;
+}
+
+.detail-name {
+  cursor: pointer;
+  color: var(--nb-c-text);
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.rename-row {
+  display: flex;
+  align-items: center;
+  gap: var(--nb-spacing-4);
+
+  > :first-child {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+.detail-type {
+  color: var(--nb-c-text-subtle);
+}
+
+// ─── Shared ────────────────────────────────────────────────────────────────────
+.section-banner {
+  margin-bottom: var(--nb-spacing-8);
+}
+
+.section-banner-after {
+  margin-top: var(--nb-spacing-8);
+}
+
+.detail-code {
+  color: var(--nb-c-text-muted);
+  word-break: break-all;
+}
+
+.reading-unit {
+  color: var(--nb-c-text-subtle);
+}
+
+// On and off are states, so they carry the state's colour.
+.state-on {
+  color: var(--nb-c-success);
+}
+
+.state-off {
+  color: var(--nb-c-text-subtle);
+}
+
+.quiet-note {
+  margin: 0;
+  color: var(--nb-c-text-muted);
+}
+
+// NbField puts its hint under the control's column, which for a switch on the
+// right edge is the switch's own width. The hint sits under the whole row instead.
+.field-hint {
+  margin: var(--nb-spacing-2) 0 0;
+  color: var(--nb-c-text-subtle);
+}
+
+// ─── Widget: energy meter ──────────────────────────────────────────────────────
+.widget-energy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--nb-spacing-8);
+}
+
+.energy-primary {
+  display: flex;
+  align-items: baseline;
+  gap: var(--nb-spacing-4);
+  color: var(--nb-c-text);
+}
+
+// ─── Recent activity ───────────────────────────────────────────────────────────
 .event-list {
   list-style: none;
   margin: 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
+  gap: var(--nb-spacing-4);
 }
 
 .event {
   display: flex;
-  gap: 0.6rem;
+  gap: var(--nb-spacing-8);
   align-items: baseline;
-  font-size: 0.8rem;
-  line-height: 1.4;
 }
 
 // Fixed width and tabular figures so the messages line up into a column that
@@ -1277,14 +1404,14 @@ const historyChartSeries = computed(() => {
   flex: 0 0 auto;
   min-width: 5.5rem;
   color: var(--nb-c-text-subtle);
-  font-variant-numeric: tabular-nums;
 }
 
 .event-body {
   display: flex;
-  gap: 0.4rem;
+  gap: var(--nb-spacing-8);
   align-items: baseline;
   flex-wrap: wrap;
+  min-width: 0;
 }
 
 .event-message {
@@ -1293,388 +1420,114 @@ const historyChartSeries = computed(() => {
 
 .event-source {
   color: var(--nb-c-text-muted);
-  font-size: 0.7rem;
-  border: 1px solid var(--nb-c-border);
-  border-radius: 3px;
-  padding: 0 0.3rem;
-}
-
-.inspector-content {
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-  height: 100%;
-}
-
-.detail-header {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 1rem;
-  border-bottom: 1px solid var(--nb-c-border);
-  position: sticky;
-  top: 0;
-  background: var(--nb-c-surface);
-
-  // On a phone the sheet's 44px dismiss button floats over this header's
-  // right edge, so a long name stops short of it instead of running under it.
-  @include variables.phone {
-    padding-inline-end: calc(var(--nb-shell-inspector-dismiss-inset, 0px) + 0.5rem);
-  }
-}
-
-.detail-icon {
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--nb-c-primary) 12%, var(--nb-c-surface));
-  color: var(--nb-c-primary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  &.native-icon {
-    background: color-mix(in srgb, var(--nb-c-primary) 12%, var(--nb-c-surface));
-    color: var(--nb-c-primary);
-  }
-}
-
-.detail-name {
-  cursor: pointer;
-  font-weight: 700;
-  font-size: 0.95rem;
-  color: var(--nb-c-text);
-  margin: 0;
-}
-
-.rename-row {
-  display: flex;
-  align-items: center;
-  gap: 0.25rem;
-}
-.rename-input {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--nb-c-text);
-  border: 1px solid var(--nb-c-primary);
-  border-radius: 6px;
-  padding: 0.2rem 0.4rem;
-  outline: none;
-  flex: 1;
-  min-width: 0;
-  &:focus {
-    border-color: var(--nb-c-primary);
-    box-shadow: 0 0 0 2px color-mix(in srgb, var(--nb-c-primary) 10%, transparent);
-  }
-}
-
-.detail-type {
-  font-size: 0.75rem;
-  color: var(--nb-c-text-subtle);
-}
-
-.info-grid {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 0.25rem 0.75rem;
-  font-size: 0.8rem;
-}
-.info-key {
-  color: var(--nb-c-text-subtle);
-  text-transform: capitalize;
-}
-.info-val {
-  color: var(--nb-c-text);
-  word-break: break-all;
-  &.mono {
-    font-family: var(--nb-font-family-mono);
-    font-size: 0.72rem;
-    color: var(--nb-c-text-muted);
-  }
-}
-
-// ─── Widget: energy meter ──────────────────────────────────────────────────────
-.widget-energy {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  padding: 0.25rem 0;
-}
-.energy-primary {
-  display: flex;
-  align-items: baseline;
-  gap: 0.25rem;
-}
-.energy-value {
-  font-size: 2rem;
-  font-weight: 700;
-  color: var(--nb-c-text);
-}
-.energy-unit {
-  font-size: 1rem;
-  color: var(--nb-c-text-subtle);
-}
-.energy-secondary {
-  display: flex;
-  gap: 1rem;
-}
-.energy-item {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-}
-.energy-label {
-  font-size: 0.68rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--nb-c-text-subtle);
-}
-.energy-item-val {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--nb-c-text);
-}
-
-// ─── Widget: thermostat / dehumidifier ────────────────────────────────────────
-.widget-thermo {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-.thermo-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.3rem 0.5rem;
-  border-radius: 6px;
-  background: var(--nb-c-layer-1);
-}
-.thermo-label {
-  font-size: 0.8rem;
-  color: var(--nb-c-text-subtle);
-}
-.thermo-value {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--nb-c-text);
-  &.accent {
-    color: var(--nb-c-primary);
-  }
-  &.on {
-    color: var(--nb-c-success);
-  }
-  &.off {
-    color: var(--nb-c-text-subtle);
-  }
-}
-
-// ─── Widget: generic sensor ───────────────────────────────────────────────────
-.widget-generic {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-.no-telemetry {
-  font-size: 0.8rem;
-  color: var(--nb-c-text-subtle);
-  font-style: italic;
-}
-
-// ─── Char rows ─────────────────────────────────────────────────────────────────
-.char-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
-.char-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.8rem;
-  padding: 0.3rem 0.5rem;
-  border-radius: 6px;
-  background: var(--nb-c-layer-1);
-  border: 1px solid var(--nb-c-layer-1);
-}
-
-.char-name {
-  flex: 1;
-  color: var(--nb-c-text-muted);
-}
-.char-value {
-  color: var(--nb-c-text);
-  font-weight: 500;
-  font-size: 0.78rem;
-  &.on {
-    color: var(--nb-c-success);
-  }
-}
-.char-writable {
-  color: var(--nb-c-primary);
-  display: flex;
-  align-items: center;
 }
 
 .detail-uuid {
-  padding: 0.75rem 1rem;
-  font-size: 0.68rem;
-  color: var(--nb-c-border);
-  font-family: var(--nb-font-family-mono);
+  padding: var(--nb-spacing-12) var(--nb-spacing-16);
+  color: var(--nb-c-text-subtle);
   word-break: break-all;
 }
 
 // ─── Energy history ────────────────────────────────────────────────────────────
-.energy-history {
-  padding-bottom: 1rem;
-}
-
 .history-tabs {
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--nb-spacing-12);
 }
 
 .history-nav {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 0.75rem;
+  margin-bottom: var(--nb-spacing-12);
 }
+
 .history-nav-center {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
-}
-.history-total {
-  font-size: 1.2rem;
-  font-weight: 700;
-  color: var(--nb-c-text);
-}
-.history-unit {
-  font-size: 0.7rem;
-  color: var(--nb-c-text-subtle);
-  font-weight: 400;
-}
-.history-date {
-  font-size: 0.7rem;
-  color: var(--nb-c-text-subtle);
+  gap: var(--nb-spacing-2);
 }
 
-.history-chart {
+.history-total {
   display: flex;
-  align-items: flex-end;
-  height: 80px;
-  gap: 2px;
-  padding: 0 2px;
+  align-items: baseline;
+  gap: var(--nb-spacing-4);
+  color: var(--nb-c-text);
 }
-.history-bar-wrap {
-  flex: 1;
-  height: 100%;
-  display: flex;
-  align-items: flex-end;
-}
-.history-bar {
-  width: 100%;
-  background: var(--nb-c-primary);
-  border-radius: 2px 2px 0 0;
-  transition: height 0.3s ease;
-  min-height: 2px;
-  opacity: 0.7;
-  &:hover {
-    opacity: 1;
-  }
+
+.history-date {
+  color: var(--nb-c-text-subtle);
 }
 
 .no-history {
-  font-size: 0.78rem;
+  margin: 0;
+  padding: var(--nb-spacing-16) 0;
   color: var(--nb-c-text-subtle);
-  font-style: italic;
   text-align: center;
-  padding: 1rem 0;
 }
 
 // ─── Calibration ──────────────────────────────────────────────────────────────
 .calibration-hint {
-  font-size: 0.68rem;
+  margin: var(--nb-spacing-4) 0 var(--nb-spacing-8);
   color: var(--nb-c-text-subtle);
   text-align: center;
-  margin-top: 0.25rem;
-  margin-bottom: 0.5rem;
 }
 
 .calibration-actions {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--nb-spacing-8);
   justify-content: flex-end;
 }
 
-.homekit-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 0.25rem 0;
-}
-
-.homekit-copy {
+// ─── HomeKit ───────────────────────────────────────────────────────────────────
+.homekit-fields {
   display: flex;
   flex-direction: column;
-  gap: 0.2rem;
+  gap: var(--nb-spacing-12);
 }
 
-.homekit-title {
-  font-size: 0.85rem;
-  font-weight: 500;
+.service-type {
+  margin-bottom: var(--nb-spacing-12);
 }
 
-.homekit-hint {
-  font-size: 0.72rem;
-  line-height: 1.35;
-  color: var(--nb-color-text-muted, var(--nb-c-text-muted));
-}
-
-.homekit-notice {
-  margin-top: 0.4rem;
-  font-size: 0.72rem;
-  color: var(--nb-color-text-muted, var(--nb-c-text-muted));
-}
-
+// ─── Report ────────────────────────────────────────────────────────────────────
 .obs-help {
-  margin: 0 0 0.6rem;
-  font-size: 0.78rem;
-  line-height: 1.5;
-  color: var(--nb-c-text-subtle);
+  margin: 0 0 var(--nb-spacing-8);
+  color: var(--nb-c-text-muted);
 }
 
 .obs-form {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--nb-spacing-8);
 }
 
 .obs-verdicts {
   display: flex;
-  gap: 0.35rem;
+  flex-wrap: wrap;
+  gap: var(--nb-spacing-4);
+}
+
+.obs-submit {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .obs-list {
-  margin-top: 0.9rem;
+  margin-top: var(--nb-spacing-16);
   border-top: 1px solid var(--nb-c-border);
-  padding-top: 0.6rem;
+  padding-top: var(--nb-spacing-12);
 }
 
 .obs-list-head {
-  font-size: 0.72rem;
-  color: var(--nb-c-text-subtle);
-  margin-bottom: 0.4rem;
+  color: var(--nb-c-text-muted);
+  margin-bottom: var(--nb-spacing-8);
 }
 
 .obs-row {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
-  padding: 0.22rem 0;
-  font-size: 0.75rem;
+  gap: var(--nb-spacing-8);
+  padding: var(--nb-spacing-4) 0;
 }
 
 .obs-when {
@@ -1682,11 +1535,8 @@ const historyChartSeries = computed(() => {
   white-space: nowrap;
 }
 
-.obs-temp {
-  font-weight: 600;
-}
-
 .obs-note {
+  min-width: 0;
   color: var(--nb-c-text-subtle);
   overflow: hidden;
   text-overflow: ellipsis;
