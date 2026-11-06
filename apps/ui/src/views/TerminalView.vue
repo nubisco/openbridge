@@ -1,7 +1,7 @@
 <template>
   <div class="terminal-view">
     <Teleport defer to="#ob-topbar-right">
-      <NbBadge :variant="connected ? 'green' : 'grey'" dot role="status">
+      <NbBadge :variant="connected ? 'success' : 'neutral'" dot role="status">
         {{ connected ? 'Connected' : 'Disconnected' }}
       </NbBadge>
     </Teleport>

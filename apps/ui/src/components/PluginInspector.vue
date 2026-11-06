@@ -416,10 +416,10 @@ function widgetIcon(widgetType: string): string {
 
 // Same colours the plugin list uses for the status, so the two agree.
 function statusVariant(status: string) {
-  if (status === 'running') return 'green'
-  if (status === 'error') return 'red'
-  if (status === 'loading') return 'blue'
-  return 'grey'
+  if (status === 'running') return 'success'
+  if (status === 'error') return 'danger'
+  if (status === 'loading') return 'info'
+  return 'neutral'
 }
 
 const statusLabel: Record<string, string> = {
@@ -946,7 +946,7 @@ async function save() {
 
 // ─── Setup / config section ───────────────────────────────────────────────────
 .error-text {
-  font-family: monospace;
+  font-family: var(--nb-font-family-mono);
   word-break: break-word;
 }
 

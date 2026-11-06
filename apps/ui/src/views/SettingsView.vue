@@ -83,13 +83,13 @@
 
       <div class="update-row">
         <div class="update-versions">
-          <NbBadge variant="grey">Current: v{{ updateStatus?.current ?? '…' }}</NbBadge>
+          <NbBadge variant="neutral">Current: v{{ updateStatus?.current ?? '…' }}</NbBadge>
           <template v-if="updateStatus && !checkingUpdate">
-            <NbBadge v-if="updateStatus.updateAvailable" variant="blue">Available: v{{ updateStatus.latest }}</NbBadge>
-            <NbBadge v-else-if="updateStatus.latest === null" variant="orange">Unable to check</NbBadge>
-            <NbBadge v-else variant="green">Up to date</NbBadge>
+            <NbBadge v-if="updateStatus.updateAvailable" variant="info">Available: v{{ updateStatus.latest }}</NbBadge>
+            <NbBadge v-else-if="updateStatus.latest === null" variant="warning">Unable to check</NbBadge>
+            <NbBadge v-else variant="success">Up to date</NbBadge>
           </template>
-          <NbBadge v-if="checkingUpdate" variant="grey">Checking…</NbBadge>
+          <NbBadge v-if="checkingUpdate" variant="neutral">Checking…</NbBadge>
         </div>
 
         <div class="update-actions">
@@ -507,7 +507,7 @@ function generatePin() {
 }
 
 .mono :deep(input) {
-  font-family: monospace;
+  font-family: var(--nb-font-family-mono);
 }
 
 .pin-row {

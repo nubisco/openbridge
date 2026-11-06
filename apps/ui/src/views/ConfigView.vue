@@ -198,7 +198,7 @@ function format() {
 
 // Teleported next to the breadcrumb in the shell topbar.
 .config-path {
-  font-family: monospace;
+  font-family: var(--nb-font-family-mono);
   font-size: 0.82rem;
   color: var(--nb-c-text-muted);
   background: var(--nb-c-field-bg);

@@ -32,7 +32,7 @@
           </div>
           <div class="plugin-version">
             v{{ row.plugin.manifest.version }}
-            <NbBadge v-if="row.plugin.availableUpdate" variant="blue" size="sm">
+            <NbBadge v-if="row.plugin.availableUpdate" variant="info" size="sm">
               v{{ row.plugin.availableUpdate }} available
             </NbBadge>
           </div>
@@ -92,7 +92,7 @@
 
     <template #cell-version="{ row }">
       {{ row.version }}
-      <NbBadge v-if="row.availableUpdate" variant="blue" size="sm">v{{ row.availableUpdate }}</NbBadge>
+      <NbBadge v-if="row.availableUpdate" variant="info" size="sm">v{{ row.availableUpdate }}</NbBadge>
     </template>
 
     <template #cell-status="{ row }">
@@ -123,10 +123,10 @@ const props = defineProps<{
 const emit = defineEmits<{ select: [plugin: PluginInstance] }>()
 
 function statusVariant(status: string) {
-  if (status === 'running') return 'green'
-  if (status === 'error') return 'red'
-  if (status === 'loading') return 'blue'
-  return 'grey'
+  if (status === 'running') return 'success'
+  if (status === 'error') return 'danger'
+  if (status === 'loading') return 'info'
+  return 'neutral'
 }
 
 // ─── Table mode ─────────────────────────────────────────────────────────────

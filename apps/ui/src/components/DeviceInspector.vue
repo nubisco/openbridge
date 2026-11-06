@@ -283,7 +283,7 @@
           <div v-for="(o, i) in observations" :key="i" class="obs-row">
             <span class="obs-when">{{ new Date(o.at).toLocaleString() }}</span>
             <span class="obs-temp">{{ o.roomTemperature }}°</span>
-            <NbBadge :variant="o.comfort === 'ok' ? 'green' : o.comfort === 'cold' ? 'blue' : 'orange'" size="sm">
+            <NbBadge :variant="o.comfort === 'ok' ? 'success' : o.comfort === 'cold' ? 'info' : 'warning'" size="sm">
               {{ o.comfort }}
             </NbBadge>
             <span v-if="o.note" class="obs-note">{{ o.note }}</span>
@@ -1387,7 +1387,7 @@ const historyChartSeries = computed(() => {
   color: var(--nb-c-text);
   word-break: break-all;
   &.mono {
-    font-family: monospace;
+    font-family: var(--nb-font-family-mono);
     font-size: 0.72rem;
     color: var(--nb-c-text-muted);
   }
@@ -1520,7 +1520,7 @@ const historyChartSeries = computed(() => {
   padding: 0.75rem 1rem;
   font-size: 0.68rem;
   color: var(--nb-c-border);
-  font-family: monospace;
+  font-family: var(--nb-font-family-mono);
   word-break: break-all;
 }
 

@@ -305,7 +305,7 @@ async function disconnect(clientId: string, name: string) {
   }
 
   &__mono :deep(input) {
-    font-family: monospace;
+    font-family: var(--nb-font-family-mono);
   }
 }
 </style>

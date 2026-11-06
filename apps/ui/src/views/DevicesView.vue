@@ -204,7 +204,7 @@
           </div>
         </template>
         <template #cell-state="{ row }">
-          <NbBadge v-if="row.state" :variant="row.unhealthy ? 'orange' : row.stateOn ? 'green' : 'grey'">
+          <NbBadge v-if="row.state" :variant="row.unhealthy ? 'warning' : row.stateOn ? 'success' : 'neutral'">
             {{ row.state }}
           </NbBadge>
           <span v-else>—</span>

@@ -54,7 +54,7 @@
           <div class="mp-name-row">
             <span class="mp-name">{{ local.name }}</span>
             <NbBadge variant="primary" size="sm" icon="diamond">Native</NbBadge>
-            <NbBadge variant="blue" size="sm" icon="folder">Local</NbBadge>
+            <NbBadge variant="info" size="sm" icon="folder">Local</NbBadge>
             <span class="mp-ver">v{{ local.version }}</span>
           </div>
           <p v-if="local.description" class="mp-desc">{{ local.description }}</p>

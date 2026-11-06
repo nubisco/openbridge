@@ -57,8 +57,8 @@
         <div class="card-title">
           Plugins
           <span class="plugins-counts">
-            <NbBadge variant="green">{{ daemon.runningCount }} running</NbBadge>
-            <NbBadge v-if="daemon.errorCount" variant="red">{{ daemon.errorCount }} error</NbBadge>
+            <NbBadge variant="success">{{ daemon.runningCount }} running</NbBadge>
+            <NbBadge v-if="daemon.errorCount" variant="danger">{{ daemon.errorCount }} error</NbBadge>
           </span>
         </div>
         <div v-if="daemon.plugins.length === 0" class="empty-inline">No plugins loaded yet.</div>
@@ -67,7 +67,7 @@
             <div class="plugin-dot" :class="p.status" />
             <span class="plugin-name">{{ p.manifest.name }}</span>
             <span class="plugin-ver">v{{ p.manifest.version }}</span>
-            <NbBadge v-if="p.source === 'homebridge'" variant="orange" size="sm">HB</NbBadge>
+            <NbBadge v-if="p.source === 'homebridge'" variant="warning" size="sm">HB</NbBadge>
             <NbBadge :variant="statusVariant(p.status)" size="sm">{{ p.status }}</NbBadge>
           </div>
         </div>
@@ -186,10 +186,10 @@ const daemon = useDaemonStore()
 const layout = useLayoutStore()
 
 function statusVariant(status: string) {
-  if (status === 'running') return 'green'
-  if (status === 'error') return 'red'
-  if (status === 'loading') return 'blue'
-  return 'grey'
+  if (status === 'running') return 'success'
+  if (status === 'error') return 'danger'
+  if (status === 'loading') return 'info'
+  return 'neutral'
 }
 
 // ─── Restart OpenBridge ───────────────────────────────────────────────────────
@@ -232,8 +232,8 @@ const pincode = ref('')
 const hapError = ref('')
 
 const hapVariant = computed(() => {
-  if (!daemon.connected) return 'grey'
-  return hapError.value ? 'red' : 'green'
+  if (!daemon.connected) return 'neutral'
+  return hapError.value ? 'danger' : 'success'
 })
 
 const hapStatusLabel = computed(() => {
@@ -440,7 +440,7 @@ onUnmounted(() => {
   font-weight: 800;
   letter-spacing: 0.12em;
   color: var(--nb-c-text);
-  font-family: monospace;
+  font-family: var(--nb-font-family-mono);
 }
 .pin-label {
   font-size: 0.72rem;
@@ -465,7 +465,7 @@ onUnmounted(() => {
 }
 // A path is read character by character, so it keeps the monospace face.
 .sys-path {
-  font-family: monospace;
+  font-family: var(--nb-font-family-mono);
   font-size: 0.75rem;
   color: var(--nb-c-text-muted);
 }
