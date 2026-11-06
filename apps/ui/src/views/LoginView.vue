@@ -1,20 +1,22 @@
 <template>
-  <div class="login-page">
-    <div class="login-card">
-      <h1 class="login-title">OpenBridge</h1>
-      <p class="login-subtitle">Sign in via Nubisco Platform to manage this OpenBridge instance.</p>
+  <!-- A full-page task outside the shell: one heading, one primary. -->
+  <div class="login">
+    <NbPanel class="login__panel">
+      <img class="login__mark" src="/logo.svg" alt="" width="44" height="44" />
+      <h1 class="type-heading-03">OpenBridge</h1>
+      <p class="login__note">Sign in via Nubisco Platform to manage this OpenBridge instance.</p>
 
-      <NbMessage v-if="error" variant="error" class="login-error">
+      <NbMessage v-if="error" variant="error">
         {{ error }}
       </NbMessage>
-      <NbMessage v-else-if="loggedOut" variant="success" class="login-error">You have been signed out.</NbMessage>
+      <NbMessage v-else-if="loggedOut" variant="success">You have been signed out.</NbMessage>
 
-      <NbButton variant="primary" size="lg" :disabled="loading" class="login-btn" @click="signIn">
+      <NbButton variant="primary" :disabled="loading" @click="signIn">
         <span v-if="loading">Redirecting…</span>
         <span v-else>Sign in via Nubisco Platform</span>
       </NbButton>
-      <NbButton variant="ghost" size="sm" :disabled="loading" @click="pickAccount">Use a different account</NbButton>
-    </div>
+      <NbButton variant="tertiary" :disabled="loading" @click="pickAccount">Use a different account</NbButton>
+    </NbPanel>
   </div>
 </template>
 
@@ -106,45 +108,33 @@ onMounted(async () => {
 </script>
 
 <style scoped lang="scss">
-.login-page {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-}
+/* The consent screen has the same shape: both are the bridge's front doors. */
+.login {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: var(--nb-spacing-16);
+  background: var(--nb-c-bg-soft);
 
-.login-card {
-  width: 100%;
-  max-width: 420px;
-  padding: 2.5rem 2rem;
-  border: 1px solid var(--nb-c-component-plain-border, var(--nb-c-border));
-  border-radius: 12px;
-  background: var(--nb-c-surface);
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
+  &__panel {
+    width: min(100%, 28rem);
+    display: grid;
+    gap: var(--nb-spacing-16);
+    text-align: center;
 
-.login-title {
-  margin: 0;
-  font-size: var(--nb-font-size-24, 24px);
-  font-weight: var(--nb-font-weight-bold, 700);
-  letter-spacing: -0.4px;
-}
+    h1 {
+      margin: 0;
+    }
+  }
 
-.login-subtitle {
-  margin: 0;
-  color: var(--nb-c-text-subtle);
-  font-size: var(--nb-font-size-14);
-  line-height: 1.5;
-}
+  &__mark {
+    display: block;
+    margin-inline: auto;
+  }
 
-.login-error {
-  margin: 0;
-}
-
-.login-btn {
-  margin-top: 0.5rem;
+  &__note {
+    margin: 0;
+    color: var(--nb-c-text-muted);
+  }
 }
 </style>

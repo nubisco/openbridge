@@ -199,14 +199,18 @@ function format() {
   min-height: 0;
 }
 
-// Contributed beside the breadcrumb in the shell topbar.
+// Contributed beside the breadcrumb in the shell topbar. A path is code, so it
+// takes the mono set rather than a size of its own.
 .config-path {
-  font-family: var(--nb-font-family-mono);
-  font-size: 0.82rem;
+  font-family: var(--nb-type-code-sm-family);
+  font-size: var(--nb-type-code-sm-size);
+  font-weight: var(--nb-type-code-sm-weight);
+  line-height: var(--nb-type-code-sm-line-height);
+  letter-spacing: var(--nb-type-code-sm-letter-spacing);
   color: var(--nb-c-text-muted);
   background: var(--nb-c-field-bg);
-  padding: 0.25rem 0.6rem;
-  border-radius: 6px;
+  padding: var(--nb-spacing-4) var(--nb-spacing-8);
+  border-radius: var(--nb-radius-control-sm);
 
   // The topbar is the width of the screen on a phone: the path gives way first.
   @include variables.phone {
@@ -218,7 +222,7 @@ function format() {
 }
 
 .loading-state {
-  padding: 4rem;
+  padding: var(--nb-spacing-48);
   justify-content: center;
 }
 

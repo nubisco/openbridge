@@ -1,7 +1,10 @@
 <template>
   <div class="callback-page">
     <NbMessage v-if="error" variant="error">{{ error }}</NbMessage>
-    <p v-else class="callback-loading">Signing you in…</p>
+    <p v-else class="callback-loading">
+      <NbSpinner size="sm" />
+      Signing you in…
+    </p>
   </div>
 </template>
 
@@ -85,16 +88,20 @@ onMounted(async () => {
 </script>
 
 <style scoped lang="scss">
+/* A full-page task outside the shell, on the same ground as sign-in. */
 .callback-page {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: var(--nb-spacing-16);
+  background: var(--nb-c-bg-soft);
 }
 
 .callback-loading {
-  color: var(--nb-c-text-subtle);
-  font-size: var(--nb-font-size-14);
+  display: flex;
+  align-items: center;
+  gap: var(--nb-spacing-8);
+  margin: 0;
+  color: var(--nb-c-text-muted);
 }
 </style>

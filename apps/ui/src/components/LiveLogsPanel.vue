@@ -1,5 +1,5 @@
 <template>
-  <NbShellPanel v-model:size="size" title="Live Logs">
+  <NbShellPanel v-model:size="size" title="Live logs">
     <template #toolbar>
       <div class="logs-filter">
         <!-- xs, not sm: the field height token for xs (3.5 base units) is the
@@ -18,9 +18,9 @@
     </template>
 
     <div ref="logsEl" class="log-list">
-      <div v-if="filteredLogs.length === 0" class="log-empty">No log entries yet.</div>
+      <div v-if="filteredLogs.length === 0" class="log-empty type-body-compact">No log entries yet.</div>
       <div v-for="(entry, i) in filteredLogs" :key="i" class="log-line">
-        <span class="log-time">{{ new Date(entry.timestamp).toLocaleTimeString() }}</span>
+        <span class="log-time tabular">{{ new Date(entry.timestamp).toLocaleTimeString() }}</span>
         <span class="log-level" :class="`log-level--${entry.level}`">{{ entry.level.toUpperCase() }}</span>
         <span class="log-plugin">{{ entry.plugin }}</span>
         <span class="log-msg">{{ entry.message }}</span>
@@ -97,47 +97,55 @@ watch(
 }
 
 // No background of its own: the NbShellPanel surface shows through, so the
-// console follows the active theme instead of pinning one palette.
+// console follows the active theme instead of pinning one palette. The log is
+// code, so it reads in the library's mono set (Plex Mono at 12px) rather than
+// the terminal's Meslo, which only the terminal and the editors need for glyphs.
 .log-list {
   height: 100%;
   overflow-y: auto;
-  padding: 0.4rem 0.6rem;
-  font-family: 'MesloLGS NF', monospace;
-  font-size: 0.72rem;
-  line-height: 1.55;
+  padding: var(--nb-spacing-4) var(--nb-spacing-8);
+  font-family: var(--nb-type-code-sm-family);
+  font-size: var(--nb-type-code-sm-size);
+  font-weight: var(--nb-type-code-sm-weight);
+  line-height: var(--nb-type-code-sm-line-height);
+  letter-spacing: var(--nb-type-code-sm-letter-spacing);
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: var(--nb-spacing-2);
 }
 
 .log-empty {
-  color: var(--nb-c-text-subtle);
-  padding: 1rem 0;
+  color: var(--nb-c-text-muted);
+  padding-block: var(--nb-spacing-16);
   text-align: center;
 }
 
 .log-line {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--nb-spacing-8);
   align-items: baseline;
+
+  @include variables.phone {
+    flex-wrap: wrap;
+    row-gap: 0;
+  }
 
   &:hover {
     background: var(--nb-c-surface-hover);
-    border-radius: 3px;
+    border-radius: var(--nb-radius-control-sm);
   }
 }
 
 .log-time {
   color: var(--nb-c-text-subtle);
   flex-shrink: 0;
-  font-size: 0.68rem;
 }
 
+// The level is told apart by its hue and its word, not by weight: semibold
+// is for 14px and up, and the line is 12px.
 .log-level {
   flex-shrink: 0;
-  width: 34px;
-  font-weight: 700;
-  font-size: 0.66rem;
+  width: 5ch;
 
   &--debug {
     color: var(--nb-c-text-subtle);
@@ -166,5 +174,11 @@ watch(
   color: var(--nb-c-text-muted);
   flex: 1;
   word-break: break-word;
+
+  // Beside time, level and plugin a phone leaves the message a few characters
+  // a line, so there it takes a line of its own under them.
+  @include variables.phone {
+    flex-basis: 100%;
+  }
 }
 </style>

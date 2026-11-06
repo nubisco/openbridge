@@ -9,19 +9,19 @@
       </p>
 
       <template v-else-if="state === 'invalid'">
-        <h1 class="consent__title">This request cannot continue</h1>
+        <h1 class="consent__title type-heading-03">This request cannot continue</h1>
         <NbBanner status="error" variant="inline" :title="reason || 'The connection request is not valid.'" />
         <p class="consent__note">Nothing was shared. Start the connection again from your application.</p>
       </template>
 
       <template v-else-if="state === 'signed-out'">
-        <h1 class="consent__title">Sign in to continue</h1>
+        <h1 class="consent__title type-heading-03">Sign in to continue</h1>
         <p class="consent__note">Sign in to this bridge to decide whether {{ clientName }} may connect.</p>
         <NbButton variant="primary" @click="signIn">Sign in</NbButton>
       </template>
 
       <template v-else>
-        <h1 class="consent__title">Connect {{ clientName }} to OpenBridge?</h1>
+        <h1 class="consent__title type-heading-03">Connect {{ clientName }} to OpenBridge?</h1>
         <p class="consent__note">
           {{ clientName }} will be able to read your devices, their current readings and recorded history, their events
           and the bridge logs
@@ -36,7 +36,7 @@
           locks. You can disconnect it from Settings at any time.
         </NbMessage>
         <div class="consent__row">
-          <NbButton variant="ghost" @click="decide('deny')">Cancel</NbButton>
+          <NbButton variant="secondary" @click="decide('deny')">Cancel</NbButton>
           <NbButton variant="primary" @click="decide('approve')">Connect</NbButton>
         </div>
       </template>
@@ -149,20 +149,18 @@ function decide(decision: 'approve' | 'deny') {
   min-height: 100dvh;
   display: grid;
   place-items: center;
-  padding: 1rem;
+  padding: var(--nb-spacing-16);
   background: var(--nb-c-bg-soft);
 
   &__panel {
     width: min(100%, 28rem);
     display: grid;
-    gap: 1rem;
+    gap: var(--nb-spacing-16);
     text-align: center;
   }
 
   &__title {
     margin: 0;
-    font-size: 1.15rem;
-    font-weight: 600;
     color: var(--nb-c-text);
   }
 
@@ -175,9 +173,7 @@ function decide(decision: 'approve' | 'deny') {
 
   &__note {
     margin: 0;
-    color: var(--nb-c-text-subtle);
-    font-size: 0.85rem;
-    line-height: 1.55;
+    color: var(--nb-c-text-muted);
 
     strong {
       color: var(--nb-c-text);
@@ -186,7 +182,7 @@ function decide(decision: 'approve' | 'deny') {
 
   &__row {
     display: flex;
-    gap: 0.5rem;
+    gap: var(--nb-spacing-8);
     justify-content: center;
   }
 }

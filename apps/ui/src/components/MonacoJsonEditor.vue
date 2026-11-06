@@ -1,7 +1,15 @@
 <template>
   <div :style="{ height: `${height ?? 220}px`, width: '100%', position: 'relative' }">
     <div ref="containerEl" style="height: 100%; width: 100%" />
-    <div v-if="!ready" class="monaco-skeleton" />
+    <NbSkeleton
+      v-if="!ready"
+      variant="block"
+      width="100%"
+      height="100%"
+      radius="none"
+      label="Loading editor"
+      class="monaco-skeleton"
+    />
   </div>
 </template>
 
@@ -78,28 +86,10 @@ watch(
 )
 </script>
 
-<style scoped>
+<style lang="scss" scoped>
+// The editor's shape while Monaco boots, laid over the box it will fill.
 .monaco-skeleton {
   position: absolute;
   inset: 0;
-  background: var(--nb-c-layer-1);
-  border-radius: inherit;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.monaco-skeleton::after {
-  content: '';
-  width: 40px;
-  height: 40px;
-  border: 3px solid var(--nb-c-border);
-  border-top-color: var(--nb-c-primary);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-}
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 </style>

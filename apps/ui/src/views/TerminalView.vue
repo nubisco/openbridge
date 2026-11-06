@@ -150,7 +150,7 @@ onBeforeUnmount(() => {
     height: 100%;
   }
   :deep(.xterm-screen) {
-    padding: 0.5rem;
+    padding: var(--nb-spacing-8);
   }
   :deep(.xterm-helper-textarea) {
     opacity: 0 !important;

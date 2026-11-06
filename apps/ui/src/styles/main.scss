@@ -1,17 +1,11 @@
-// Nubisco UI global styles: includes CSS variables, grid, typography, reset
+// Nubisco UI global styles: tokens, the reset, type, grid and utilities.
+// This file holds only what the library does not: the library's reset already
+// sets `box-sizing` on every element and clears the body margin, and its type
+// layer sets the sans family on html and body.
 @use '@nubisco/ui/styles';
 @use './theme';
 
-@font-face {
-  font-family: 'Symbols Nerd Font Mono';
-  src: url('https://cdn.jsdelivr.net/gh/ryanoasis/nerd-fonts@v3.2.1/patched-fonts/NerdFontsSymbolsOnly/Regular/SymbolsNerdFontMono-Regular.woff2')
-    format('woff2');
-  font-weight: normal;
-  font-style: normal;
-  font-display: block;
-}
-
-*,
+// The reset's box-sizing rule covers elements, not their generated content.
 *::before,
 *::after {
   box-sizing: border-box;
@@ -19,9 +13,7 @@
 
 html,
 body {
-  margin: 0;
   height: 100%;
-  font-family: var(--nb-font-family-sans);
   color: var(--nb-c-text);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
