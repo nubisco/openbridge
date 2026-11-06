@@ -118,7 +118,7 @@ const crumbs = computed<IBreadcrumbItem[]>(() => [
   { label: device.value?.name ?? deviceId.value },
 ])
 // It is the frame's one trail, in the topbar, not a second one in the page.
-watchEffect(() => layout.setPage(device.value?.name ?? deviceId.value, undefined, { crumbs: crumbs.value }))
+watchEffect(() => layout.setPage(device.value?.name ?? deviceId.value, { crumbs: crumbs.value }))
 
 const currentMetric = computed(() => metrics.value.find((m) => m.key === selectedMetric.value) ?? null)
 

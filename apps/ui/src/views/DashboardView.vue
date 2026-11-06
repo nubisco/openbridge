@@ -1,12 +1,9 @@
 <template>
-  <!-- The dashboard pattern. A home bridge is opened to answer "is everything
-       running?", and the plugins are what answer it: they are what talks to
-       the devices, and a plugin in error is the one thing here that changes
-       what you do next. So the strip sums them up, the plugin list is the one
-       raised region, and the rest supports it as flat tiles: the live metrics
-       for when something is slow, then HomeKit pairing (a setup step, done
-       once) and system information (reference). The trail names the page, so
-       there is no heading repeating it. -->
+  <!-- The dashboard pattern. A summary strip, then HomeKit pairing as the one
+       raised region (a new bridge is opened to be paired), with system
+       information beside it, then the plugins and the live metrics as flat
+       supporting tiles. The trail names the page, so there is no heading
+       repeating it. -->
   <div class="dashboard">
     <!-- Three figures from data the page already has. Hue is status: a tile
          turns red only when something is wrong. -->
@@ -25,9 +22,56 @@
       <NbStat size="sm" label="HomeKit bridge" :value="hapStatusLabel" :status="hapStatus" />
     </NbCardGrid>
 
-    <!-- The region the page is for: first, full width, and the page's only
-         raised surface. -->
-    <NbPanel title="Plugins">
+    <!-- Pairing first (Jose, 2026-11-06): a new bridge is opened to be added
+         to the Home app, so the QR code is the page's one raised region and
+         sits where nobody has to scroll for it. System information is its
+         flat neighbour. -->
+    <NbCardGrid min="320px" gap="lg" fill="auto-fit">
+      <NbPanel title="HomeKit pairing">
+        <div class="hk">
+          <div v-if="qrDataUrl" class="hk__qr">
+            <img :src="qrDataUrl" alt="HomeKit QR code" class="hk__qr-img" />
+          </div>
+          <div v-else class="hk__qr hk__qr--empty type-body-sm">
+            <NbIcon name="qr-code" size="xl" />
+            <span>{{ hapError ? 'HomeKit bridge unavailable' : 'No HAP bridge configured' }}</span>
+          </div>
+          <div class="hk__details">
+            <div v-if="pincode" class="hk__pin type-heading-02 tabular">{{ pincode }}</div>
+            <div v-if="pincode" class="metric__sub type-body-sm">Scan to add to HomeKit</div>
+            <div v-if="hapError" class="hk__error type-body-sm">{{ hapError }}</div>
+          </div>
+        </div>
+      </NbPanel>
+
+      <NbPanel flat title="System information">
+        <!-- A fixed term width keeps every value on one edge. The library's
+             rows are separate grids, so a content-sized term would not. -->
+        <NbDefinitionList v-if="sysInfo" compact term-width="6rem">
+          <NbDefinitionListItem term="OS">{{ sysInfo.os }}</NbDefinitionListItem>
+          <NbDefinitionListItem term="Arch">{{ sysInfo.arch }}</NbDefinitionListItem>
+          <NbDefinitionListItem term="Hostname">{{ sysInfo.hostname }}</NbDefinitionListItem>
+          <NbDefinitionListItem term="IP Address">{{ sysInfo.ip }}</NbDefinitionListItem>
+          <NbDefinitionListItem term="User">{{ sysInfo.user }}</NbDefinitionListItem>
+          <NbDefinitionListItem term="Node.js">{{ sysInfo.nodeVersion }}</NbDefinitionListItem>
+          <NbDefinitionListItem term="OpenBridge">v{{ daemon.health?.version ?? '—' }}</NbDefinitionListItem>
+          <NbDefinitionListItem term="Config">
+            <span class="sys-path type-code-sm">{{ sysInfo.configPath }}</span>
+          </NbDefinitionListItem>
+          <NbDefinitionListItem term="OB plugins">
+            <span class="sys-path type-code-sm">{{ sysInfo.obPluginsDir }}</span>
+          </NbDefinitionListItem>
+          <NbDefinitionListItem term="HB plugins">
+            <span class="sys-path type-code-sm">{{ sysInfo.hbPluginsDir }}</span>
+          </NbDefinitionListItem>
+        </NbDefinitionList>
+        <NbSpinner v-else size="sm" show-label label="Loading..." />
+      </NbPanel>
+    </NbCardGrid>
+
+    <!-- What talks to the devices, flat on the ground: the strip above
+         already says whether any is in error. -->
+    <NbPanel flat title="Plugins">
       <template #actions>
         <NbButton size="sm" variant="tertiary" to="/plugins">Manage plugins</NbButton>
       </template>
@@ -116,50 +160,6 @@
         </div>
       </NbPanel>
     </div>
-
-    <!-- Setup and reference, read rarely: last, flat, two halves. -->
-    <NbCardGrid min="320px" gap="lg" fill="auto-fit">
-      <NbPanel flat title="HomeKit pairing">
-        <div class="hk">
-          <div v-if="qrDataUrl" class="hk__qr">
-            <img :src="qrDataUrl" alt="HomeKit QR code" class="hk__qr-img" />
-          </div>
-          <div v-else class="hk__qr hk__qr--empty type-body-sm">
-            <NbIcon name="qr-code" size="xl" />
-            <span>{{ hapError ? 'HomeKit bridge unavailable' : 'No HAP bridge configured' }}</span>
-          </div>
-          <div class="hk__details">
-            <div v-if="pincode" class="hk__pin type-heading-02 tabular">{{ pincode }}</div>
-            <div v-if="pincode" class="metric__sub type-body-sm">Scan to add to HomeKit</div>
-            <div v-if="hapError" class="hk__error type-body-sm">{{ hapError }}</div>
-          </div>
-        </div>
-      </NbPanel>
-
-      <NbPanel flat title="System information">
-        <!-- A fixed term width keeps every value on one edge. The library's
-             rows are separate grids, so a content-sized term would not. -->
-        <NbDefinitionList v-if="sysInfo" compact term-width="6rem">
-          <NbDefinitionListItem term="OS">{{ sysInfo.os }}</NbDefinitionListItem>
-          <NbDefinitionListItem term="Arch">{{ sysInfo.arch }}</NbDefinitionListItem>
-          <NbDefinitionListItem term="Hostname">{{ sysInfo.hostname }}</NbDefinitionListItem>
-          <NbDefinitionListItem term="IP Address">{{ sysInfo.ip }}</NbDefinitionListItem>
-          <NbDefinitionListItem term="User">{{ sysInfo.user }}</NbDefinitionListItem>
-          <NbDefinitionListItem term="Node.js">{{ sysInfo.nodeVersion }}</NbDefinitionListItem>
-          <NbDefinitionListItem term="OpenBridge">v{{ daemon.health?.version ?? '—' }}</NbDefinitionListItem>
-          <NbDefinitionListItem term="Config">
-            <span class="sys-path type-code-sm">{{ sysInfo.configPath }}</span>
-          </NbDefinitionListItem>
-          <NbDefinitionListItem term="OB plugins">
-            <span class="sys-path type-code-sm">{{ sysInfo.obPluginsDir }}</span>
-          </NbDefinitionListItem>
-          <NbDefinitionListItem term="HB plugins">
-            <span class="sys-path type-code-sm">{{ sysInfo.hbPluginsDir }}</span>
-          </NbDefinitionListItem>
-        </NbDefinitionList>
-        <NbSpinner v-else size="sm" show-label label="Loading..." />
-      </NbPanel>
-    </NbCardGrid>
   </div>
 </template>
 

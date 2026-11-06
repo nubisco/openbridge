@@ -11,7 +11,6 @@ import type { IBreadcrumbItem } from '@nubisco/ui'
  */
 export const useLayoutStore = defineStore('layout', () => {
   const title = ref('')
-  const count = ref<number | null>(null)
   /**
    * The trail of a page that has a parent (a device under Devices). Empty on
    * the top-level pages, whose trail is their title alone.
@@ -24,16 +23,11 @@ export const useLayoutStore = defineStore('layout', () => {
   const fullBleed = ref(false)
 
   /** Opt-in per page: setPage resets it, so a view must ask on every mount. */
-  function setPage(
-    pageTitle: string,
-    pageCount?: number,
-    options?: { fullBleed?: boolean; crumbs?: IBreadcrumbItem[] },
-  ) {
+  function setPage(pageTitle: string, options?: { fullBleed?: boolean; crumbs?: IBreadcrumbItem[] }) {
     title.value = pageTitle
-    count.value = pageCount ?? null
     fullBleed.value = options?.fullBleed ?? false
     crumbs.value = options?.crumbs ?? []
   }
 
-  return { title, count, crumbs, fullBleed, setPage }
+  return { title, crumbs, fullBleed, setPage }
 })

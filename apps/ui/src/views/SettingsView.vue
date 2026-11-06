@@ -61,7 +61,7 @@
         <NbButton variant="primary" :loading="saving" :icon="saved ? 'check' : undefined" @click="save">
           {{ saved ? 'Saved' : 'Save' }}
         </NbButton>
-        <NbButton variant="tertiary" :loading="restarting" icon="arrows-clockwise" @click="restart">
+        <NbButton variant="tertiary" :loading="restarting" icon="arrows-clockwise" @click="saveAndRestart">
           {{ restarting ? 'Restarting…' : 'Save & Restart OpenBridge' }}
         </NbButton>
         <span v-if="saved && !restarting" class="type-body-sm settings__hint">
@@ -400,6 +400,18 @@ async function save() {
   } finally {
     saving.value = false
   }
+}
+
+/**
+ * What the button says: save the form, then restart so the bridge picks it up.
+ * It used to restart only, and anything unsaved was lost. A failed save stops
+ * here and shows its error rather than restarting on the old settings.
+ */
+async function saveAndRestart() {
+  if (restarting.value || saving.value) return
+  await save()
+  if (error.value) return
+  await restart()
 }
 
 async function restart() {

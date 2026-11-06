@@ -103,7 +103,6 @@
     <template #topbar-left>
       <NbBreadcrumbs v-if="layout.crumbs.length > 0" :items="layout.crumbs" collapse="phone" />
       <NbBreadcrumbs v-else :subtitle="layout.title" />
-      <NbBadge v-if="layout.count !== null">{{ layout.count }}</NbBadge>
     </template>
 
     <!-- ═══ Notification banner ═══ -->

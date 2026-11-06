@@ -55,7 +55,7 @@ function sendResize() {
 }
 
 onMounted(async () => {
-  layout.setPage('Terminal', undefined, { fullBleed: true })
+  layout.setPage('Terminal', { fullBleed: true })
 
   // Ensure fonts are loaded before xterm measures glyph widths
   await document.fonts.ready

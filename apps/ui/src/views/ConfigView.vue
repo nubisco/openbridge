@@ -64,7 +64,7 @@ const phoneEditorOptions = (isPhone: boolean) => ({
 })
 
 onMounted(async () => {
-  layout.setPage('Config', undefined, { fullBleed: true })
+  layout.setPage('Config', { fullBleed: true })
 
   // Load the config content
   let content = '{}'

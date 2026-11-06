@@ -3,7 +3,9 @@
   <!-- Peers, so flat tiles on the page ground rather than each a raised
        region. NbCard draws the title, the support line, the hover and the
        selection, and lines the footers up along a row. -->
-  <NbCardGrid v-if="view === 'cards'" min="260px" gap="md">
+  <!-- 400px: a plugin's name is a long package name with no spaces, and a
+       narrower card breaks it mid-word beside the status badge. -->
+  <NbCardGrid v-if="view === 'cards'" min="400px" gap="md">
     <NbCard
       v-for="row in rows"
       :key="row.plugin.id"

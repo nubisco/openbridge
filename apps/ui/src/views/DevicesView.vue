@@ -38,6 +38,10 @@
     <!-- self on the layout, not the grid: the click must land on the empty
          area around the cards, and a card click stops at the card itself. -->
     <div v-else class="devices-layout" @click.self="inspector.close()">
+      <!-- The count is page content, not location, so it sits in the page
+           rather than beside the trail (Jose, 2026-11-06). The source of each
+           device is on HomeKit cards' support line and in the table. -->
+      <p class="list-count type-body-sm tabular">{{ pluralize(totalDevices, DEVICE_FORMS) }}</p>
       <!-- The cards are peers, so they are flat tiles on the page ground, not
            each a raised region. NbCard draws the title, the support line, the
            hover and the selection. Only health and the reading live here. -->
@@ -234,7 +238,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, computed, watch } from 'vue'
+import { onMounted, onUnmounted, ref, computed } from 'vue'
 import {
   useConfirm,
   usePhoneLayout,
@@ -242,6 +246,7 @@ import {
   type IDataTableSortState,
   type ITooltipOptions,
   useShellSlot,
+  pluralize,
 } from '@nubisco/ui'
 import { useRouter } from 'vue-router'
 import { useDaemonStore } from '@/stores/daemon'
@@ -249,8 +254,7 @@ import { useInspectorStore, type NativeDevice } from '@/stores/inspector'
 import { useLayoutStore } from '@/stores/layout'
 import { api, type Accessory } from '@/api'
 // Controls this view puts in the shell topbar. Only on the right: the left
-// is the frame's trail, and the device count rides on it through setPage, the
-// same way the plugins page carries its own.
+// is the frame's trail and nothing else.
 const topbarRight = useShellSlot('topbar-right')
 
 // On a phone the grid is one column, so each card turns on its side: the icon
@@ -749,18 +753,8 @@ async function poll() {
   }
 }
 
-// The count is the frame's, beside the page name, as on the plugins page. It
-// used to sit in the topbar's left slot with a "native" badge, but that slot
-// is the trail and nothing else. The source is on each HomeKit card's support
-// line and in the table's Source column instead.
-watch(
-  totalDevices,
-  (n) => {
-    // Hidden at zero, as before: the empty state already says there are none.
-    layout.setPage('Devices', n > 0 ? n : undefined)
-  },
-  { immediate: true },
-)
+layout.setPage('Devices')
+const DEVICE_FORMS = { one: '{count} device', other: '{count} devices' }
 
 onMounted(async () => {
   await poll()
@@ -773,6 +767,11 @@ onUnmounted(() => {
 </script>
 
 <style lang="scss" scoped>
+.list-count {
+  margin: 0;
+  color: var(--nb-c-text-muted);
+}
+
 .devices-view {
   flex: 1;
   display: flex;
@@ -803,6 +802,9 @@ onUnmounted(() => {
 .devices-layout {
   min-height: 0;
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nb-spacing-16);
 }
 
 // Warning, not danger, matching the dot: a device that has stopped answering
