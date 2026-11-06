@@ -1,8 +1,7 @@
 <template>
   <div class="device-detail">
-    <div class="detail-header">
-      <NbBreadcrumbs :items="crumbs" />
-      <span v-if="device?.model" class="detail-model">{{ device.model }}</span>
+    <div v-if="device?.model" class="detail-header">
+      <span class="detail-model">{{ device.model }}</span>
     </div>
 
     <div v-if="loadError" class="detail-message">
@@ -75,16 +74,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, watchEffect, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
 import { usePhoneLayout, type IBreadcrumbItem, type ITabItem } from '@nubisco/ui'
 import { api, type DeviceDescriptor, type MetricDescriptor } from '@/api'
+import { useLayoutStore } from '@/stores/layout'
 
 type NativeDevice = DeviceDescriptor & { telemetry: Record<string, unknown> }
 
 const route = useRoute()
 const { phone } = usePhoneLayout()
 
+const layout = useLayoutStore()
 const deviceId = computed(() => String(route.params.id ?? ''))
 const device = ref<NativeDevice | null>(null)
 const metrics = ref<MetricDescriptor[]>([])
@@ -117,6 +118,8 @@ const crumbs = computed<IBreadcrumbItem[]>(() => [
   { label: 'Devices', to: { name: 'devices' } },
   { label: device.value?.name ?? deviceId.value },
 ])
+// It is the frame's one trail, in the topbar, not a second one in the page.
+watchEffect(() => layout.setPage(device.value?.name ?? deviceId.value, undefined, { crumbs: crumbs.value }))
 
 const currentMetric = computed(() => metrics.value.find((m) => m.key === selectedMetric.value) ?? null)
 

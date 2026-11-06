@@ -96,16 +96,14 @@
     </template>
 
     <!-- ═══ Topbar ═══ -->
-    <!-- The two empty divs are teleport targets. Views render their own chrome
-         into them (see stores/layout.ts), which keeps handlers and reactive
-         state in the view that owns them. -->
+    <!-- One trail, owned by the frame. Views add their own controls beside it
+         and on the right with useShellSlot, which keeps handlers and reactive
+         state in the view that owns them. A page with a parent (a device)
+         names it, and the parent crumb links back. -->
     <template #topbar-left>
-      <NbBreadcrumbs :subtitle="layout.title" />
+      <NbBreadcrumbs v-if="layout.crumbs.length > 0" :items="layout.crumbs" collapse="phone" />
+      <NbBreadcrumbs v-else :subtitle="layout.title" />
       <NbBadge v-if="layout.count !== null">{{ layout.count }}</NbBadge>
-      <div id="ob-topbar-left" class="topbar-slot" />
-    </template>
-    <template #topbar-right>
-      <div id="ob-topbar-right" class="topbar-slot" />
     </template>
 
     <!-- ═══ Notification banner ═══ -->
@@ -303,18 +301,5 @@ onUnmounted(() => daemon.disconnectLiveLogs())
   width: 100%;
   color: inherit;
   text-decoration: none;
-}
-
-// Teleport targets for per-view topbar chrome
-.topbar-slot {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-
-  // On a phone the left slot (page path) must be allowed to shrink, or at
-  // 360px it runs under the page actions on the right.
-  @include variables.phone {
-    min-width: 0;
-  }
 }
 </style>

@@ -1,6 +1,6 @@
 <template>
   <div class="plugins-view">
-    <Teleport defer to="#ob-topbar-right">
+    <component :is="topbarRight.Outlet">
       <!-- A phone topbar has room for the title and two icons, so the search
            moves into the page and Refresh and the view toggle fold into the
            group's menu. Desktop renders the same controls as before. -->
@@ -26,7 +26,7 @@
         />
       </template>
       <NbActionGroup :items="topbarItems" overflow="phone" />
-    </Teleport>
+    </component>
 
     <NbTextInput v-if="phone" v-model="search" placeholder="Search plugins..." size="sm" />
 
@@ -54,7 +54,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { useToast, usePhoneLayout, type IActionGroupItem } from '@nubisco/ui'
+import { useToast, usePhoneLayout, type IActionGroupItem, useShellSlot } from '@nubisco/ui'
 import * as iconArrowClockwise from '@nubisco/ui/icons/arrow-clockwise'
 import * as iconList from '@nubisco/ui/icons/list'
 import * as iconMagnifyingGlass from '@nubisco/ui/icons/magnifying-glass'
@@ -66,6 +66,8 @@ import { useLayoutStore } from '@/stores/layout'
 import { api, type NpmPackage } from '@/api'
 import PluginList, { type PluginRow } from '@/components/PluginList.vue'
 import type { PluginInstance } from '@/api'
+// Controls this view puts in the shell topbar.
+const topbarRight = useShellSlot('topbar-right')
 
 const daemon = useDaemonStore()
 const inspector = useInspectorStore()

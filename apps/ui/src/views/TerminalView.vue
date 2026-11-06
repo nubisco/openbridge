@@ -1,20 +1,23 @@
 <template>
   <div class="terminal-view">
-    <Teleport defer to="#ob-topbar-right">
+    <component :is="topbarRight.Outlet">
       <NbBadge :variant="connected ? 'success' : 'neutral'" dot role="status">
         {{ connected ? 'Connected' : 'Disconnected' }}
       </NbBadge>
-    </Teleport>
+    </component>
 
     <div ref="containerEl" class="terminal-container" />
   </div>
 </template>
 
 <script setup lang="ts">
+import { useShellSlot } from '@nubisco/ui'
 import { onMounted, onBeforeUnmount, ref, shallowRef } from 'vue'
 import { useLayoutStore } from '@/stores/layout'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+// Controls this view puts in the shell topbar.
+const topbarRight = useShellSlot('topbar-right')
 
 const layout = useLayoutStore()
 const containerEl = ref<HTMLElement | null>(null)
