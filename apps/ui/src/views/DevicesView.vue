@@ -1,11 +1,13 @@
 <template>
   <div class="devices-view">
-    <Teleport v-if="totalDevices > 0" defer to="#ob-topbar-left">
+    <component :is="topbarLeft.Outlet">
+      <template v-if="totalDevices > 0">
       <span class="toolbar-count">{{ totalDevices }} device{{ totalDevices !== 1 ? 's' : '' }}</span>
       <NbBadge v-if="nativeDevices.length > 0">{{ nativeDevices.length }} native</NbBadge>
-    </Teleport>
+      </template>
+    </component>
 
-    <Teleport defer to="#ob-topbar-right">
+    <component :is="topbarRight.Outlet">
       <NbButton
         v-nb-tooltip="{ body: viewToggleLabel }"
         variant="ghost"
@@ -23,7 +25,7 @@
         :loading="refreshing"
         @click="refresh"
       />
-    </Teleport>
+    </component>
 
     <NbEmptyState
       v-if="totalDevices === 0"
@@ -51,7 +53,7 @@
           :key="'native:' + dev.id"
           class="device-card native-card"
           :class="{ selected: selectedDeviceId === dev.id, unhealthy: isUnhealthy(dev) }"
-          :title="isUnhealthy(dev) ? healthTooltip(dev) : undefined"
+          v-nb-tooltip="isUnhealthy(dev) ? cardTooltip(healthTooltip(dev)) : {}"
           @click="selectNative(dev)"
           @dblclick="openDetail(dev)"
         >
@@ -148,7 +150,7 @@
             unreachable: !acc.reachable,
             unhealthy: !acc.reachable,
           }"
-          :title="acc.reachable ? undefined : HAP_UNREACHABLE_TOOLTIP"
+          v-nb-tooltip="acc.reachable ? {} : cardTooltip(HAP_UNREACHABLE_TOOLTIP)"
           @click="selectHap(acc)"
         >
           <div class="device-icon hap-icon" :class="{ unreachable: !acc.reachable }">
@@ -216,12 +218,15 @@
 
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, computed } from 'vue'
-import { useConfirm, type IDataTableColumn, type IDataTableSortState } from '@nubisco/ui'
+import { useConfirm, type IDataTableColumn, type IDataTableSortState, type ITooltipOptions, useShellSlot } from '@nubisco/ui'
 import { useRouter } from 'vue-router'
 import { useDaemonStore } from '@/stores/daemon'
 import { useInspectorStore, type NativeDevice } from '@/stores/inspector'
 import { useLayoutStore } from '@/stores/layout'
 import { api, type Accessory } from '@/api'
+// Controls this view puts in the shell topbar.
+const topbarLeft = useShellSlot('topbar-left')
+const topbarRight = useShellSlot('topbar-right')
 
 const daemon = useDaemonStore()
 const inspector = useInspectorStore()
@@ -286,6 +291,16 @@ const HAP_UNREACHABLE_TOOLTIP = [
   'HomeKit reports this accessory as unreachable. Check it is powered and on the network.',
   'Click to open it for its services and characteristics.',
 ].join('\n')
+
+/**
+ * The same text for a card, as a library tooltip rather than the native
+ * `title`: NbPanel has a `title` prop since @nubisco/ui 5.48, which drew this
+ * text as the card's heading. Not on touch, where a tap selects the card.
+ */
+function cardTooltip(text: string): ITooltipOptions {
+  const [header, ...rest] = text.split('\n')
+  return { header, body: rest.join(' '), touch: false }
+}
 
 function healthClass(dev: NativeDevice): string {
   const status = dev.health?.status
@@ -714,7 +729,7 @@ onUnmounted(() => {
   min-height: 0;
 }
 
-// Teleported next to the breadcrumb in the shell topbar.
+// Contributed beside the breadcrumb in the shell topbar.
 .toolbar-count {
   font-size: 0.8rem;
   color: var(--nb-c-text-muted);
