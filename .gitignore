@@ -54,3 +54,7 @@ apps/daemon/LICENSE
 apps/daemon/README.md
 apps/daemon/ui-dist/
 *.tgz
+
+# UI harness: the recording holds the bridge's real config, never commit it
+scripts/ui-harness/api.har
+scripts/ui-harness/out/
