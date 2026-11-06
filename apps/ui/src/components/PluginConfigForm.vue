@@ -19,7 +19,7 @@
         @update-array="(p: string[], i: number, v: unknown) => updateArrayItem(p, i, v)"
       />
     </template>
-    <div v-else class="pcf-no-schema">No configurable fields found in schema.</div>
+    <p v-else class="pcf-no-schema type-body-sm">No configurable fields found in schema.</p>
   </div>
 </template>
 
@@ -108,13 +108,14 @@ const rootSchema = computed(() => props.hbSchema.schema ?? { type: 'object', pro
 </script>
 
 <style lang="scss" scoped>
+// The fields are xs (see PluginConfigField), and xs rows pair with an 8 gap.
 .pcf-root {
   display: flex;
   flex-direction: column;
-  gap: 0.85rem;
+  gap: var(--nb-spacing-8);
 }
 .pcf-no-schema {
-  font-size: 0.8rem;
+  margin: 0;
   color: var(--nb-c-text-subtle);
 }
 </style>

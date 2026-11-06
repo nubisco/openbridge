@@ -1,141 +1,161 @@
 <!--
   Renders a single field from a Homebridge config.schema.json schema entry.
   Recursive: nested objects call back into this component.
+
+  Every row is an NbField, so the labels share the inspector's spine and every
+  control sits on one edge. Fields are xs, the inspector's density, stated here
+  once for the whole form.
 -->
 <template>
-  <!-- Nested object → section with children -->
-  <div v-if="resolveType() === 'object' && field.properties" class="pcf-section">
-    <div class="pcf-section-label">{{ label() }}</div>
-    <div class="pcf-section-body">
-      <PluginConfigField
-        v-for="(childField, childKey) in field.properties"
-        :key="childKey"
-        :field-key="String(childKey)"
-        :field="childField"
-        :path="[...path, String(childKey)]"
-        :required="field.required?.includes(String(childKey)) ?? false"
-        :value="nestedValue(String(childKey))"
-        @change="(v) => nestedChange(String(childKey), v)"
-        @add-array="(p, items) => emit('addArray', p, items)"
-        @remove-array="(p, i) => emit('removeArray', p, i)"
-        @update-array="(p, i, v) => emit('updateArray', p, i, v)"
-      />
-    </div>
-  </div>
+  <!-- Nested object → a group with its own title, children indented under it -->
+  <fieldset v-if="resolveType() === 'object' && field.properties" class="pcf-section">
+    <legend class="pcf-section-label type-heading-compact">{{ label() }}</legend>
+    <PluginConfigField
+      v-for="(childField, childKey) in field.properties"
+      :key="childKey"
+      :field-key="String(childKey)"
+      :field="childField"
+      :path="[...path, String(childKey)]"
+      :required="field.required?.includes(String(childKey)) ?? false"
+      :value="nestedValue(String(childKey))"
+      @change="(v) => nestedChange(String(childKey), v)"
+      @add-array="(p, items) => emit('addArray', p, items)"
+      @remove-array="(p, i) => emit('removeArray', p, i)"
+      @update-array="(p, i, v) => emit('updateArray', p, i, v)"
+    />
+  </fieldset>
 
   <!-- Boolean → NbSwitch -->
-  <div v-else-if="resolveType() === 'boolean'" class="pcf-row pcf-row--switch">
-    <div class="pcf-label-wrap">
-      <span class="pcf-label">
+  <!-- NbSwitch builds its own input id, so it cannot take the field's: the
+       switch is named directly instead. -->
+  <NbField
+    v-else-if="resolveType() === 'boolean'"
+    control="fit"
+    :label-for="`${controlId}-input`"
+    :hint="field.description"
+  >
+    <template #label>
+      <label class="pcf-label type-label" :for="`${controlId}-input`">
         {{ label() }}
-        <span v-if="required" class="pcf-required">*</span>
-      </span>
-      <span v-if="field.description" class="pcf-hint">{{ field.description }}</span>
-    </div>
+        <span v-if="required" class="pcf-required" aria-hidden="true">*</span>
+      </label>
+    </template>
     <!-- NbSwitch only accepts primary|secondary; the previous "success"
          was silently ignored, in 3.3.0 too. -->
     <NbSwitch
+      :id="controlId"
       :model-value="Boolean(value ?? field.default ?? false)"
-      :name="`pcf-${path.join('-')}`"
-      size="sm"
+      :name="controlId"
       variant="primary"
       @update:model-value="emit('change', $event)"
     />
-  </div>
+  </NbField>
 
   <!-- Enum → NbSelect -->
-  <div v-else-if="field.enum" class="pcf-row">
-    <label class="pcf-label">
-      {{ label() }}
-      <span v-if="required" class="pcf-required">*</span>
-    </label>
-    <div class="pcf-control">
-      <NbSelect
-        :model-value="selectValue()"
-        :options="selectOptions()"
-        size="sm"
-        @update:model-value="emit('change', $event)"
-      />
-      <span v-if="field.description" class="pcf-hint">{{ field.description }}</span>
-    </div>
-  </div>
+  <NbField v-else-if="field.enum" :label-for="controlId" :hint="field.description">
+    <template #label>
+      <label class="pcf-label type-label" :for="controlId">
+        {{ label() }}
+        <span v-if="required" class="pcf-required" aria-hidden="true">*</span>
+      </label>
+    </template>
+    <NbSelect
+      :id="controlId"
+      :model-value="selectValue()"
+      :options="selectOptions()"
+      size="xs"
+      @update:model-value="emit('change', $event)"
+    />
+  </NbField>
 
   <!-- Array of primitives -->
-  <div v-else-if="resolveType() === 'array'" class="pcf-row pcf-row--array">
-    <label class="pcf-label">
-      {{ label() }}
-      <span v-if="required" class="pcf-required">*</span>
-    </label>
-    <div class="pcf-control">
-      <div class="pcf-array">
-        <div v-for="(item, idx) in arrayItems()" :key="idx" class="pcf-array-row">
-          <NbTextInput
-            :model-value="String(item)"
-            size="sm"
-            :placeholder="`${label()} ${idx + 1}`"
-            style="flex: 1"
-            @update:model-value="emit('updateArray', path, idx, $event)"
-          />
-          <NbButton
-            v-nb-tooltip="{ body: `Remove ${label()} ${idx + 1}` }"
-            variant="ghost"
-            size="sm"
-            icon="trash"
-            :aria-label="`Remove ${label()} ${idx + 1}`"
-            @click="emit('removeArray', path, idx)"
-          />
-        </div>
+  <NbField v-else-if="resolveType() === 'array'" align="start" :hint="field.description">
+    <template #label>
+      <span class="pcf-label pcf-label--array type-label">
+        {{ label() }}
+        <span v-if="required" class="pcf-required" aria-hidden="true">*</span>
+      </span>
+    </template>
+    <div class="pcf-array">
+      <div v-for="(item, idx) in arrayItems()" :key="idx" class="pcf-array-row">
+        <NbTextInput
+          class="pcf-array-input"
+          :model-value="String(item)"
+          size="xs"
+          :placeholder="`${label()} ${idx + 1}`"
+          :aria-label="`${label()} ${idx + 1}`"
+          @update:model-value="emit('updateArray', path, idx, $event)"
+        />
         <NbButton
+          v-nb-tooltip="{ body: `Remove ${label()} ${idx + 1}` }"
           variant="ghost"
           size="sm"
-          icon="plus"
-          @click="emit('addArray', path, field.items ?? { type: 'string' })"
-        >
-          Add
-        </NbButton>
+          icon="trash"
+          :aria-label="`Remove ${label()} ${idx + 1}`"
+          @click="emit('removeArray', path, idx)"
+        />
       </div>
-      <span v-if="field.description" class="pcf-hint">{{ field.description }}</span>
+      <NbButton
+        class="pcf-array-add"
+        variant="tertiary"
+        size="sm"
+        icon="plus"
+        @click="emit('addArray', path, field.items ?? { type: 'string' })"
+      >
+        Add
+      </NbButton>
     </div>
-  </div>
+  </NbField>
 
   <!-- Number / integer -->
-  <div v-else-if="resolveType() === 'number' || resolveType() === 'integer'" class="pcf-row">
-    <label class="pcf-label">
-      {{ label() }}
-      <span v-if="required" class="pcf-required">*</span>
-    </label>
-    <div class="pcf-control">
+  <NbField
+    v-else-if="resolveType() === 'number' || resolveType() === 'integer'"
+    :label-for="controlId"
+    :hint="field.description"
+  >
+    <template #label>
+      <label class="pcf-label type-label" :for="controlId">
+        {{ label() }}
+        <span v-if="required" class="pcf-required" aria-hidden="true">*</span>
+      </label>
+    </template>
+    <template #default="{ describedby }">
       <NbTextInput
+        :id="controlId"
         :model-value="value !== undefined ? String(value) : field.default !== undefined ? String(field.default) : ''"
         type="number"
-        size="sm"
+        size="xs"
         :placeholder="field.default !== undefined ? String(field.default) : ''"
-        style="max-width: 180px"
+        :aria-describedby="describedby"
         @update:model-value="emit('change', Number($event))"
       />
-      <span v-if="field.description" class="pcf-hint">{{ field.description }}</span>
-    </div>
-  </div>
+    </template>
+  </NbField>
 
   <!-- Default: string / text -->
-  <div v-else class="pcf-row">
-    <label class="pcf-label">
-      {{ label() }}
-      <span v-if="required" class="pcf-required">*</span>
-    </label>
-    <div class="pcf-control">
+  <NbField v-else :label-for="controlId" :hint="field.description">
+    <template #label>
+      <label class="pcf-label type-label" :for="controlId">
+        {{ label() }}
+        <span v-if="required" class="pcf-required" aria-hidden="true">*</span>
+      </label>
+    </template>
+    <template #default="{ describedby }">
       <NbTextInput
+        :id="controlId"
         :model-value="value !== undefined ? String(value) : field.default !== undefined ? String(field.default) : ''"
-        size="sm"
+        size="xs"
         :placeholder="field.default !== undefined ? String(field.default) : ''"
+        :aria-describedby="describedby"
         @update:model-value="emit('change', $event)"
       />
-      <span v-if="field.description" class="pcf-hint">{{ field.description }}</span>
-    </div>
-  </div>
+    </template>
+  </NbField>
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
+
 interface SchemaField {
   type?: string | string[]
   title?: string
@@ -166,6 +186,10 @@ const emit = defineEmits<{
   removeArray: [path: string[], index: number]
   updateArray: [path: string[], index: number, value: unknown]
 }>()
+
+// One id per field, from its path, so the label points at its control. The
+// switch's name was already this, so a boolean keeps the name it had.
+const controlId = computed(() => `pcf-${props.path.join('-')}`)
 
 function resolveType(): string {
   const t = Array.isArray(props.field.type) ? props.field.type[0] : (props.field.type ?? 'string')
@@ -205,101 +229,62 @@ function arrayItems(): unknown[] {
 </script>
 
 <style lang="scss" scoped>
+// A nested object: its title, then its fields indented under a hairline so the
+// nesting reads at a glance. The same rhythm as the panel the form sits in.
 .pcf-section {
-  border: 1px solid var(--nb-c-border);
-  border-radius: 8px;
-  overflow: hidden;
+  margin: 0;
+  min-width: 0;
+  border: 0;
+  border-left: 1px solid var(--nb-c-border);
+  padding: 0 0 0 var(--nb-spacing-12);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nb-spacing-8);
 }
 
 .pcf-section-label {
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--nb-c-text-subtle);
-  background: var(--nb-c-layer-1);
-  padding: 0.45rem 0.75rem;
-  border-bottom: 1px solid var(--nb-c-border);
-}
-
-.pcf-section-body {
-  padding: 0.75rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.pcf-row {
-  display: grid;
-  grid-template-columns: 140px 1fr;
-  gap: 0.5rem 0.75rem;
-  align-items: start;
-
-  &--switch {
-    align-items: center;
-    .pcf-label-wrap {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-  }
-
-  &--array {
-    align-items: start;
-  }
-
-  // The inspector sheet is the full width of a phone, and a 140px label
-  // column left the control a sliver of it. The label sits above instead.
-  // A switch keeps its row, it is narrow enough to sit beside its label.
-  @include variables.phone {
-    &:not(.pcf-row--switch) {
-      grid-template-columns: minmax(0, 1fr);
-      gap: 0.25rem;
-    }
-
-    &--switch {
-      grid-template-columns: minmax(0, 1fr) auto;
-    }
-  }
-}
-
-.pcf-label {
-  font-size: 0.82rem;
-  font-weight: 500;
+  padding: 0;
+  margin-bottom: var(--nb-spacing-8);
   color: var(--nb-c-text);
-  padding-top: 0.3rem;
 }
 
-.pcf-label-wrap {
-  grid-column: 1;
+// NbField's own label is not used, because it has no way to mark a field
+// required. This matches it: muted, one line, ellipsized.
+.pcf-label {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--nb-c-text-muted);
+}
+
+// Top-aligned against a list of inputs, so it sits level with the first one.
+.pcf-label--array {
+  padding-top: var(--nb-spacing-4);
 }
 
 .pcf-required {
   color: var(--nb-c-danger);
-  margin-left: 2px;
-}
-
-.pcf-control {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-}
-
-.pcf-hint {
-  font-size: 0.71rem;
-  color: var(--nb-c-text-subtle);
-  line-height: 1.4;
+  margin-left: var(--nb-spacing-2);
 }
 
 .pcf-array {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  align-items: flex-start;
+  gap: var(--nb-spacing-8);
 }
 
 .pcf-array-row {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: var(--nb-spacing-4);
+  align-self: stretch;
+}
+
+.pcf-array-input {
+  flex: 1;
+  min-width: 0;
 }
 </style>
