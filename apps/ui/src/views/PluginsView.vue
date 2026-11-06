@@ -1,11 +1,11 @@
 <template>
   <div class="plugins-view">
-    <Teleport defer to="#ob-topbar-right">
+    <component :is="topbarRight.Outlet">
       <!-- A phone topbar has room for the title and two icons, so the search
            moves into the page and Refresh and the view toggle fold into the
            group's menu. Desktop renders the same controls as before. -->
       <template v-if="!phone">
-        <NbTextInput v-model="search" placeholder="Search plugins..." size="sm" style="width: 200px" />
+        <NbTextInput v-model="search" placeholder="Search plugins..." size="sm" class="plugins-search" />
         <NbButton
           v-nb-tooltip="{ body: 'Refresh metadata' }"
           variant="ghost"
@@ -26,7 +26,7 @@
         />
       </template>
       <NbActionGroup :items="topbarItems" overflow="phone" />
-    </Teleport>
+    </component>
 
     <NbTextInput v-if="phone" v-model="search" placeholder="Search plugins..." size="sm" />
 
@@ -37,8 +37,10 @@
       :title="search ? `No plugins matching &quot;${search}&quot;` : 'No plugins loaded yet'"
       bordered
     >
+      <!-- The topbar already holds the page's one primary, Browse plugins, so
+           the empty state's way in steps down to tertiary. -->
       <template v-if="!search" #actions>
-        <NbButton variant="primary" size="sm" icon="magnifying-glass" @click="inspector.openMarketplace()">
+        <NbButton variant="tertiary" size="sm" icon="magnifying-glass" @click="inspector.openMarketplace()">
           Browse &amp; install plugins
         </NbButton>
       </template>
@@ -47,14 +49,15 @@
     <!-- self: a click on the empty area around the cards dismisses the
          inspector, which is why there is no close button on it. -->
     <div v-else class="plugins-body" @click.self="inspector.close()">
+      <p class="list-count type-body-sm tabular">{{ countLabel }}</p>
       <PluginList :rows="rows" :view="view" :selected-id="selectedId" @select="selectPlugin" />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
-import { useToast, usePhoneLayout, type IActionGroupItem } from '@nubisco/ui'
+import { computed, onMounted, ref } from 'vue'
+import { useToast, usePhoneLayout, type IActionGroupItem, useShellSlot, pluralize } from '@nubisco/ui'
 import * as iconArrowClockwise from '@nubisco/ui/icons/arrow-clockwise'
 import * as iconList from '@nubisco/ui/icons/list'
 import * as iconMagnifyingGlass from '@nubisco/ui/icons/magnifying-glass'
@@ -66,6 +69,8 @@ import { useLayoutStore } from '@/stores/layout'
 import { api, type NpmPackage } from '@/api'
 import PluginList, { type PluginRow } from '@/components/PluginList.vue'
 import type { PluginInstance } from '@/api'
+// Controls this view puts in the shell topbar.
+const topbarRight = useShellSlot('topbar-right')
 
 const daemon = useDaemonStore()
 const inspector = useInspectorStore()
@@ -295,16 +300,24 @@ onMounted(async () => {
   await daemon.fetchPlugins()
 })
 
-watch(
-  () => daemon.plugins.length,
-  (n) => {
-    layout.setPage('Plugins', n)
-  },
-  { immediate: true },
+layout.setPage('Plugins')
+const PLUGIN_FORMS = { one: '{count} plugin', other: '{count} plugins' }
+
+// The count is page content, not location, so it sits in the page rather than
+// beside the trail (Jose, 2026-11-06). A search says how much of it matches.
+const countLabel = computed(() =>
+  rows.value.length === daemon.plugins.length
+    ? pluralize(daemon.plugins.length, PLUGIN_FORMS)
+    : `${rows.value.length} of ${pluralize(daemon.plugins.length, PLUGIN_FORMS)}`,
 )
 </script>
 
 <style lang="scss" scoped>
+.list-count {
+  margin: 0;
+  color: var(--nb-c-text-muted);
+}
+
 // flex: 1 so the view fills the shell's content row. Without it the body below
 // the cards has no height, and there is no empty area to click for dismissal.
 .plugins-view {
@@ -312,12 +325,19 @@ watch(
   display: flex;
   flex-direction: column;
   min-height: 0;
-  gap: 1rem;
+  gap: var(--nb-spacing-16);
+}
+
+.plugins-search {
+  width: 200px;
 }
 
 // Grows past the cards so there is empty area to click for dismissal.
 .plugins-body {
   flex: 1;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nb-spacing-16);
 }
 </style>

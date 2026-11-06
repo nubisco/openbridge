@@ -1,27 +1,31 @@
 <template>
-  <div v-if="inspector.selectedPlugin" class="inspector nb-inspector">
+  <div v-if="inspector.selectedPlugin" class="inspector">
+    <!-- Pinned: the sections scroll under it, so the plugin being edited and
+         its one status stay in view however far down the config goes. -->
     <div class="inspector-header">
-      <div class="inspector-avatar" :class="inspector.selectedPlugin.status">
-        <NbIcon name="puzzle-piece" :size="24" />
+      <div class="inspector-avatar">
+        <NbIcon name="puzzle-piece" size="lg" />
       </div>
       <div class="inspector-title">
-        <h2 class="inspector-name">{{ inspector.selectedPlugin.manifest.name }}</h2>
-        <span class="inspector-version">v{{ inspector.selectedPlugin.manifest.version }}</span>
+        <h2 class="inspector-name type-heading-01">{{ inspector.selectedPlugin.manifest.name }}</h2>
+        <span class="inspector-version type-body-sm tabular">v{{ inspector.selectedPlugin.manifest.version }}</span>
       </div>
+      <NbBadge class="inspector-status" :variant="statusVariant(inspector.selectedPlugin.status)">
+        {{ statusLabel[inspector.selectedPlugin.status] }}
+      </NbBadge>
     </div>
 
-    <div class="inspector-body">
+    <div class="inspector-body nb-inspector">
       <NbShellPanel v-model:size="sections.status" title="Status" fluid>
-        <NbField label="Status" control="fit">
-          <NbBadge :variant="statusVariant(inspector.selectedPlugin.status)">
-            {{ statusLabel[inspector.selectedPlugin.status] }}
-          </NbBadge>
+        <NbField v-if="inspector.selectedPlugin.startedAt" label="Started">
+          <span class="field-value type-body-compact tabular">
+            {{ new Date(inspector.selectedPlugin.startedAt).toLocaleString() }}
+          </span>
         </NbField>
-        <NbField v-if="inspector.selectedPlugin.startedAt" label="Started" control="fit">
-          <span class="field-value">{{ new Date(inspector.selectedPlugin.startedAt).toLocaleString() }}</span>
-        </NbField>
-        <NbField v-if="inspector.selectedPlugin.stoppedAt" label="Stopped" control="fit">
-          <span class="field-value">{{ new Date(inspector.selectedPlugin.stoppedAt).toLocaleString() }}</span>
+        <NbField v-if="inspector.selectedPlugin.stoppedAt" label="Stopped">
+          <span class="field-value type-body-compact tabular">
+            {{ new Date(inspector.selectedPlugin.stoppedAt).toLocaleString() }}
+          </span>
         </NbField>
         <NbField label="Disabled" control="fit">
           <NbSwitch
@@ -40,18 +44,20 @@
             <img v-if="pluginQrUrl" :src="pluginQrUrl" alt="HomeKit QR Code" class="hap-qr-img" />
           </div>
           <div class="hap-details">
-            <NbField label="PIN" control="fit">
-              <span class="field-value mono">{{ inspector.selectedPlugin.hapBridge.pincode }}</span>
+            <NbField label="PIN">
+              <span class="field-value type-code-md">{{ inspector.selectedPlugin.hapBridge.pincode }}</span>
             </NbField>
-            <NbField label="Port" control="fit">
-              <span class="field-value">{{ inspector.selectedPlugin.hapBridge.port }}</span>
+            <NbField label="Port">
+              <span class="field-value type-body-compact tabular">{{ inspector.selectedPlugin.hapBridge.port }}</span>
             </NbField>
-            <NbField label="Bridge" control="fit">
-              <span class="field-value">{{ inspector.selectedPlugin.hapBridge.name }}</span>
+            <NbField label="Bridge">
+              <span class="field-value type-body-compact">{{ inspector.selectedPlugin.hapBridge.name }}</span>
             </NbField>
           </div>
         </div>
-        <p class="hap-hint">Scan with the Home app or enter the PIN manually to pair this plugin's devices.</p>
+        <p class="hap-hint type-helper-text">
+          Scan with the Home app or enter the PIN manually to pair this plugin's devices.
+        </p>
       </NbShellPanel>
 
       <!-- ── Update available ──────────────────────────────────────────────── -->
@@ -72,12 +78,14 @@
 
       <!-- ── Remove plugin ─────────────────────────────────────────────────── -->
       <NbShellPanel v-model:size="sections.manage" title="Manage" fluid>
+        <!-- The trigger is outlined danger, the confirmation keeps the filled one. -->
         <NbButton
           v-if="!confirmingRemove"
-          variant="ghost"
+          class="manage-remove"
+          variant="danger"
+          outlined
           size="sm"
           icon="trash"
-          style="color: var(--nb-c-danger)"
           @click="confirmingRemove = true"
         >
           Remove plugin
@@ -87,7 +95,7 @@
         <NbBanner v-else status="error" title="This uninstalls the plugin and removes its configuration">
           OpenBridge needs a restart afterwards.
           <template #action>
-            <NbButton variant="ghost" size="sm" @click="confirmingRemove = false">Cancel</NbButton>
+            <NbButton variant="secondary" size="sm" @click="confirmingRemove = false">Cancel</NbButton>
             <NbButton variant="danger" size="sm" :loading="removing" @click="removePlugin">Remove</NbButton>
           </template>
         </NbBanner>
@@ -150,14 +158,11 @@
               :class="{ invalid: configJson && !jsonValid }"
             >
               <MonacoJsonEditor :model-value="configJson" :height="220" @update:model-value="onJsonChange" />
-              <div v-if="configJson && !jsonValid" class="json-error">Invalid JSON</div>
-              <div v-else-if="jsonMissingPlatform" class="json-error">Missing "platform" field</div>
+              <div v-if="configJson && !jsonValid" class="json-error type-body-sm">Invalid JSON</div>
+              <div v-else-if="jsonMissingPlatform" class="json-error type-body-sm">Missing "platform" field</div>
             </div>
 
-            <div v-if="saveError" class="save-error">
-              <NbIcon name="warning" :size="13" />
-              {{ saveError }}
-            </div>
+            <NbBanner v-if="saveError" status="error">{{ saveError }}</NbBanner>
 
             <div class="setup-actions">
               <NbButton
@@ -172,9 +177,8 @@
               </NbButton>
               <NbButton
                 v-if="saveSuccess"
-                variant="secondary"
+                variant="tertiary"
                 size="sm"
-                outlined
                 :loading="restarting"
                 icon="arrows-clockwise"
                 @click="restartOpenBridge"
@@ -194,12 +198,9 @@
             :height="220"
             @update:model-value="nativeConfigJson = $event"
           />
-          <div v-if="nativeConfigJson && !nativeJsonValid" class="json-error">Invalid JSON</div>
+          <div v-if="nativeConfigJson && !nativeJsonValid" class="json-error type-body-sm">Invalid JSON</div>
         </div>
-        <div v-if="nativeSaveError" class="save-error">
-          <NbIcon name="warning" :size="13" />
-          {{ nativeSaveError }}
-        </div>
+        <NbBanner v-if="nativeSaveError" status="error">{{ nativeSaveError }}</NbBanner>
         <div class="setup-actions">
           <NbButton
             variant="primary"
@@ -213,9 +214,8 @@
           </NbButton>
           <NbButton
             v-if="nativeSaveSuccess"
-            variant="secondary"
+            variant="tertiary"
             size="sm"
-            outlined
             :loading="restarting"
             icon="arrows-clockwise"
             @click="restartOpenBridge"
@@ -227,8 +227,8 @@
 
       <NbShellPanel v-model:size="sections.transfer" title="Import &amp; export" fluid>
         <div class="import-export-row">
-          <NbButton variant="ghost" size="sm" icon="download" @click="exportConfig">Export config</NbButton>
-          <NbButton variant="ghost" size="sm" icon="upload" @click="triggerImport">Import config</NbButton>
+          <NbButton variant="tertiary" size="sm" icon="download-simple" @click="exportConfig">Export config</NbButton>
+          <NbButton variant="tertiary" size="sm" icon="upload-simple" @click="triggerImport">Import config</NbButton>
           <input ref="importInput" type="file" accept=".json" style="display: none" @change="importConfig" />
         </div>
       </NbShellPanel>
@@ -240,25 +240,30 @@
         :title="`Devices (${pluginDevices.length})`"
         fluid
       >
-        <div v-for="dev in pluginDevices" :key="dev.id" class="plugin-device-row">
-          <NbIcon :name="widgetIcon(dev.widgetType)" :size="14" />
-          <span class="plugin-device-name">{{ dev.name }}</span>
-          <span class="plugin-device-type">{{ dev.widgetType }}</span>
-        </div>
+        <NbContainedList size="sm" aria-label="Devices registered by this plugin">
+          <NbContainedListItem v-for="dev in pluginDevices" :key="dev.id" :title="dev.name">
+            <template #leading>
+              <NbIcon :name="widgetIcon(dev.widgetType)" size="sm" />
+            </template>
+            <template #trailing>
+              <span class="plugin-device-type type-body-sm">{{ dev.widgetType }}</span>
+            </template>
+          </NbContainedListItem>
+        </NbContainedList>
       </NbShellPanel>
 
       <NbShellPanel v-model:size="sections.manifest" title="Manifest" fluid>
-        <NbField label="Name" control="fit">
-          <span class="field-value">{{ inspector.selectedPlugin.manifest.name }}</span>
+        <NbField label="Name">
+          <span class="field-value type-body-compact">{{ inspector.selectedPlugin.manifest.name }}</span>
         </NbField>
-        <NbField label="Version" control="fit">
-          <span class="field-value">{{ inspector.selectedPlugin.manifest.version }}</span>
+        <NbField label="Version">
+          <span class="field-value type-body-compact tabular">{{ inspector.selectedPlugin.manifest.version }}</span>
         </NbField>
-        <NbField v-if="inspector.selectedPlugin.manifest.description" label="Description" control="fit">
-          <span class="field-value">{{ inspector.selectedPlugin.manifest.description }}</span>
+        <NbField v-if="inspector.selectedPlugin.manifest.description" label="Description">
+          <span class="field-value type-body-compact">{{ inspector.selectedPlugin.manifest.description }}</span>
         </NbField>
-        <NbField v-if="inspector.selectedPlugin.manifest.author" label="Author" control="fit">
-          <span class="field-value">{{ inspector.selectedPlugin.manifest.author }}</span>
+        <NbField v-if="inspector.selectedPlugin.manifest.author" label="Author">
+          <span class="field-value type-body-compact">{{ inspector.selectedPlugin.manifest.author }}</span>
         </NbField>
       </NbShellPanel>
 
@@ -266,14 +271,14 @@
         <!-- The message is whatever the plugin threw, so it stays monospaced
              and wrapping: it is output to read, not prose. -->
         <NbBanner status="error">
-          <code class="error-text">{{ inspector.selectedPlugin.error }}</code>
+          <code class="error-text type-code-sm">{{ inspector.selectedPlugin.error }}</code>
         </NbBanner>
       </NbShellPanel>
 
       <NbShellPanel v-if="pluginLogs.length > 0" v-model:size="sections.logs" title="Recent logs" fluid>
-        <div ref="logsEl" class="plugin-log-terminal">
+        <div ref="logsEl" class="plugin-log-terminal type-code-sm">
           <div v-for="(entry, i) in pluginLogs" :key="i" class="plugin-log-line">
-            <span class="plog-time">{{ new Date(entry.timestamp).toLocaleTimeString() }}</span>
+            <span class="plog-time tabular">{{ new Date(entry.timestamp).toLocaleTimeString() }}</span>
             <span class="plog-level" :style="{ color: LOG_COLORS[entry.level] }">{{ entry.level.toUpperCase() }}</span>
             <span class="plog-msg">{{ entry.message }}</span>
           </div>
@@ -290,6 +295,8 @@ import { useInspectorStore } from '@/stores/inspector'
 import { useDaemonStore } from '@/stores/daemon'
 import { api, type LogEntry, type DeviceDescriptor } from '@/api'
 import QRCode from 'qrcode'
+import * as iconSliders from '@nubisco/ui/icons/sliders'
+import * as iconBracketsCurly from '@nubisco/ui/icons/brackets-curly'
 import MonacoJsonEditor from './MonacoJsonEditor.vue'
 import PluginConfigForm from './PluginConfigForm.vue'
 
@@ -326,9 +333,11 @@ const inspector = useInspectorStore()
 
 // "contained" is the library's segmented control, which is what a mode switch
 // between two editors of the same thing wants.
+// The icons are imported modules: a name inside a script object is not linked
+// by the bundler plugin and would throw at runtime.
 const editorTabs = [
-  { id: 'visual', label: 'Visual', icon: 'sliders' },
-  { id: 'json', label: 'JSON', icon: 'brackets-curly' },
+  { id: 'visual', label: 'Visual', icon: iconSliders },
+  { id: 'json', label: 'JSON', icon: iconBracketsCurly },
 ]
 
 // Per-section collapse state for the NbShellPanel stack. Persisted because an
@@ -416,10 +425,10 @@ function widgetIcon(widgetType: string): string {
 
 // Same colours the plugin list uses for the status, so the two agree.
 function statusVariant(status: string) {
-  if (status === 'running') return 'green'
-  if (status === 'error') return 'red'
-  if (status === 'loading') return 'blue'
-  return 'grey'
+  if (status === 'running') return 'success'
+  if (status === 'error') return 'danger'
+  if (status === 'loading') return 'info'
+  return 'neutral'
 }
 
 const statusLabel: Record<string, string> = {
@@ -840,103 +849,95 @@ async function save() {
 </script>
 
 <style lang="scss" scoped>
+// The header is pinned and the body scrolls: .nb-inspector sits on the body,
+// so it is the body that takes the pattern's scroll, gutter and section caps.
 .inspector {
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-height: 0;
 }
 
 .inspector-header {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  padding: 1rem 1.1rem;
-  border-bottom: 1px solid var(--nb-c-layer-1);
+  gap: var(--nb-spacing-12);
+  padding: var(--nb-spacing-12) var(--nb-spacing-16);
+  border-bottom: 1px solid var(--nb-c-border);
   flex-shrink: 0;
 }
 
+// Neutral on purpose: the status badge beside the name is the one place the
+// plugin's state is coloured.
 .inspector-avatar {
-  width: 42px;
-  height: 42px;
-  border-radius: 10px;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--nb-radius-control);
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--nb-c-layer-1);
   color: var(--nb-c-text-muted);
   flex-shrink: 0;
-  &.running {
-    background: color-mix(in srgb, var(--nb-c-success) 30%, var(--nb-c-surface));
-    color: var(--nb-c-success);
-  }
-  &.error {
-    background: color-mix(in srgb, var(--nb-c-danger) 30%, var(--nb-c-surface));
-    color: var(--nb-c-danger);
-  }
-  &.loading {
-    background: color-mix(in srgb, var(--nb-c-warning) 30%, var(--nb-c-surface));
-    color: var(--nb-c-warning);
-  }
 }
 
 .inspector-title {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 .inspector-name {
   margin: 0;
-  font-size: 0.95rem;
-  font-weight: 700;
   color: var(--nb-c-text);
+  overflow-wrap: anywhere;
+}
+.inspector-version {
+  color: var(--nb-c-text-subtle);
+}
+.inspector-status {
+  flex-shrink: 0;
 }
 
 // The phone sheet puts its dismiss button over the top right corner, so the
-// header keeps clear of it and a long package name wraps instead of running
-// under it.
+// header keeps clear of it.
 @include variables.phone {
   .inspector-header {
-    padding-right: calc(1.1rem + var(--nb-shell-inspector-dismiss-inset, 0px));
+    padding-right: calc(var(--nb-spacing-16) + var(--nb-shell-inspector-dismiss-inset, 0px));
   }
-  .inspector-name {
-    overflow-wrap: anywhere;
-  }
-}
-.inspector-version {
-  font-size: 0.75rem;
-  color: var(--nb-c-text-subtle);
 }
 
 .hap-bridge-info {
   display: flex;
-  gap: 1rem;
+  gap: var(--nb-spacing-12);
   align-items: flex-start;
 }
 .hap-qr {
   flex-shrink: 0;
 }
 .hap-qr-img {
+  display: block;
   width: 120px;
   height: 120px;
-  border-radius: 8px;
+  border-radius: var(--nb-radius-control);
   border: 1px solid var(--nb-c-border);
 }
 .hap-details {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--nb-spacing-8);
 }
 .hap-hint {
-  margin: 0.5rem 0 0;
-  font-size: 0.72rem;
+  margin: 0;
   color: var(--nb-c-text-subtle);
-  line-height: 1.4;
 }
 
 // The .nb-inspector pattern supplies the panel gutter, gaps and section caps.
 .inspector-body {
   flex: 1;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
+  min-height: 0;
 }
 
 .field-value {
@@ -946,22 +947,23 @@ async function save() {
 
 // ─── Setup / config section ───────────────────────────────────────────────────
 .error-text {
-  font-family: monospace;
   word-break: break-word;
 }
 
 .visual-editor-wrap {
   max-height: 340px;
   overflow-y: auto;
-  padding: 0.25rem 0;
+  padding: var(--nb-spacing-4) 0;
 }
 
+// The editor has no frame of its own, so this draws the field border around
+// it, and turns it red while the JSON does not parse.
 .config-editor-wrap {
   position: relative;
-  border: 1.5px solid var(--nb-c-text);
-  border-radius: 8px;
+  border: 1px solid var(--nb-c-text);
+  border-radius: var(--nb-radius-control);
   overflow: hidden;
-  transition: border-color 0.15s;
+  transition: border-color var(--nb-motion-quick) var(--nb-ease-standard);
   &:focus-within {
     border-color: var(--nb-c-primary);
   }
@@ -972,95 +974,65 @@ async function save() {
 
 .json-error {
   position: absolute;
-  bottom: 4px;
-  right: 8px;
-  font-size: 0.68rem;
+  bottom: var(--nb-spacing-4);
+  right: var(--nb-spacing-8);
   color: var(--nb-c-danger);
   background: var(--nb-c-scrim);
-  padding: 1px 6px;
-  border-radius: 3px;
+  padding: var(--nb-spacing-2) var(--nb-spacing-8);
+  border-radius: var(--nb-radius-control-sm);
   pointer-events: none;
 }
 
-.save-error {
+.setup-actions,
+.import-export-row {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  font-size: 0.78rem;
-  color: var(--nb-c-danger);
+  gap: var(--nb-spacing-8);
+  flex-wrap: wrap;
 }
 
-.setup-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex-wrap: wrap;
+.manage-remove {
+  align-self: flex-start;
 }
 
 // ─── Per-plugin log terminal ──────────────────────────────────────────────────
 .plugin-log-terminal {
   background: var(--nb-c-layer-1);
-  border-radius: 8px;
-  padding: 0.6rem 0.75rem;
+  border-radius: var(--nb-radius-control);
+  padding: var(--nb-spacing-8) var(--nb-spacing-12);
   max-height: 200px;
   overflow-y: auto;
-  font-family: 'MesloLGS NF', monospace;
-  font-size: 0.72rem;
-  line-height: 1.55;
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: var(--nb-spacing-2);
 }
 
 .plugin-log-line {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--nb-spacing-8);
   align-items: baseline;
   &:hover {
     background: var(--nb-c-surface-hover);
-    border-radius: 3px;
   }
 }
 
 .plog-time {
   color: var(--nb-c-text-muted);
   flex-shrink: 0;
-  font-size: 0.68rem;
 }
+// Wide enough for DEBUG, so every message starts on one edge.
 .plog-level {
   flex-shrink: 0;
-  width: 34px;
-  font-weight: 700;
-  font-size: 0.66rem;
+  width: 5ch;
 }
 .plog-msg {
   color: var(--nb-c-text-muted);
   flex: 1;
+  min-width: 0;
   word-break: break-word;
 }
 
-.import-export-row {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.plugin-device-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.4rem 0.5rem;
-  border-radius: 6px;
-  background: var(--nb-c-layer-1);
-  border: 1px solid var(--nb-c-layer-1);
-  font-size: 0.8rem;
-}
-.plugin-device-name {
-  flex: 1;
-  font-weight: 500;
-  color: var(--nb-c-text);
-}
 .plugin-device-type {
-  font-size: 0.7rem;
   color: var(--nb-c-text-subtle);
   text-transform: capitalize;
 }

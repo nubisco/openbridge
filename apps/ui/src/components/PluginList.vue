@@ -1,63 +1,83 @@
 <template>
   <!-- ═══ Cards ═══ -->
-  <!-- Plain CSS grid rather than NbGrid: NbGrid's `grid` prop is a 16-column
-       span applied to the element itself, not a container column count, so it
-       cannot express "fit as many ~260px cards per row as will go". NbPanel
-       still supplies every card's surface, which is the part worth reusing. -->
-  <div v-if="view === 'cards'" class="plugin-cards">
-    <NbPanel
+  <!-- Peers, so flat tiles on the page ground rather than each a raised
+       region. NbCard draws the title, the support line, the hover and the
+       selection, and lines the footers up along a row. -->
+  <!-- 400px: a plugin's name is a long package name with no spaces, and a
+       narrower card breaks it mid-word beside the status badge. -->
+  <NbCardGrid v-if="view === 'cards'" min="400px" gap="md">
+    <NbCard
       v-for="row in rows"
       :key="row.plugin.id"
+      flat
+      clickable
+      orientation="horizontal"
       class="plugin-card"
-      :class="{ 'plugin-card--selected': row.plugin.id === selectedId }"
-      @click="emit('select', row.plugin)"
+      :title="row.plugin.manifest.name"
+      :selected="row.plugin.id === selectedId"
+      @select="emit('select', row.plugin)"
     >
-      <span class="plugin-card__accent" :class="`plugin-card__accent--${row.plugin.status}`" />
-
-      <NbGrid dir="row" align="start" gap="sm" class="plugin-card__header">
-        <div class="plugin-avatar">
+      <template #icon>
+        <span class="plugin-avatar">
           <img
             v-if="row.avatarUrl"
             :src="row.avatarUrl"
             :alt="row.plugin.manifest.name"
             @error="($event.target as HTMLImageElement).style.display = 'none'"
           />
-          <NbIcon v-else :name="row.isOpenBridge ? 'diamond' : 'puzzle-piece'" :size="20" />
-        </div>
+          <NbIcon v-else :name="row.isOpenBridge ? 'diamond' : 'puzzle-piece'" size="md" />
+        </span>
+      </template>
 
-        <div class="plugin-meta">
-          <div class="plugin-name">{{ row.plugin.manifest.name }}</div>
-          <div v-if="row.plugin.source === 'homebridge' && row.plugin.platformName" class="plugin-platform">
-            Platform: {{ row.plugin.platformName }}
-          </div>
-          <div class="plugin-version">
-            v{{ row.plugin.manifest.version }}
-            <NbBadge v-if="row.plugin.availableUpdate" variant="blue" size="sm">
-              v{{ row.plugin.availableUpdate }} available
-            </NbBadge>
-          </div>
-        </div>
+      <!-- One status carrier: the badge. The coloured edge it used to repeat
+           said the same thing a second time in the same hue. -->
+      <template #meta>
+        <NbBadge :variant="statusVariant(row.plugin.status)" size="sm">{{ row.plugin.status }}</NbBadge>
+      </template>
 
-        <NbBadge :variant="statusVariant(row.plugin.status)">{{ row.plugin.status }}</NbBadge>
-      </NbGrid>
+      <template #subtitle>
+        <span class="plugin-support">
+          <span class="tabular">v{{ row.plugin.manifest.version }}</span>
+          <span v-if="row.plugin.source === 'homebridge' && row.plugin.platformName">
+            · Platform: {{ row.plugin.platformName }}
+          </span>
+          <NbBadge v-if="row.plugin.availableUpdate" variant="info" size="sm">
+            v{{ row.plugin.availableUpdate }} available
+          </NbBadge>
+        </span>
+      </template>
 
       <p v-if="row.plugin.manifest.description" class="plugin-desc">{{ row.plugin.manifest.description }}</p>
-      <p v-if="row.plugin.manifest.author" class="plugin-author">by {{ row.plugin.manifest.author }}</p>
+      <p v-if="row.plugin.manifest.author" class="plugin-desc">by {{ row.plugin.manifest.author }}</p>
+      <p v-if="row.plugin.error" class="plugin-error">{{ row.plugin.error }}</p>
 
-      <div v-if="row.sponsorUrl || row.docsUrl" class="plugin-links">
-        <a v-if="row.sponsorUrl" :href="row.sponsorUrl" target="_blank" rel="noopener" @click.stop>
-          <NbIcon name="heart" weight="fill" :size="11" />
-          Sponsor
-        </a>
-        <a v-if="row.docsUrl" :href="row.docsUrl" target="_blank" rel="noopener" @click.stop>
-          <NbIcon name="book-open" :size="11" />
-          Docs
-        </a>
-      </div>
-
-      <div v-if="row.plugin.error" class="plugin-error">{{ row.plugin.error }}</div>
-    </NbPanel>
-  </div>
+      <template v-if="row.sponsorUrl || row.docsUrl" #footer>
+        <!-- The card is a button: a click or key on a link stays on the link. -->
+        <span class="plugin-links" @click.stop @keydown.stop>
+          <NbButton
+            v-if="row.sponsorUrl"
+            variant="link"
+            size="xs"
+            :href="row.sponsorUrl"
+            target="_blank"
+            :aria-label="`Sponsor ${row.plugin.manifest.name}`"
+          >
+            Sponsor
+          </NbButton>
+          <NbButton
+            v-if="row.docsUrl"
+            variant="link"
+            size="xs"
+            :href="row.docsUrl"
+            target="_blank"
+            :aria-label="`Docs for ${row.plugin.manifest.name}`"
+          >
+            Docs
+          </NbButton>
+        </span>
+      </template>
+    </NbCard>
+  </NbCardGrid>
 
   <!-- ═══ Table ═══ -->
   <NbDataTable
@@ -74,25 +94,27 @@
   >
     <template #cell-name="{ row }">
       <div class="cell-name">
-        <div class="plugin-avatar plugin-avatar--sm">
+        <span class="plugin-avatar plugin-avatar--sm">
           <img
             v-if="row.avatarUrl"
             :src="row.avatarUrl"
             :alt="row.name"
             @error="($event.target as HTMLImageElement).style.display = 'none'"
           />
-          <NbIcon v-else :name="row.isOpenBridge ? 'diamond' : 'puzzle-piece'" :size="14" />
-        </div>
-        <div>
-          <div class="plugin-name">{{ row.name }}</div>
-          <div v-if="row.platform" class="plugin-platform">Platform: {{ row.platform }}</div>
+          <NbIcon v-else :name="row.isOpenBridge ? 'diamond' : 'puzzle-piece'" size="sm" />
+        </span>
+        <div class="cell-name__text">
+          <div class="type-heading-compact">{{ row.name }}</div>
+          <div v-if="row.platform" class="type-body-sm cell-muted">Platform: {{ row.platform }}</div>
         </div>
       </div>
     </template>
 
     <template #cell-version="{ row }">
-      {{ row.version }}
-      <NbBadge v-if="row.availableUpdate" variant="blue" size="sm">v{{ row.availableUpdate }}</NbBadge>
+      <span class="cell-version">
+        <span class="tabular">{{ row.version }}</span>
+        <NbBadge v-if="row.availableUpdate" variant="info" size="sm">v{{ row.availableUpdate }}</NbBadge>
+      </span>
     </template>
 
     <template #cell-status="{ row }">
@@ -123,10 +145,10 @@ const props = defineProps<{
 const emit = defineEmits<{ select: [plugin: PluginInstance] }>()
 
 function statusVariant(status: string) {
-  if (status === 'running') return 'green'
-  if (status === 'error') return 'red'
-  if (status === 'loading') return 'blue'
-  return 'grey'
+  if (status === 'running') return 'success'
+  if (status === 'error') return 'danger'
+  if (status === 'loading') return 'info'
+  return 'neutral'
 }
 
 // ─── Table mode ─────────────────────────────────────────────────────────────
@@ -191,67 +213,17 @@ const tableRows = computed<TableRow[]>(() => {
 </script>
 
 <style lang="scss" scoped>
-.plugin-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 1rem;
-  // Stretch, not start: only some plugins publish sponsor/docs links, and
-  // letting cards size to their own content made a row ragged wherever one
-  // card happened to have them.
-  align-items: stretch;
-}
-
-// NbPanel supplies the surface, border and layer. Only the things it cannot
-// know about live here: the status accent, selection ring and inner rhythm.
 .plugin-card {
-  position: relative;
-  overflow: hidden;
-  cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  transition:
-    border-color 0.15s,
-    background 0.15s;
-
-  &:hover {
-    background: var(--nb-c-surface-hover);
-  }
-
-  &--selected {
-    border-color: var(--nb-c-primary);
-    box-shadow: 0 0 0 1px var(--nb-c-primary);
-  }
-}
-
-.plugin-card__accent {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 3px;
-
-  &--running {
-    background: var(--nb-c-success);
-  }
-  &--error {
-    background: var(--nb-c-danger);
-  }
-  &--stopped,
-  &--idle {
-    background: var(--nb-c-component-inactive);
-  }
-  &--loading {
-    background: var(--nb-c-info);
-  }
-}
-
-.plugin-card__header {
-  margin-bottom: 0.6rem;
+  // A long package name breaks anywhere, and the support line and the links
+  // wrap under it rather than widening the tile.
+  min-width: 0;
 }
 
 .plugin-avatar {
   width: 36px;
   height: 36px;
   flex-shrink: 0;
-  border-radius: 9px;
+  border-radius: var(--nb-radius-md);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -266,90 +238,54 @@ const tableRows = computed<TableRow[]>(() => {
   }
 
   &--sm {
-    width: 22px;
-    height: 22px;
-    border-radius: 6px;
+    width: 24px;
+    height: 24px;
+    border-radius: var(--nb-radius-sm);
   }
 }
 
-.plugin-meta {
-  flex: 1;
-  min-width: 0;
-}
-
-.plugin-name {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--nb-c-text);
-  word-break: break-word;
-}
-
-.plugin-platform {
-  font-size: 0.72rem;
-  color: var(--nb-c-text-muted);
-}
-
-.plugin-version {
-  font-size: 0.72rem;
-  color: var(--nb-c-text-subtle);
-  display: flex;
+.plugin-support {
+  display: inline-flex;
   align-items: center;
-  gap: 0.35rem;
   flex-wrap: wrap;
+  gap: var(--nb-spacing-4);
 }
 
+// NbCard sets the body in body-sm and muted. Paragraphs only need their
+// margins taken off and a step between them.
 .plugin-desc {
-  margin: 0 0 0.4rem;
-  font-size: 0.78rem;
-  line-height: 1.5;
-  color: var(--nb-c-text-muted);
-}
-
-.plugin-author {
   margin: 0;
-  font-size: 0.74rem;
-  color: var(--nb-c-text-subtle);
 }
 
-.plugin-links {
-  display: flex;
-  gap: 0.4rem;
-  // Pinned to the bottom so the links line up across a row instead of
-  // floating at whatever height the description happens to end.
-  margin-top: auto;
-  padding-top: 0.5rem;
-
-  // Same recipe NbBadge uses for its tinted variants: a 12% fill of the
-  // semantic colour behind that colour as text. The previous outline-only
-  // treatment leaned on --nb-c-border, which is deliberately near-invisible.
-  a {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.25rem;
-    font-size: 0.7rem;
-    font-weight: 500;
-    padding: 0.15rem 0.5rem;
-    border-radius: 99px;
-    background: color-mix(in srgb, var(--nb-c-primary) 12%, var(--nb-c-surface));
-    color: var(--nb-c-primary);
-    text-decoration: none;
-
-    &:hover {
-      background: color-mix(in srgb, var(--nb-c-primary) 22%, var(--nb-c-surface));
-    }
-  }
+.plugin-desc + .plugin-desc {
+  margin-top: var(--nb-spacing-4);
 }
 
 .plugin-error {
-  margin-top: 0.5rem;
-  font-size: 0.72rem;
+  margin: var(--nb-spacing-8) 0 0;
   color: var(--nb-c-danger);
   word-break: break-word;
+}
+
+.plugin-links {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--nb-spacing-8);
 }
 
 .cell-name {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--nb-spacing-8);
+}
+
+.cell-muted {
+  color: var(--nb-c-text-muted);
+}
+
+.cell-version {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--nb-spacing-4);
 }
 </style>

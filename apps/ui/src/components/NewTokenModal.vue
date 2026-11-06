@@ -70,7 +70,7 @@ watch(
 )
 
 function validateName() {
-  nameError.value = name.value.trim() ? undefined : 'Give the token a name you will recognise later'
+  nameError.value = name.value.trim() ? undefined : 'Give the token a name you will recognize later'
 }
 
 async function submit() {

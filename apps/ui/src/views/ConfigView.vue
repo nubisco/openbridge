@@ -2,15 +2,15 @@
   <div class="config-view">
     <!-- The file being edited reads as page identity, so it sits beside the
          breadcrumb rather than taking a row out of the editor. -->
-    <Teleport defer to="#ob-topbar-left">
+    <component :is="topbarLeft.Outlet">
       <span class="config-path">~/.openbridge/config.json</span>
-    </Teleport>
+    </component>
 
     <!-- On a phone the actions fold: Save stays as an icon and Format moves
          into the overflow menu, so the path beside the breadcrumb keeps its room. -->
-    <Teleport defer to="#ob-topbar-right">
+    <component :is="topbarRight.Outlet">
       <NbActionGroup :items="actions" size="sm" overflow="phone" />
-    </Teleport>
+    </component>
 
     <NbBanner v-if="error" status="error" :title="error" flush />
 
@@ -25,10 +25,13 @@ import { computed, ref, onMounted, onBeforeUnmount, shallowRef, watch } from 'vu
 import loader from '@monaco-editor/loader'
 import { api } from '@/api'
 import { useLayoutStore } from '@/stores/layout'
-import { useTheme, usePhoneLayout, type IActionGroupItem } from '@nubisco/ui'
+import { useTheme, usePhoneLayout, type IActionGroupItem, useShellSlot } from '@nubisco/ui'
 import * as iconMagicWand from '@nubisco/ui/icons/magic-wand'
 import * as iconFloppyDisk from '@nubisco/ui/icons/floppy-disk'
 import * as iconCheck from '@nubisco/ui/icons/check'
+// Controls this view puts in the shell topbar.
+const topbarLeft = useShellSlot('topbar-left')
+const topbarRight = useShellSlot('topbar-right')
 
 const layout = useLayoutStore()
 const { resolved } = useTheme()
@@ -61,7 +64,7 @@ const phoneEditorOptions = (isPhone: boolean) => ({
 })
 
 onMounted(async () => {
-  layout.setPage('Config', undefined, { fullBleed: true })
+  layout.setPage('Config', { fullBleed: true })
 
   // Load the config content
   let content = '{}'
@@ -196,14 +199,18 @@ function format() {
   min-height: 0;
 }
 
-// Teleported next to the breadcrumb in the shell topbar.
+// Contributed beside the breadcrumb in the shell topbar. A path is code, so it
+// takes the mono set rather than a size of its own.
 .config-path {
-  font-family: monospace;
-  font-size: 0.82rem;
+  font-family: var(--nb-type-code-sm-family);
+  font-size: var(--nb-type-code-sm-size);
+  font-weight: var(--nb-type-code-sm-weight);
+  line-height: var(--nb-type-code-sm-line-height);
+  letter-spacing: var(--nb-type-code-sm-letter-spacing);
   color: var(--nb-c-text-muted);
   background: var(--nb-c-field-bg);
-  padding: 0.25rem 0.6rem;
-  border-radius: 6px;
+  padding: var(--nb-spacing-4) var(--nb-spacing-8);
+  border-radius: var(--nb-radius-control-sm);
 
   // The topbar is the width of the screen on a phone: the path gives way first.
   @include variables.phone {
@@ -215,7 +222,7 @@ function format() {
 }
 
 .loading-state {
-  padding: 4rem;
+  padding: var(--nb-spacing-48);
   justify-content: center;
 }
 

@@ -5,6 +5,7 @@ import NubiscoUI, { configureNamedTheme, configureTheme } from '@nubisco/ui'
 import App from './App.vue'
 import { router } from './router'
 import { registerRuntimeIcons } from './icons'
+import 'unfonts.css'
 import './styles/main.scss'
 import PluginConfigField from './components/PluginConfigField.vue'
 

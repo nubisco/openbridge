@@ -3,8 +3,8 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath, URL } from 'node:url'
 import { defineConfig, type Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
-import Unfonts from 'unplugin-fonts/vite'
 import { nubiscoUI } from '@nubisco/ui/vite'
+import { DEFAULT_FONTS, fonts } from '@nubisco/ui/plugins/fonts'
 
 /**
  * Appends a content-hash query param (?v=<hash>) to favicon links in index.html
@@ -43,7 +43,12 @@ export default defineConfig({
       glyphs: { catalog: 'off' },
     }),
     faviconCacheBust(),
-    Unfonts({
+    // The library's faces (IBM Plex Sans and Mono, self-hosted through
+    // Fontsource) plus the terminal's Meslo Nerd Font. Passing options replaces
+    // the defaults, so DEFAULT_FONTS is spread back in. Loaded by the
+    // `import 'unfonts.css'` in main.ts.
+    fonts({
+      ...DEFAULT_FONTS,
       custom: {
         families: [
           {

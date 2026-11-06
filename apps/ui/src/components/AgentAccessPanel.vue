@@ -1,76 +1,89 @@
 <template>
-  <NbPanel class="agents">
-    <div class="agents__header">
-      <div class="agents__icon">
-        <NbIcon name="robot" :size="18" />
-      </div>
-      <div>
-        <h2 class="agents__title">AI agents</h2>
-        <p class="agents__subtitle">
+  <!-- Three sections of the settings page (SettingsView.vue): the endpoint,
+       then each table as its own object with its title and its one action on
+       the table. A data table paints its own surface, so nothing is boxed. -->
+  <div class="agents">
+    <section class="agents__section" aria-labelledby="agents-title">
+      <header>
+        <h2 id="agents-title" class="type-heading-02 agents__title">AI agents</h2>
+        <p class="type-body-sm agents__lede">
           Let Claude and other MCP clients read your devices and their history, and with control access, operate them.
         </p>
-      </div>
-    </div>
+      </header>
 
-    <!-- Off by default: nothing here works until the owner turns it on. -->
-    <NbMessage v-if="enabled === false" variant="helper">
-      The MCP endpoint is off on this bridge. Start OpenBridge with
-      <code>OPENBRIDGE_MCP=on</code>
-      in its environment to turn it on, then create a token here.
-      <a href="https://docs.nubisco.io/openbridge/guide/mcp" target="_blank" rel="noopener">How to turn it on</a>
-    </NbMessage>
-
-    <template v-if="enabled">
-      <NbBanner
-        v-if="freshToken"
-        status="info"
-        variant="inline"
-        title="Copy this token now. It is not shown again."
-        dismissible
-        @close="freshToken = ''"
-      >
-        <NbField v-slot="{ id }" label="Token" orientation="stack">
-          <div class="agents__reveal">
-            <NbTextInput :id="id" :model-value="freshToken" readonly size="sm" class="agents__mono" />
-            <NbCopyButton :text="freshToken" label="Copy" copied-label="Copied" />
-          </div>
-        </NbField>
-        <NbField v-slot="{ id }" label="Connect Claude Code" orientation="stack">
-          <div class="agents__reveal">
-            <NbTextInput :id="id" :model-value="cliCommand(freshToken)" readonly size="sm" class="agents__mono" />
-            <NbCopyButton :text="cliCommand(freshToken)" label="Copy" copied-label="Copied" />
-          </div>
-        </NbField>
-      </NbBanner>
-
-      <NbField v-slot="{ id }" label="MCP endpoint" orientation="stack">
-        <div class="agents__reveal">
-          <NbTextInput :id="id" :model-value="endpoint" readonly size="sm" class="agents__mono" />
-          <NbCopyButton :text="endpoint" label="Copy" copied-label="Copied" />
-        </div>
-      </NbField>
-      <NbMessage variant="helper">
-        Every request needs a token, even when sign-in is off. Create one below and paste it into your client, or add
-        the endpoint as a connector and approve it in your browser. claude.ai and the Claude app connect from the cloud,
-        so their connectors need this bridge on an https address reachable from the internet.
-        <a href="https://docs.nubisco.io/openbridge/guide/mcp" target="_blank" rel="noopener">How to connect</a>
+      <!-- Off by default: nothing here works until the owner turns it on. -->
+      <NbMessage v-if="enabled === false" variant="helper" class="agents__form">
+        The MCP endpoint is off on this bridge. Start OpenBridge with
+        <code>OPENBRIDGE_MCP=on</code>
+        in its environment to turn it on, then create a token here.
+        <a href="https://docs.nubisco.io/openbridge/guide/mcp" target="_blank" rel="noopener">How to turn it on</a>
       </NbMessage>
 
-      <div class="agents__section-head">
-        <h3 class="agents__section-title">Tokens</h3>
-        <NbButton size="sm" variant="primary" icon="plus" @click="creating = true">New token</NbButton>
-      </div>
+      <template v-if="enabled">
+        <NbBanner
+          v-if="freshToken"
+          status="info"
+          variant="inline"
+          title="Copy this token now. It is not shown again."
+          dismissible
+          @close="freshToken = ''"
+        >
+          <NbField v-slot="{ id }" label="Token" orientation="stack">
+            <div class="agents__reveal">
+              <NbTextInput :id="id" :model-value="freshToken" readonly class="agents__mono" />
+              <NbCopyButton :text="freshToken" label="Copy" copied-label="Copied" />
+            </div>
+          </NbField>
+          <NbField v-slot="{ id }" label="Connect Claude Code" orientation="stack">
+            <div class="agents__reveal">
+              <NbTextInput :id="id" :model-value="cliCommand(freshToken)" readonly class="agents__mono" />
+              <NbCopyButton :text="cliCommand(freshToken)" label="Copy" copied-label="Copied" />
+            </div>
+          </NbField>
+        </NbBanner>
+
+        <NbField v-slot="{ id }" label="MCP endpoint" orientation="stack" class="agents__form">
+          <div class="agents__reveal">
+            <NbTextInput :id="id" :model-value="endpoint" readonly class="agents__mono" />
+            <NbCopyButton :text="endpoint" label="Copy" copied-label="Copied" />
+          </div>
+        </NbField>
+        <NbMessage variant="helper" class="agents__form">
+          Every request needs a token, even when sign-in is off. Create one below and paste it into your client, or add
+          the endpoint as a connector and approve it in your browser. claude.ai and the Claude app connect from the
+          cloud, so their connectors need this bridge on an https address reachable from the internet.
+          <a href="https://docs.nubisco.io/openbridge/guide/mcp" target="_blank" rel="noopener">How to connect</a>
+        </NbMessage>
+      </template>
+
+      <NbMessage v-if="error" variant="error" class="agents__form">{{ error }}</NbMessage>
+    </section>
+
+    <template v-if="enabled">
+      <!-- Revoke and Disconnect stay worded: no icon is agreed for either yet
+           (a library gap), and each names its row for a screen reader. -->
       <NbDataTable
         stack-on-phone
         :columns="tokenColumns"
         :rows="tokenRows"
         row-key="id"
         size="sm"
-        aria-label="Tokens"
+        title="Tokens"
+        description="Each one lets a client such as Claude Code use this bridge, read only or with control."
         :loading="loading"
       >
-        <template #cell-actions="{ row }">
-          <NbButton size="sm" variant="ghost" @click="revokeToken(String(row.id), String(row.name))">Revoke</NbButton>
+        <template #toolbar-actions>
+          <NbButton variant="primary" icon="plus" @click="creating = true">New token</NbButton>
+        </template>
+        <template #row-actions="{ row }">
+          <NbButton
+            size="sm"
+            variant="ghost"
+            :aria-label="`Revoke token ${row.name}`"
+            @click="revokeToken(String(row.id), String(row.name))"
+          >
+            Revoke
+          </NbButton>
         </template>
         <template #empty>
           <NbEmptyState
@@ -81,18 +94,23 @@
         </template>
       </NbDataTable>
 
-      <h3 class="agents__section-title">Connected applications</h3>
       <NbDataTable
         stack-on-phone
         :columns="connectionColumns"
         :rows="connectionRows"
         row-key="clientId"
         size="sm"
-        aria-label="Connected applications"
+        title="Connected applications"
+        description="Applications approved through a connector sign-in. Disconnecting one ends every sign-in it holds."
         :loading="loading"
       >
-        <template #cell-actions="{ row }">
-          <NbButton size="sm" variant="ghost" @click="disconnect(String(row.clientId), String(row.name))">
+        <template #row-actions="{ row }">
+          <NbButton
+            size="sm"
+            variant="ghost"
+            :aria-label="`Disconnect ${row.name}`"
+            @click="disconnect(String(row.clientId), String(row.name))"
+          >
             Disconnect
           </NbButton>
         </template>
@@ -106,10 +124,8 @@
       </NbDataTable>
     </template>
 
-    <NbMessage v-if="error" variant="error">{{ error }}</NbMessage>
-
     <NewTokenModal :open="creating" @close="creating = false" @created="onCreated" />
-  </NbPanel>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -148,7 +164,6 @@ const tokenColumns = [
   { key: 'created', header: 'Created', phoneMeta: true },
   // Never used is what makes a forgotten token safe to revoke.
   { key: 'lastUsed', header: 'Last used' },
-  { key: 'actions', header: '', align: 'right' as const },
 ]
 const tokenRows = computed(() =>
   tokens.value.map((t) => ({
@@ -165,7 +180,6 @@ const connectionColumns = [
   { key: 'access', header: 'Access' },
   { key: 'connected', header: 'Connected', phoneMeta: true },
   { key: 'lastUsed', header: 'Last used' },
-  { key: 'actions', header: '', align: 'right' as const },
 ]
 const connectionRows = computed(() =>
   connections.value.map((c) => ({
@@ -240,63 +254,38 @@ async function disconnect(clientId: string, name: string) {
 </script>
 
 <style lang="scss" scoped>
-// Matches the other Settings cards (SettingsView.vue), and spans the whole
-// row because its tables need the width.
+// Part of the settings column (SettingsView.vue): the same 32px between
+// sections, and the same 40rem measure on the form parts. The tables take the
+// column's full width because they need it.
 .agents {
-  grid-column: 1 / -1;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: var(--nb-spacing-32);
 
-  &__header {
+  &__section {
     display: flex;
-    align-items: center;
-    gap: 0.75rem;
-  }
-
-  &__icon {
-    width: 36px;
-    height: 36px;
-    border-radius: 9px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: color-mix(in srgb, var(--nb-c-primary) 12%, var(--nb-c-surface));
-    color: var(--nb-c-primary);
-    flex-shrink: 0;
+    flex-direction: column;
+    gap: var(--nb-spacing-16);
   }
 
   &__title {
     margin: 0;
-    font-size: 0.95rem;
-    font-weight: 600;
-    color: var(--nb-c-text);
   }
 
-  &__subtitle {
-    margin: 0;
-    font-size: 0.78rem;
+  &__lede {
+    max-inline-size: var(--nb-measure);
+    margin: var(--nb-spacing-4) 0 0;
     color: var(--nb-c-text-muted);
   }
 
-  &__section-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.75rem;
-  }
-
-  &__section-title {
-    margin: 0;
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--nb-c-text);
+  &__form {
+    max-inline-size: 40rem;
   }
 
   &__reveal {
     display: flex;
     align-items: center;
-    gap: 0.4rem;
+    gap: var(--nb-spacing-8);
 
     > :first-child {
       flex: 1;
@@ -305,7 +294,7 @@ async function disconnect(clientId: string, name: string) {
   }
 
   &__mono :deep(input) {
-    font-family: monospace;
+    font-family: var(--nb-font-family-mono);
   }
 }
 </style>

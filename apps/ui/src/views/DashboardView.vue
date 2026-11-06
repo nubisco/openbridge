@@ -1,34 +1,50 @@
 <template>
+  <!-- The dashboard pattern. A summary strip, then HomeKit pairing as the one
+       raised region (a new bridge is opened to be paired), with system
+       information beside it, then the plugins and the live metrics as flat
+       supporting tiles. The trail names the page, so there is no heading
+       repeating it. -->
   <div class="dashboard">
-    <!-- ─── Row 1: HomeKit + System Info + Plugins ────────────────────────── -->
-    <div class="top-row">
-      <!-- HomeKit pairing card -->
-      <NbPanel class="hk-card">
-        <div class="card-title">HomeKit Pairing</div>
-        <div class="hk-body">
-          <div v-if="qrDataUrl" class="qr-wrap">
-            <img :src="qrDataUrl" alt="HomeKit QR Code" class="qr-img" />
+    <!-- Three figures from data the page already has. Hue is status: a tile
+         turns red only when something is wrong. -->
+    <NbCardGrid min="160px" gap="md">
+      <NbStat size="sm" label="Plugins running" :value="`${daemon.runningCount} of ${daemon.plugins.length}`" />
+      <NbStat
+        size="sm"
+        label="Plugin errors"
+        :value="daemon.errorCount"
+        :status="daemon.errorCount ? 'danger' : 'neutral'"
+      />
+      <!-- Reports the HAP bridge, not the browser's connection to the daemon.
+           Those are not the same thing: the daemon serves this page perfectly
+           well with no HomeKit bridge behind it, and reading "Running" in
+           that state is worse than useless. -->
+      <NbStat size="sm" label="HomeKit bridge" :value="hapStatusLabel" :status="hapStatus" />
+    </NbCardGrid>
+
+    <!-- Pairing first (Jose, 2026-11-06): a new bridge is opened to be added
+         to the Home app, so the QR code is the page's one raised region and
+         sits where nobody has to scroll for it. System information is its
+         flat neighbour. -->
+    <NbCardGrid min="320px" gap="lg" fill="auto-fit">
+      <NbPanel title="HomeKit pairing">
+        <div class="hk">
+          <div v-if="qrDataUrl" class="hk__qr">
+            <img :src="qrDataUrl" alt="HomeKit QR code" class="hk__qr-img" />
           </div>
-          <div v-else class="qr-placeholder">
-            <NbIcon name="qr-code" :size="48" />
+          <div v-else class="hk__qr hk__qr--empty type-body-sm">
+            <NbIcon name="qr-code" size="xl" />
             <span>{{ hapError ? 'HomeKit bridge unavailable' : 'No HAP bridge configured' }}</span>
           </div>
-          <div class="hk-details">
-            <div v-if="pincode" class="pin-display">{{ pincode }}</div>
-            <div v-if="pincode" class="pin-label">Scan to add to HomeKit</div>
-            <!-- Reports the HAP bridge, not the browser's connection to the
-                 daemon. Those are not the same thing: the daemon serves this
-                 page perfectly well with no HomeKit bridge behind it, and
-                 reading "Bridge running" in that state is worse than useless. -->
-            <NbBadge class="hk-status" dot :variant="hapVariant">{{ hapStatusLabel }}</NbBadge>
-            <div v-if="hapError" class="hk-error">{{ hapError }}</div>
+          <div class="hk__details">
+            <div v-if="pincode" class="hk__pin type-heading-02 tabular">{{ pincode }}</div>
+            <div v-if="pincode" class="metric__sub type-body-sm">Scan to add to HomeKit</div>
+            <div v-if="hapError" class="hk__error type-body-sm">{{ hapError }}</div>
           </div>
         </div>
       </NbPanel>
 
-      <!-- System information card -->
-      <NbPanel class="sys-card">
-        <div class="card-title">System Information</div>
+      <NbPanel flat title="System information">
         <!-- A fixed term width keeps every value on one edge. The library's
              rows are separate grids, so a content-sized term would not. -->
         <NbDefinitionList v-if="sysInfo" compact term-width="6rem">
@@ -40,104 +56,86 @@
           <NbDefinitionListItem term="Node.js">{{ sysInfo.nodeVersion }}</NbDefinitionListItem>
           <NbDefinitionListItem term="OpenBridge">v{{ daemon.health?.version ?? '—' }}</NbDefinitionListItem>
           <NbDefinitionListItem term="Config">
-            <span class="sys-path">{{ sysInfo.configPath }}</span>
+            <span class="sys-path type-code-sm">{{ sysInfo.configPath }}</span>
           </NbDefinitionListItem>
           <NbDefinitionListItem term="OB plugins">
-            <span class="sys-path">{{ sysInfo.obPluginsDir }}</span>
+            <span class="sys-path type-code-sm">{{ sysInfo.obPluginsDir }}</span>
           </NbDefinitionListItem>
           <NbDefinitionListItem term="HB plugins">
-            <span class="sys-path">{{ sysInfo.hbPluginsDir }}</span>
+            <span class="sys-path type-code-sm">{{ sysInfo.hbPluginsDir }}</span>
           </NbDefinitionListItem>
         </NbDefinitionList>
         <NbSpinner v-else size="sm" show-label label="Loading..." />
       </NbPanel>
+    </NbCardGrid>
 
-      <!-- Plugins mini-list card -->
-      <NbPanel class="plugins-card">
-        <div class="card-title">
-          Plugins
-          <span class="plugins-counts">
-            <NbBadge variant="green">{{ daemon.runningCount }} running</NbBadge>
-            <NbBadge v-if="daemon.errorCount" variant="red">{{ daemon.errorCount }} error</NbBadge>
+    <!-- What talks to the devices, flat on the ground: the strip above
+         already says whether any is in error. -->
+    <NbPanel flat title="Plugins">
+      <template #actions>
+        <NbButton size="sm" variant="tertiary" to="/plugins">Manage plugins</NbButton>
+      </template>
+      <p v-if="daemon.plugins.length === 0" class="empty-inline type-body-compact">No plugins loaded yet.</p>
+      <NbContainedList v-else aria-label="Plugins" size="md">
+        <NbContainedListItem v-for="p in daemon.plugins" :key="p.id" :title="p.manifest.name">
+          <template #trailing>
+            <span class="plugin-ver type-body-sm tabular">v{{ p.manifest.version }}</span>
+            <NbBadge v-if="p.source === 'homebridge'" variant="neutral" size="sm">HB</NbBadge>
+            <NbBadge :variant="statusVariant(p.status)" size="sm">{{ p.status }}</NbBadge>
+          </template>
+        </NbContainedListItem>
+      </NbContainedList>
+    </NbPanel>
+
+    <!-- Live metrics: diagnostics, peers of each other, flat on the ground.
+         A plain grid rather than NbCardGrid: four, two or one to a row, never
+         three and an orphan. -->
+    <div class="metrics">
+      <NbPanel flat title="CPU" class="metric">
+        <div class="metric__values">
+          <span class="metric__big type-heading-03 tabular">{{ latest?.cpu ?? '—' }}</span>
+          <span class="metric__unit type-body-sm">%</span>
+          <span v-if="latest?.cpuTemp && latest.cpuTemp > 0" class="metric__sub type-body-sm tabular">
+            {{ latest.cpuTemp }}°C
           </span>
         </div>
-        <div v-if="daemon.plugins.length === 0" class="empty-inline">No plugins loaded yet.</div>
-        <div v-else class="plugins-list">
-          <div v-for="p in daemon.plugins" :key="p.id" class="plugin-row">
-            <div class="plugin-dot" :class="p.status" />
-            <span class="plugin-name">{{ p.manifest.name }}</span>
-            <span class="plugin-ver">v{{ p.manifest.version }}</span>
-            <NbBadge v-if="p.source === 'homebridge'" variant="orange" size="sm">HB</NbBadge>
-            <NbBadge :variant="statusVariant(p.status)" size="sm">{{ p.status }}</NbBadge>
-          </div>
-        </div>
-      </NbPanel>
-    </div>
-
-    <!-- ─── Row 2: Metrics cards ──────────────────────────────────────────── -->
-    <div class="metrics-row">
-      <!-- CPU -->
-      <NbPanel class="metric-card">
-        <div class="metric-header">
-          <div class="metric-icon purple"><NbIcon name="cpu" :size="13" /></div>
-          <span class="metric-title">CPU</span>
-        </div>
-        <div class="metric-values">
-          <div class="metric-big">
-            {{ latest?.cpu ?? '—' }}
-            <span class="metric-unit">%</span>
-          </div>
-          <div v-if="latest?.cpuTemp && latest.cpuTemp > 0" class="metric-sub">{{ latest.cpuTemp }}°C</div>
-        </div>
-        <div class="metric-chart">
+        <div class="metric__chart">
           <NbSparkline :data="cpuHistory" color="var(--nb-c-primary)" :height="40" />
         </div>
       </NbPanel>
 
-      <!-- Memory -->
-      <NbPanel class="metric-card">
-        <div class="metric-header">
-          <div class="metric-icon blue"><NbIcon name="database" :size="13" /></div>
-          <span class="metric-title">Memory</span>
-        </div>
-        <div class="metric-values">
-          <div class="metric-big">
-            {{ memPct }}
-            <span class="metric-unit">%</span>
-          </div>
-          <div class="metric-sub">{{ memUsed }} / {{ memTotal }}</div>
+      <NbPanel flat title="Memory" class="metric">
+        <div class="metric__values">
+          <span class="metric__big type-heading-03 tabular">{{ memPct }}</span>
+          <span class="metric__unit type-body-sm">%</span>
+          <span class="metric__sub type-body-sm tabular">{{ memUsed }} / {{ memTotal }}</span>
         </div>
         <NbProgressBar :value="memPct" :max="100" size="sm" />
-        <div class="metric-chart">
-          <NbSparkline :data="memHistory" color="var(--nb-c-info)" :height="32" />
+        <div class="metric__chart">
+          <NbSparkline :data="memHistory" color="var(--nb-c-primary)" :height="32" />
         </div>
       </NbPanel>
 
-      <!-- Uptime + Restart -->
-      <NbPanel class="metric-card">
-        <div class="metric-header">
-          <div class="metric-icon green"><NbIcon name="clock" :size="13" /></div>
-          <span class="metric-title">Uptime</span>
-        </div>
-        <div class="uptime-rows">
-          <div class="uptime-row">
-            <span class="uptime-val">{{ sysInfo ? fmtUptime(sysInfo.uptimeSystem) : '—' }}</span>
-            <span class="uptime-label">System</span>
+      <NbPanel flat title="Uptime" class="metric">
+        <div class="uptime">
+          <div class="uptime__row">
+            <span class="type-heading-02 tabular">{{ sysInfo ? fmtUptime(sysInfo.uptimeSystem) : '—' }}</span>
+            <span class="metric__sub type-body-sm">System</span>
           </div>
-          <div class="uptime-divider" />
-          <div class="uptime-row">
-            <span class="uptime-val">{{ sysInfo ? fmtUptime(sysInfo.uptimeProcess) : '—' }}</span>
-            <span class="uptime-label">Process</span>
+          <div class="uptime__row">
+            <span class="type-heading-02 tabular">{{ sysInfo ? fmtUptime(sysInfo.uptimeProcess) : '—' }}</span>
+            <span class="metric__sub type-body-sm">Process</span>
           </div>
         </div>
-        <div style="margin-top: 0.75rem">
+        <!-- Restarting interrupts HomeKit for a few seconds and destroys
+             nothing, so it is not a danger action. Alone in its tile, it is
+             tertiary rather than a stranded secondary. -->
+        <div class="metric__chart">
           <NbButton
-            variant="secondary"
+            variant="tertiary"
             size="sm"
-            outlined
-            style="width: 100%; justify-content: center"
             :loading="restarting"
-            :icon="restartDone ? 'check' : 'arrows-clockwise'"
+            :icon="restartDone ? iconCheck : iconRestart"
             @click="restartOpenBridge"
           >
             {{ restartDone ? 'Restarted' : restarting ? 'Restarting…' : 'Restart OpenBridge' }}
@@ -145,29 +143,20 @@
         </div>
       </NbPanel>
 
-      <!-- Network -->
-      <NbPanel class="metric-card net-card">
-        <div class="metric-header">
-          <!-- "activity" is not a name the catalogue has, so the bundler plugin
-               could not link it and NbIcon threw at render, blanking the whole
-               dashboard. "pulse" is the same waveform under the name that
-               exists. Pre-dates the NubiscoUI 5.0.0 upgrade. -->
-          <div class="metric-icon amber"><NbIcon name="pulse" :size="13" /></div>
-          <span class="metric-title">Network</span>
-        </div>
-        <div class="net-values">
+      <NbPanel flat title="Network" class="metric">
+        <div class="net">
           <div>
-            <div class="net-val">{{ latest ? fmtBytes(latest.netRxSec) + '/s' : '—' }}</div>
-            <div class="net-label">↓ Received</div>
+            <div class="type-heading-compact tabular">{{ latest ? fmtBytes(latest.netRxSec) + '/s' : '—' }}</div>
+            <div class="metric__sub type-body-sm">↓ Received</div>
           </div>
           <div>
-            <div class="net-val">{{ latest ? fmtBytes(latest.netTxSec) + '/s' : '—' }}</div>
-            <div class="net-label">↑ Sent</div>
+            <div class="type-heading-compact tabular">{{ latest ? fmtBytes(latest.netTxSec) + '/s' : '—' }}</div>
+            <div class="metric__sub type-body-sm">↑ Sent</div>
           </div>
         </div>
-        <div class="metric-chart net-charts">
-          <NbSparkline :data="netRxHistory" color="var(--nb-c-success)" :height="28" />
-          <NbSparkline :data="netTxHistory" color="var(--nb-c-warning)" :height="28" />
+        <div class="metric__chart net__charts">
+          <NbSparkline :data="netRxHistory" color="var(--nb-c-primary)" :height="28" />
+          <NbSparkline :data="netTxHistory" color="var(--nb-c-text-subtle)" :height="28" />
         </div>
       </NbPanel>
     </div>
@@ -180,16 +169,18 @@ import QRCode from 'qrcode'
 import { api, type SystemInfo, type MetricsSnapshot } from '@/api'
 import { useDaemonStore } from '@/stores/daemon'
 import { useLayoutStore } from '@/stores/layout'
-// NbSparkline replaced by NbSparkline from @nubisco/ui (globally registered)
+// Bound through a ternary, so the bundler plugin cannot link them by name.
+import * as iconCheck from '@nubisco/ui/icons/check'
+import * as iconRestart from '@nubisco/ui/icons/arrows-clockwise'
 
 const daemon = useDaemonStore()
 const layout = useLayoutStore()
 
 function statusVariant(status: string) {
-  if (status === 'running') return 'green'
-  if (status === 'error') return 'red'
-  if (status === 'loading') return 'blue'
-  return 'grey'
+  if (status === 'running') return 'success'
+  if (status === 'error') return 'danger'
+  if (status === 'loading') return 'info'
+  return 'neutral'
 }
 
 // ─── Restart OpenBridge ───────────────────────────────────────────────────────
@@ -231,14 +222,12 @@ const pincode = ref('')
 /** Why HomeKit is unavailable, as reported by the daemon. */
 const hapError = ref('')
 
-const hapVariant = computed(() => {
-  if (!daemon.connected) return 'grey'
-  return hapError.value ? 'red' : 'green'
-})
+/** Red only when the bridge is down. A running bridge is the quiet default. */
+const hapStatus = computed(() => (daemon.connected && hapError.value ? 'danger' : 'neutral'))
 
 const hapStatusLabel = computed(() => {
   if (!daemon.connected) return 'Daemon offline'
-  return hapError.value ? 'HomeKit offline' : 'Bridge running'
+  return hapError.value ? 'Offline' : 'Running'
 })
 
 // ─── Live metrics ─────────────────────────────────────────────────────────────
@@ -363,304 +352,145 @@ onUnmounted(() => {
 </script>
 
 <style lang="scss" scoped>
+// Regions are xl apart (the dashboard pattern).
 .dashboard {
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  flex: 1;
-  min-height: 0;
+  gap: var(--nb-spacing-32);
 }
 
-// ─── Cards ────────────────────────────────────────────────────────────────────
-.card-title {
-  font-size: 0.78rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--nb-c-text-subtle);
-  margin-bottom: 0.85rem;
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-}
-
-// ─── Row 1: 3 columns ────────────────────────────────────────────────────────
-.top-row {
+.metrics {
   display: grid;
-  grid-template-columns: 220px 1fr 1fr;
-  gap: 1rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--nb-spacing-24);
 
-  // Three columns leave the system card a sliver on a phone, so its values
-  // broke after every few letters. One card per row instead.
+  @container (max-width: 960px) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  // Two side by side squeezes the network tile's two rates past its edge at
+  // 360px, so on a phone the metrics stack.
   @include variables.phone {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 
-// HomeKit card
-.hk-card {
+.empty-inline {
+  margin: 0;
+  color: var(--nb-c-text-muted);
+}
+
+.plugin-ver {
+  color: var(--nb-c-text-muted);
+}
+
+// ─── Metrics ─────────────────────────────────────────────────────────────────
+.metric {
   display: flex;
   flex-direction: column;
+  gap: var(--nb-spacing-8);
+
+  &__values {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--nb-spacing-4);
+  }
+
+  &__big {
+    color: var(--nb-c-text);
+  }
+
+  &__unit,
+  &__sub {
+    color: var(--nb-c-text-muted);
+  }
+
+  &__unit + &__sub {
+    margin-inline-start: var(--nb-spacing-4);
+  }
+
+  // Charts and the restart button sit on the tile's bottom edge, so the
+  // four tiles line up whatever their content above.
+  &__chart {
+    margin-top: auto;
+  }
 }
-.hk-body {
+
+.uptime {
+  display: flex;
+  gap: var(--nb-spacing-24);
+
+  &__row {
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+.net {
+  display: flex;
+  gap: var(--nb-spacing-24);
+
+  &__charts {
+    display: flex;
+    flex-direction: column;
+    gap: var(--nb-spacing-2);
+  }
+}
+
+// ─── HomeKit ─────────────────────────────────────────────────────────────────
+.hk {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.75rem;
-}
-.qr-wrap {
-  border-radius: 8px;
-  overflow: hidden;
-  border: 1px solid var(--nb-c-border);
-}
-.qr-img {
-  display: block;
-  width: 148px;
-  height: 148px;
-}
-.qr-placeholder {
-  width: 148px;
-  height: 148px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  color: var(--nb-c-border);
-  font-size: 0.75rem;
-  text-align: center;
-  border: 1px dashed var(--nb-c-border);
-  border-radius: 8px;
-}
-.hk-details {
-  text-align: center;
-}
-.pin-display {
-  font-size: 1.3rem;
-  font-weight: 800;
-  letter-spacing: 0.12em;
-  color: var(--nb-c-text);
-  font-family: monospace;
-}
-.pin-label {
-  font-size: 0.72rem;
-  color: var(--nb-c-text-subtle);
-  margin-top: 2px;
-}
-.hk-status {
-  margin-top: 0.5rem;
+  gap: var(--nb-spacing-12);
+
+  // The QR code is drawn at a fixed 148px (see QRCode.toDataURL), so its
+  // frame and the empty placeholder hold the same box.
+  &__qr {
+    border-radius: var(--nb-radius-md);
+    overflow: hidden;
+    border: 1px solid var(--nb-c-border);
+  }
+
+  &__qr-img {
+    display: block;
+    width: 148px;
+    height: 148px;
+  }
+
+  &__qr--empty {
+    width: 148px;
+    height: 148px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--nb-spacing-8);
+    padding: var(--nb-spacing-8);
+    color: var(--nb-c-text-muted);
+    text-align: center;
+    border-style: dashed;
+  }
+
+  &__details {
+    text-align: center;
+  }
+
+  &__pin {
+    color: var(--nb-c-text);
+  }
+
+  &__error {
+    margin-top: var(--nb-spacing-4);
+    color: var(--nb-c-danger);
+  }
 }
 
-.hk-error {
-  margin-top: 0.25rem;
-  font-size: 0.75rem;
-  line-height: 1.35;
-  color: var(--nb-c-danger);
-}
-
-// System info
-.sys-card {
-  display: flex;
-  flex-direction: column;
-}
 // A path is read character by character, so it keeps the monospace face.
 .sys-path {
-  font-family: monospace;
-  font-size: 0.75rem;
   color: var(--nb-c-text-muted);
-}
-// Plugins mini-list
-.plugins-card {
-  display: flex;
-  flex-direction: column;
-}
-.plugins-counts {
-  display: flex;
-  gap: 0.4rem;
-  margin-left: auto;
-}
-.empty-inline {
-  font-size: 0.82rem;
-  color: var(--nb-c-text-subtle);
-}
-.plugins-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  overflow-y: auto;
-  flex: 1;
-}
-.plugin-row {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  padding: 0.45rem 0.7rem;
-  border-radius: 7px;
-  background: var(--nb-c-layer-1);
-  font-size: 0.82rem;
-  &:hover {
-    background: var(--nb-c-layer-1);
-  }
-}
-.plugin-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  background: var(--nb-c-border);
-  &.running {
-    background: var(--nb-c-success);
-  }
-  &.error {
-    background: var(--nb-c-danger);
-  }
-  &.loading {
-    background: var(--nb-c-warning);
-  }
-}
-.plugin-name {
-  font-weight: 500;
-  color: var(--nb-c-text);
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.plugin-ver {
-  color: var(--nb-c-text-subtle);
-  flex-shrink: 0;
-}
-// ─── Row 2 ────────────────────────────────────────────────────────────────────
-.metrics-row {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 1rem;
-
-  // Two side by side still squeezes the network card's two rates past its
-  // edge at 360px, so the metrics stack too.
-  @include variables.phone {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-.metric-card {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  padding: 0.75rem 0.9rem;
-}
-.metric-header {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-.metric-title {
-  font-size: 0.7rem;
-  font-weight: 600;
-  color: var(--nb-c-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-.metric-icon {
-  width: 24px;
-  height: 24px;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  &.purple {
-    background: color-mix(in srgb, var(--nb-c-primary) 12%, var(--nb-c-surface));
-    color: var(--nb-c-primary);
-  }
-  &.blue {
-    background: color-mix(in srgb, var(--nb-c-info) 10%, var(--nb-c-surface));
-    color: var(--nb-c-info);
-  }
-  &.green {
-    background: color-mix(in srgb, var(--nb-c-success) 10%, var(--nb-c-surface));
-    color: var(--nb-c-success);
-  }
-  &.amber {
-    background: color-mix(in srgb, var(--nb-c-warning) 10%, var(--nb-c-surface));
-    color: var(--nb-c-warning);
-  }
-}
-
-.metric-values {
-  display: flex;
-  align-items: baseline;
-  gap: 0.4rem;
-}
-.metric-big {
-  font-size: 1.6rem;
-  font-weight: 800;
-  color: var(--nb-c-text);
-  line-height: 1;
-  .metric-unit {
-    font-size: 0.82rem;
-    font-weight: 500;
-    color: var(--nb-c-text-subtle);
-    margin-left: 1px;
-  }
-}
-.metric-sub {
-  font-size: 0.72rem;
-  color: var(--nb-c-text-subtle);
-}
-.metric-chart {
-  margin-top: auto;
-}
-
-.uptime-rows {
-  display: flex;
-  gap: 0.75rem;
-  align-items: center;
-  margin-top: 0.15rem;
-  flex: 1;
-}
-.uptime-row {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  flex: 1;
-}
-.uptime-val {
-  font-size: 1.15rem;
-  font-weight: 700;
-  color: var(--nb-c-text);
-}
-.uptime-label {
-  font-size: 0.66rem;
-  color: var(--nb-c-text-subtle);
-}
-.uptime-divider {
-  width: 1px;
-  height: 28px;
-  background: var(--nb-c-border);
-  flex-shrink: 0;
-}
-
-.net-values {
-  display: flex;
-  gap: 1.25rem;
-}
-.net-val {
-  font-size: 0.9rem;
-  font-weight: 700;
-  color: var(--nb-c-text);
-}
-.net-label {
-  font-size: 0.66rem;
-  color: var(--nb-c-text-subtle);
-  margin-top: 2px;
-}
-.net-charts {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin-top: 0.5rem;
+  overflow-wrap: anywhere;
 }
 </style>

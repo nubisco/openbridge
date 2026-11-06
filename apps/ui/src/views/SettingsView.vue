@@ -1,39 +1,39 @@
 <template>
-  <div class="settings-view">
-    <!-- Bridge Settings -->
-    <NbPanel class="settings-card">
-      <div class="card-header">
-        <div class="card-icon">
-          <NbIcon name="bridge" :size="18" />
-        </div>
-        <div>
-          <h2 class="card-title">Bridge</h2>
-          <p class="card-subtitle">HomeKit bridge identity and network settings</p>
-        </div>
-      </div>
+  <!-- The settings pattern: one column, sections on the page ground under a
+       heading and a lede, 32px apart. No page title, the trail already says
+       Settings. The two tables in AI agents paint their own surface, so
+       nothing here is boxed. -->
+  <div class="settings">
+    <!-- Bridge: a form with an explicit Save at its foot. -->
+    <section class="settings__section" aria-labelledby="settings-bridge-title">
+      <header>
+        <h2 id="settings-bridge-title" class="type-heading-02 settings__title">Bridge</h2>
+        <p class="type-body-sm settings__lede">
+          HomeKit bridge identity and network settings. They take effect when OpenBridge restarts.
+        </p>
+      </header>
 
       <!-- NbField supplies the label column every row lines up on, so the
            fields need no width or alignment CSS of their own. -->
-      <NbGrid dir="col" gap="sm" class="field-grid">
+      <NbGrid dir="col" gap="md" class="settings__form settings__fields">
         <NbField label="Bridge name" hint="Displayed in the Home app">
-          <NbTextInput v-model="bridge.name" size="sm" placeholder="OpenBridge" />
+          <NbTextInput v-model="bridge.name" placeholder="OpenBridge" />
         </NbField>
 
         <NbField label="HTTP port" hint="OpenBridge web UI &amp; API" control="fit">
-          <NbNumberInput v-model="bridge.port" size="sm" :min="1024" :max="65535" />
+          <NbNumberInput v-model="bridge.port" :min="1024" :max="65535" />
         </NbField>
 
         <NbField label="HAP port" hint="HomeKit accessory protocol port" control="fit">
-          <NbNumberInput v-model="bridge.hapPort" size="sm" :min="1024" :max="65535" />
+          <NbNumberInput v-model="bridge.hapPort" :min="1024" :max="65535" />
         </NbField>
 
         <NbField label="PIN code" hint="Format: XXX-XX-XXX, used to pair with HomeKit">
-          <div class="pin-row">
-            <NbTextInput v-model="bridge.pincode" size="sm" placeholder="031-45-154" />
+          <div class="settings__pin">
+            <NbTextInput v-model="bridge.pincode" class="tabular" placeholder="031-45-154" />
             <NbButton
               v-nb-tooltip="{ body: 'Generate random PIN' }"
               variant="ghost"
-              size="sm"
               icon="arrows-clockwise"
               aria-label="Generate random PIN"
               @click="generatePin"
@@ -45,62 +45,52 @@
           label="Bridge MAC"
           hint="Leave empty to auto-generate. Change this only if pairing with HomeKit fails."
         >
-          <NbTextInput v-model="bridge.username" size="sm" class="mono" placeholder="AA:BB:CC:DD:EE:FF" />
+          <NbTextInput v-model="bridge.username" class="settings__mono" placeholder="AA:BB:CC:DD:EE:FF" />
         </NbField>
 
         <NbField label="Log level" control="fit">
-          <NbSelect v-model="bridge.logLevel" size="sm" :options="logLevelOptions" />
+          <NbSelect v-model="bridge.logLevel" :options="logLevelOptions" />
         </NbField>
       </NbGrid>
 
-      <NbMessage v-if="error" variant="error">{{ error }}</NbMessage>
+      <NbMessage v-if="error" variant="error" class="settings__form">{{ error }}</NbMessage>
 
-      <div class="card-actions">
-        <NbButton variant="primary" size="sm" :loading="saving" :icon="saved ? 'check' : 'floppy-disk'" @click="save">
-          {{ saved ? 'Saved!' : 'Save' }}
+      <!-- Save is the section's one filled button. Restarting is a separate
+           step, so it stays quiet beside it. -->
+      <div class="settings__actions">
+        <NbButton variant="primary" :loading="saving" :icon="saved ? 'check' : undefined" @click="save">
+          {{ saved ? 'Saved' : 'Save' }}
         </NbButton>
-        <NbButton variant="secondary" size="sm" outlined :loading="restarting" icon="arrows-clockwise" @click="restart">
+        <NbButton variant="tertiary" :loading="restarting" icon="arrows-clockwise" @click="saveAndRestart">
           {{ restarting ? 'Restarting…' : 'Save & Restart OpenBridge' }}
         </NbButton>
-        <span v-if="saved && !restarting" class="action-hint">
-          <NbIcon name="info" :size="12" />
+        <span v-if="saved && !restarting" class="type-body-sm settings__hint">
+          <NbIcon name="info" size="sm" />
           Restart the daemon for changes to take effect
         </span>
       </div>
-    </NbPanel>
+    </section>
 
-    <!-- Updates -->
-    <NbPanel class="settings-card">
-      <div class="card-header">
-        <div class="card-icon">
-          <NbIcon name="arrow-circle-up" :size="18" />
-        </div>
-        <div>
-          <h2 class="card-title">Updates</h2>
-          <p class="card-subtitle">OpenBridge daemon and UI</p>
-        </div>
-      </div>
+    <!-- Updates: a status and the one action it allows. -->
+    <section class="settings__section" aria-labelledby="settings-updates-title">
+      <header>
+        <h2 id="settings-updates-title" class="type-heading-02 settings__title">Updates</h2>
+        <p class="type-body-sm settings__lede">OpenBridge daemon and UI.</p>
+      </header>
 
-      <div class="update-row">
-        <div class="update-versions">
-          <NbBadge variant="grey">Current: v{{ updateStatus?.current ?? '…' }}</NbBadge>
+      <div class="settings__update">
+        <div class="settings__versions">
+          <NbBadge variant="neutral">Current: v{{ updateStatus?.current ?? '…' }}</NbBadge>
           <template v-if="updateStatus && !checkingUpdate">
-            <NbBadge v-if="updateStatus.updateAvailable" variant="blue">Available: v{{ updateStatus.latest }}</NbBadge>
-            <NbBadge v-else-if="updateStatus.latest === null" variant="orange">Unable to check</NbBadge>
-            <NbBadge v-else variant="green">Up to date</NbBadge>
+            <NbBadge v-if="updateStatus.updateAvailable" variant="info">Available: v{{ updateStatus.latest }}</NbBadge>
+            <NbBadge v-else-if="updateStatus.latest === null" variant="warning">Unable to check</NbBadge>
+            <NbBadge v-else variant="success">Up to date</NbBadge>
           </template>
-          <NbBadge v-if="checkingUpdate" variant="grey">Checking…</NbBadge>
+          <NbBadge v-if="checkingUpdate" variant="neutral">Checking…</NbBadge>
         </div>
 
-        <div class="update-actions">
-          <NbButton
-            variant="secondary"
-            size="sm"
-            outlined
-            :loading="checkingUpdate"
-            icon="arrows-clockwise"
-            @click="checkUpdate"
-          >
+        <div class="settings__actions">
+          <NbButton variant="tertiary" :loading="checkingUpdate" icon="arrows-clockwise" @click="checkUpdate">
             Check
           </NbButton>
           <!-- An npm, source or pinned install cannot update itself, and the
@@ -109,7 +99,6 @@
           <NbButton
             v-if="updateStatus?.updateAvailable && updateStatus.updateMethod === 'self'"
             variant="primary"
-            size="sm"
             :loading="applying"
             icon="arrow-circle-up"
             @click="applyUpdate"
@@ -119,10 +108,11 @@
         </div>
       </div>
 
-      <!-- Only the download stage reports real progress; the later stages are
+      <!-- Only the download stage reports real progress. The later stages are
            indeterminate, which NbProgressBar shows by omitting `value`. -->
       <NbProgressBar
         v-if="applying && updateStage"
+        class="settings__form"
         :label="updateMessage"
         :value="updateStage === 'downloading' && updateProgressPct > 0 ? updateProgressPct : undefined"
         :max="100"
@@ -142,35 +132,31 @@
           Self-update is not available here ({{ updateStatus.updateBlockedBy }}). To update:
         </template>
         <template v-else>Self-update is not available for this install. To update:</template>
-        <code class="update-command">{{ updateStatus.updateCommand }}</code>
+        <code class="settings__command">{{ updateStatus.updateCommand }}</code>
       </NbMessage>
 
-      <div v-if="updateError" class="update-error-row">
+      <div v-if="updateError" class="settings__actions">
         <NbMessage variant="error">{{ updateError }}</NbMessage>
         <!-- Only once an update actually started. A request the daemon refused
              outright swapped no directories, so there is nothing to roll back
              to and offering it invites an unnecessary restart. -->
-        <NbButton v-if="updateStarted" variant="ghost" size="sm" @click="rollbackUpdate">Rollback</NbButton>
+        <NbButton v-if="updateStarted" variant="tertiary" @click="rollbackUpdate">Roll back</NbButton>
       </div>
-    </NbPanel>
+    </section>
 
     <AgentAccessPanel />
 
     <!-- Appearance. Theme is a personal setting and lives in the user menu,
          but with sign-in off (the self-hosted default) there is no user menu,
-         so this is the only place left to set it. -->
-    <NbPanel v-if="!hasUserMenu" class="settings-card">
-      <div class="card-header">
-        <div class="card-icon">
-          <NbIcon name="palette" :size="18" />
-        </div>
-        <div>
-          <h2 class="card-title">Appearance</h2>
-          <p class="card-subtitle">Theme for this browser</p>
-        </div>
-      </div>
+         so this is the only place left to set it. It applies at once, so the
+         section has no Save. -->
+    <section v-if="!hasUserMenu" class="settings__section" aria-labelledby="settings-appearance-title">
+      <header>
+        <h2 id="settings-appearance-title" class="type-heading-02 settings__title">Appearance</h2>
+        <p class="type-body-sm settings__lede">Theme for this browser. A change applies as soon as you make it.</p>
+      </header>
 
-      <NbGrid dir="col" gap="sm" class="field-grid">
+      <NbGrid dir="col" gap="md" class="settings__form settings__fields">
         <NbField label="Theme">
           <NbRadio
             name="settings-theme"
@@ -180,15 +166,14 @@
           />
         </NbField>
       </NbGrid>
-    </NbPanel>
+    </section>
 
-    <!-- HAP pairing info -->
-    <NbPanel class="settings-card info-card">
-      <h3 class="info-title">
-        <NbIcon name="info" :size="14" />
-        How to pair with HomeKit
-      </h3>
-      <ol class="info-list">
+    <!-- HAP pairing: guidance, not a setting, so it reads as prose. -->
+    <section class="settings__section" aria-labelledby="settings-pairing-title">
+      <header>
+        <h2 id="settings-pairing-title" class="type-heading-02 settings__title">Pair with HomeKit</h2>
+      </header>
+      <ol class="type-body-md settings__form settings__steps">
         <li>
           Open the
           <strong>Home</strong>
@@ -207,7 +192,7 @@
         </li>
         <li>If you change the PIN or username, unpair first from the Home app, then re-pair</li>
       </ol>
-    </NbPanel>
+    </section>
   </div>
 </template>
 
@@ -417,6 +402,18 @@ async function save() {
   }
 }
 
+/**
+ * What the button says: save the form, then restart so the bridge picks it up.
+ * It used to restart only, and anything unsaved was lost. A failed save stops
+ * here and shows its error rather than restarting on the old settings.
+ */
+async function saveAndRestart() {
+  if (restarting.value || saving.value) return
+  await save()
+  if (error.value) return
+  await restart()
+}
+
 async function restart() {
   if (restarting.value) return
   restarting.value = true
@@ -451,144 +448,103 @@ function generatePin() {
 </script>
 
 <style lang="scss" scoped>
-// A responsive grid rather than a capped single column: the cap made this the
-// only page that ignored the available width, but simply removing it would
-// stretch the form fields across the whole viewport. Columns keep the fields
-// at a readable measure while the page fills the space like every other view.
-.settings-view {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(420px, 100%), 1fr));
-  align-items: start;
-  gap: 1.25rem;
-}
-
-// NbPanel supplies the surface, border and radius; only the inner rhythm and
-// the header treatment live here.
-.settings-card {
+// The settings pattern: one column capped near 56rem so the AI agents tables
+// keep their columns, forms at 40rem so a field never stretches across a
+// desktop, sections 32px apart on the page ground.
+.settings {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-}
+  gap: var(--nb-spacing-32);
+  max-inline-size: 56rem;
+  padding-block-end: var(--nb-spacing-32);
 
-.card-header {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
+  &__section {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--nb-spacing-16);
+  }
 
-.card-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 9px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: color-mix(in srgb, var(--nb-c-primary) 12%, var(--nb-c-surface));
-  color: var(--nb-c-primary);
-  flex-shrink: 0;
-}
+  &__title {
+    margin: 0;
+  }
 
-.card-title {
-  margin: 0;
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--nb-c-text);
-}
+  &__lede {
+    max-inline-size: var(--nb-measure);
+    margin: var(--nb-spacing-4) 0 0;
+    color: var(--nb-c-text-muted);
+  }
 
-.card-subtitle {
-  margin: 0;
-  font-size: 0.78rem;
-  color: var(--nb-c-text-muted);
-}
+  &__form {
+    max-inline-size: 40rem;
+  }
 
-// The label column NbField aligns every row on.
-.field-grid {
-  --nb-field-label-width: 8rem;
-}
+  // The label column NbField aligns every row on.
+  &__fields {
+    --nb-field-label-width: 8rem;
+  }
 
-.mono :deep(input) {
-  font-family: monospace;
-}
+  &__mono :deep(input) {
+    font-family: var(--nb-font-family-mono);
+  }
 
-.pin-row {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
+  &__pin {
+    display: flex;
+    align-items: center;
+    gap: var(--nb-spacing-8);
+  }
 
-.card-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-}
+  &__actions {
+    display: flex;
+    align-items: center;
+    gap: var(--nb-spacing-8);
+    flex-wrap: wrap;
+  }
 
-.action-hint {
-  display: flex;
-  align-items: center;
-  gap: 0.3rem;
-  font-size: 0.74rem;
-  color: var(--nb-c-text-subtle);
-}
+  &__hint {
+    display: flex;
+    align-items: center;
+    gap: var(--nb-spacing-4);
+    color: var(--nb-c-text-muted);
+  }
 
-.update-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  flex-wrap: wrap;
-}
+  // The status and its action read as one line, so Check sits beside the
+  // badges rather than at the far edge of the measure.
+  &__update {
+    display: flex;
+    align-items: center;
+    gap: var(--nb-spacing-16);
+    flex-wrap: wrap;
+  }
 
-.update-versions {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  flex-wrap: wrap;
-}
+  &__versions {
+    display: flex;
+    align-items: center;
+    gap: var(--nb-spacing-8);
+    flex-wrap: wrap;
+  }
 
-.update-actions {
-  display: flex;
-  gap: 0.5rem;
-}
+  /* Spaced with a margin rather than a space in the markup. Vue drops
+     whitespace-only text between elements when it spans a newline, so the
+     command ran straight into the colon ("To update:npm install"), and writing
+     the space into the template does not survive Prettier reformatting the tag. */
+  &__command {
+    margin-inline-start: var(--nb-spacing-4);
+  }
 
-.update-error-row {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
+  &__steps {
+    margin: 0;
+    padding-inline-start: var(--nb-spacing-24);
+    display: flex;
+    flex-direction: column;
+    gap: var(--nb-spacing-8);
+    color: var(--nb-c-text-muted);
 
-/* Spaced with a margin rather than a space in the markup. Vue drops
-   whitespace-only text between elements when it spans a newline, so the command
-   ran straight into the colon ("To update:npm install"), and writing the space
-   into the template does not survive Prettier reformatting the tag. */
-.update-command {
-  margin-left: 0.35em;
-}
-
-.info-title {
-  margin: 0;
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--nb-c-text-subtle);
-}
-
-.info-list {
-  margin: 0;
-  padding-left: 1.1rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  font-size: 0.82rem;
-  line-height: 1.5;
-  color: var(--nb-c-text-muted);
-
-  strong {
-    color: var(--nb-c-text);
+    // Semibold, the ladder's emphasis at 14px, not the browser's bold.
+    strong {
+      color: var(--nb-c-text);
+      font-weight: var(--nb-type-heading-compact-weight);
+    }
   }
 }
 </style>

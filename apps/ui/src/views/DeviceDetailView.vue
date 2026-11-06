@@ -1,43 +1,45 @@
 <template>
   <div class="device-detail">
-    <div class="detail-header">
-      <NbBreadcrumbs :items="crumbs" />
-      <span v-if="device?.model" class="detail-model">{{ device.model }}</span>
-    </div>
+    <!-- A record: the device's name, the one state it is in, and the facts
+         that define it stay in reach while the history scrolls. The trail in
+         the topbar ends in the same name, which is fine here: the name is the
+         record, not a repeat of a section label. -->
+    <NbPageHeader v-if="device" :title="device.name" sticky>
+      <template #status>
+        <NbBadge :variant="healthVariant">{{ healthLabel }}</NbBadge>
+      </template>
+      <template v-if="facts.length > 0" #facts>
+        <NbDefinitionList layout="auto" compact term-width="8rem" :items="facts" />
+      </template>
+    </NbPageHeader>
 
-    <div v-if="loadError" class="detail-message">
-      <!-- was "danger", which NbMessage never accepted (error|warning|success|helper). -->
-      <NbMessage variant="error">{{ loadError }}</NbMessage>
-    </div>
+    <!-- was "danger", which NbMessage never accepted (error|warning|success|helper). -->
+    <NbMessage v-if="loadError" variant="error">{{ loadError }}</NbMessage>
 
     <template v-else-if="device">
-      <!-- Live summary: the numbers as they are right now -->
-      <div class="summary-row">
-        <div
-          v-for="metric in metrics"
-          :key="metric.key"
-          class="summary-tile"
-          :class="{ active: metric.key === selectedMetric }"
-          @click="selectMetric(metric.key)"
-        >
-          <span class="tile-label">{{ metric.label }}</span>
-          <span class="tile-value">
-            {{ formatValue(liveValue(metric), metric) }}
-            <span class="tile-unit">{{ metric.unit }}</span>
-          </span>
-        </div>
-      </div>
-
-      <div v-if="metrics.length === 0" class="detail-message">
-        <!-- was "info", likewise never a valid NbMessage variant. -->
-        <NbMessage variant="helper">
-          This device does not declare any metrics, so there is nothing to chart. Plugins opt in by describing their
-          series in the device descriptor.
-        </NbMessage>
-      </div>
+      <!-- was "info", likewise never a valid NbMessage variant. -->
+      <NbMessage v-if="metrics.length === 0" variant="helper">
+        This device does not declare any metrics, so there is nothing to chart. Plugins opt in by describing their
+        series in the device descriptor.
+      </NbMessage>
 
       <template v-else>
-        <div class="chart-toolbar">
+        <!-- Live summary: the numbers as they are right now. Each tile picks
+             the series the chart below plots. -->
+        <div class="summary-row">
+          <NbStat
+            v-for="metric in metrics"
+            :key="metric.key"
+            size="sm"
+            clickable
+            :selected="metric.key === selectedMetric"
+            :label="metric.label"
+            :value="statValue(metric)"
+            @select="selectMetric(metric.key)"
+          />
+        </div>
+
+        <NbPanel :title="currentMetric?.label" :description="resolutionLabel || undefined" class="chart-panel">
           <NbTabs
             class="range-tabs"
             :items="rangeTabs"
@@ -47,11 +49,7 @@
             aria-label="History range"
             @update:model-value="selectRange($event as RangeKey)"
           />
-          <span v-if="resolutionLabel" class="resolution-note">{{ resolutionLabel }}</span>
-        </div>
-
-        <div class="chart-panel">
-          <!-- curve was "monotone"; TLineCurve is linear|smooth|step. -->
+          <!-- curve was "monotone", which TLineCurve (linear|smooth|step) never had. -->
           <NbLineChart
             v-if="chartSeries.length > 0 && chartSeries[0].data.length > 0"
             :series="chartSeries"
@@ -62,29 +60,31 @@
             :points="false"
             curve="smooth"
           />
-          <div v-else-if="loading" class="chart-empty">Loading…</div>
-          <div v-else class="chart-empty">
+          <div v-else-if="loading" class="chart-empty type-body-compact">Loading…</div>
+          <div v-else class="chart-empty type-body-compact">
             No data recorded yet for this range. History starts accumulating once the device reports.
           </div>
-        </div>
+        </NbPanel>
       </template>
     </template>
 
-    <div v-else class="detail-message">Loading…</div>
+    <div v-else class="detail-loading type-body-compact">Loading…</div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, watchEffect, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute } from 'vue-router'
-import { usePhoneLayout, type IBreadcrumbItem, type ITabItem } from '@nubisco/ui'
+import { usePhoneLayout, type IBreadcrumbItem, type IDefinitionListItem, type ITabItem } from '@nubisco/ui'
 import { api, type DeviceDescriptor, type MetricDescriptor } from '@/api'
+import { useLayoutStore } from '@/stores/layout'
 
 type NativeDevice = DeviceDescriptor & { telemetry: Record<string, unknown> }
 
 const route = useRoute()
 const { phone } = usePhoneLayout()
 
+const layout = useLayoutStore()
 const deviceId = computed(() => String(route.params.id ?? ''))
 const device = ref<NativeDevice | null>(null)
 const metrics = ref<MetricDescriptor[]>([])
@@ -117,6 +117,8 @@ const crumbs = computed<IBreadcrumbItem[]>(() => [
   { label: 'Devices', to: { name: 'devices' } },
   { label: device.value?.name ?? deviceId.value },
 ])
+// It is the frame's one trail, in the topbar, not a second one in the page.
+watchEffect(() => layout.setPage(device.value?.name ?? deviceId.value, { crumbs: crumbs.value }))
 
 const currentMetric = computed(() => metrics.value.find((m) => m.key === selectedMetric.value) ?? null)
 
@@ -176,6 +178,44 @@ function formatValue(value: number | null, metric: MetricDescriptor): string {
   if (value === null) return '—'
   return value.toFixed(metric.precision ?? 2)
 }
+
+/** The tile shows the figure with its unit, formatted as the reader sees it. */
+function statValue(metric: MetricDescriptor): string {
+  const value = formatValue(liveValue(metric), metric)
+  return metric.unit ? `${value} ${metric.unit}` : value
+}
+
+/**
+ * The record's one state is whether the device is answering. `unknown` is not
+ * called broken: every device is unknown for the first seconds after a
+ * restart, so it reads as "No data yet", the same words the device list uses.
+ */
+const healthLabel = computed(() => {
+  const status = device.value?.health?.status
+  if (status === 'ok') return 'Responding'
+  if (status === 'stale') return 'Not responding'
+  return 'No data yet'
+})
+
+const healthVariant = computed<'success' | 'warning' | 'neutral'>(() => {
+  const status = device.value?.health?.status
+  if (status === 'ok') return 'success'
+  if (status === 'stale') return 'warning'
+  return 'neutral'
+})
+
+/** What defines the device, as facts under its name. Absent facts are left out. */
+const facts = computed<IDefinitionListItem[]>(() => {
+  const dev = device.value
+  if (!dev) return []
+  const items: IDefinitionListItem[] = []
+  if (dev.manufacturer) items.push({ term: 'Manufacturer', value: dev.manufacturer })
+  if (dev.model) items.push({ term: 'Model', value: dev.model })
+  items.push({ term: 'Plugin', value: dev.pluginId })
+  const lastSeen = dev.health?.lastSeen
+  if (lastSeen) items.push({ term: 'Last seen', value: new Date(lastSeen).toLocaleString() })
+  return items
+})
 
 function selectMetric(key: string) {
   if (selectedMetric.value === key) return
@@ -252,11 +292,12 @@ watch(deviceId, async () => {
 </script>
 
 <style lang="scss" scoped>
+// The header, the summary and the chart are regions of one record, 24 apart.
 .device-detail {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
-  padding: 1rem 1.25rem;
+  gap: var(--nb-spacing-24);
+  padding: 0 var(--nb-spacing-24) var(--nb-spacing-24);
 
   // The shell already keeps a phone's gutter. A second one on top cost the
   // tiles and the chart 40px of a 360px screen.
@@ -265,119 +306,43 @@ watch(deviceId, async () => {
   }
 }
 
-.detail-header {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-}
-
-.detail-model {
+.detail-loading {
   color: var(--nb-c-text-muted);
-  font-size: 0.85rem;
-}
-
-.detail-message {
-  padding: 1rem 0;
-  color: var(--nb-color-text-muted, var(--nb-c-text-muted));
 }
 
 .summary-row {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 0.75rem;
+  gap: var(--nb-spacing-16);
 
   // One tile per row filled a phone's first screen with four numbers. A
   // narrower minimum fits two side by side at 360px, and more when sideways.
   @include variables.phone {
     grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: var(--nb-spacing-8);
   }
-}
-
-.summary-tile {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  padding: 0.75rem 0.9rem;
-  border: 1px solid var(--nb-color-border, var(--nb-c-border));
-  border-radius: 10px;
-  cursor: pointer;
-  transition:
-    border-color 120ms ease,
-    background-color 120ms ease;
-}
-
-.summary-tile:hover {
-  border-color: var(--nb-color-primary, var(--nb-c-primary));
-}
-
-.summary-tile.active {
-  border-color: var(--nb-color-primary, var(--nb-c-primary));
-  background: color-mix(in srgb, var(--nb-color-primary, var(--nb-c-primary)) 6%, transparent);
-}
-
-.tile-label {
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--nb-color-text-muted, var(--nb-c-text-muted));
-}
-
-.tile-value {
-  font-size: 1.35rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-.tile-unit {
-  font-size: 0.8rem;
-  font-weight: 400;
-  color: var(--nb-color-text-muted, var(--nb-c-text-muted));
-  margin-left: 0.15rem;
-}
-
-.chart-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-
-// NbTabs fills its row by default, which pushed the resolution note onto a
-// line of its own. Sized to its tabs, the note stays beside them.
-.range-tabs {
-  width: auto;
-  min-width: 0;
-  flex: 0 1 auto;
-}
-
-.resolution-note {
-  font-size: 0.75rem;
-  color: var(--nb-color-text-muted, var(--nb-c-text-muted));
 }
 
 .chart-panel {
-  border: 1px solid var(--nb-color-border, var(--nb-c-border));
-  border-radius: 12px;
-  padding: 0.75rem;
-  min-height: 340px;
+  min-width: 0;
   overflow-x: auto;
+}
 
-  // A 320px chart under the tiles leaves a phone held sideways no room to see it.
-  @include variables.phone {
-    min-height: 240px;
-  }
+// NbTabs fills its row by default. Sized to its tabs, the range reads as a
+// control of the chart rather than a band across the panel.
+.range-tabs {
+  width: auto;
+  max-width: 100%;
+  margin-block-end: var(--nb-spacing-16);
 }
 
 .chart-empty {
   display: grid;
   place-items: center;
   height: 320px;
-  color: var(--nb-color-text-muted, var(--nb-c-text-muted));
-  font-size: 0.9rem;
+  padding: 0 var(--nb-spacing-32);
+  color: var(--nb-c-text-muted);
   text-align: center;
-  padding: 0 2rem;
 
   @include variables.phone {
     height: 220px;

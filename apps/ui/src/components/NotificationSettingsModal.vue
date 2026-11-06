@@ -1,18 +1,18 @@
 <template>
   <NbModal close-appearance="button" :open="open" title="Notifications" size="sm" @close="emit('close')">
     <div class="notify">
-      <p class="notify__lede">
+      <p class="type-body-md notify__lede">
         The bell tells you when a device has not answered for ten minutes, when it comes back, when a plugin fails, and
         when an update is out. Nothing is sent by email.
       </p>
 
-      <h3 class="notify__heading">This device</h3>
-      <p class="notify__lede">
+      <h3 class="type-heading-compact notify__heading">This device</h3>
+      <p class="type-body-md notify__lede">
         A desktop notification arrives the moment something happens, while OpenBridge is open in a tab. It is per
         browser, so allowing it here says nothing about your phone.
       </p>
 
-      <NbButton v-if="permission === 'default'" size="sm" variant="secondary" icon="bell" @click="askForDesktop">
+      <NbButton v-if="permission === 'default'" variant="tertiary" icon="bell" @click="askForDesktop">
         Allow notifications on this device
       </NbButton>
       <!-- Callout rather than inline: these are standing facts about the
@@ -63,17 +63,17 @@ async function askForDesktop(): Promise<void> {
 </script>
 
 <style lang="scss" scoped>
+// md density, as every settings form: 16px between the parts, and a little
+// more above the sub-heading so it starts a group of its own.
 .notify {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 0.75rem;
+  gap: var(--nb-spacing-16);
 }
 
 .notify__heading {
-  margin: 0.5rem 0 0;
-  font-size: 0.875rem;
-  font-weight: 600;
+  margin: var(--nb-spacing-8) 0 0;
 }
 
 .notify__lede {
