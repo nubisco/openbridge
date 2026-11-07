@@ -1,3 +1,10 @@
+## [1.8.2](https://github.com/nubisco/openbridge/compare/v1.8.1...v1.8.2) (2026-11-07)
+
+
+### Bug Fixes
+
+* **terminal:** xterm's stylesheet applies again, so no stray row above the prompt ([#10](https://github.com/nubisco/openbridge/issues/10)) ([c8bb692](https://github.com/nubisco/openbridge/commit/c8bb6929e4193c687fd63deb5aa52ed2a3de589b))
+
 ## [1.8.1](https://github.com/nubisco/openbridge/compare/v1.8.0...v1.8.1) (2026-11-06)
 
 
