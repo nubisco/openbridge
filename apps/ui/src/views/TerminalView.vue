@@ -16,6 +16,11 @@ import { onMounted, onBeforeUnmount, ref, shallowRef } from 'vue'
 import { useLayoutStore } from '@/stores/layout'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+// xterm's own stylesheet, imported globally. It used to be an @use inside the
+// scoped <style>, which scoped every xterm rule to this view's data-v attribute.
+// xterm's elements never carry it, so its hidden helpers (the glyph-measuring
+// string) rendered as a row of repeated characters above the prompt.
+import '@xterm/xterm/css/xterm.css'
 // Controls this view puts in the shell topbar.
 const topbarRight = useShellSlot('topbar-right')
 
@@ -129,8 +134,6 @@ onBeforeUnmount(() => {
 </script>
 
 <style lang="scss" scoped>
-@use '@xterm/xterm/css/xterm.css';
-
 .terminal-view {
   flex: 1;
   display: flex;
