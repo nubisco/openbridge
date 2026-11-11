@@ -9,8 +9,8 @@
     "preview": "nubisco-docs preview docs"
   },
   "devDependencies": {
-    "@nubisco/docs-sdk": "^0.1.3",
-    "@nubisco/ui": "^5.47.1",
+    "@nubisco/docs-sdk": "^0.5.1",
+    "@nubisco/ui": "^5.49.0",
     "vue": "^3.5.0"
   }
 }
