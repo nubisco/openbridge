@@ -1,7 +1,8 @@
 <template>
   <div class="house-editor" :class="{ 'is-phone': phone }">
     <div class="house-editor__main">
-      <div class="house-editor__toolbar">
+      <!-- Rounded, here only: the controls floating over the blueprint. -->
+      <div class="house-editor__toolbar" data-nb-appearance="rounded">
         <NbTabs
           :model-value="floorId"
           :items="floorTabs"
@@ -10,7 +11,7 @@
           aria-label="Floor to edit"
           @update:model-value="selectFloor"
         />
-        <NbButton size="sm" variant="ghost" icon="plus" @click="newFloor">Floor</NbButton>
+        <NbButton size="sm" variant="secondary" icon="plus" @click="newFloor">Floor</NbButton>
         <NbTabs
           :model-value="tool"
           :items="TOOLS"
@@ -19,6 +20,15 @@
           aria-label="Drawing tool"
           @update:model-value="setTool"
         />
+        <NbButton
+          v-if="!phone && !(inspector.visible && inspector.mode === 'house-editor')"
+          size="sm"
+          variant="secondary"
+          icon="sidebar-simple"
+          @click="inspector.openHouseEditor()"
+        >
+          Details
+        </NbButton>
       </div>
 
       <div class="house-editor__canvas hv-stage-bg">
@@ -36,241 +46,249 @@
           v-html="markup"
         />
       </div>
-      <NbMessage variant="helper" class="house-editor__help">{{ help }}</NbMessage>
+      <div class="house-editor__help" data-nb-appearance="rounded">
+        <NbMessage variant="helper">{{ help }}</NbMessage>
+      </div>
     </div>
 
-    <aside class="house-editor__side">
-      <!-- What is selected -->
-      <NbPanel v-if="room" title="Room" :flat="true">
-        <NbField v-slot="{ id }" label="Name" orientation="stack">
-          <NbTextInput :id="id" v-model="room.name" size="sm" :maxlength="80" />
-        </NbField>
-        <NbField v-slot="{ id }" label="Type" orientation="stack">
-          <NbSelect :id="id" v-model="room.kind" :options="ROOM_KINDS" size="sm" />
-        </NbField>
-        <p class="house-editor__muted">
-          {{
-            room.parts?.length
-              ? `${metres(roomArea(room) / CELLS_PER_M)} m², in ${room.parts.length + 1} parts`
-              : `${metres(room.w)} × ${metres(room.h)} m`
-          }}
-        </p>
-        <!-- A wing is another rectangle joined to the room along an edge: an L
+    <!-- What is selected, and the devices not on the plan yet. On a wide
+         screen they live in the shell's inspector beside the blueprint. On a
+         phone the inspector is a sheet that would cover the blueprint, so
+         they stay under it. -->
+    <Teleport defer to="#house-editor-inspector" :disabled="phone">
+      <aside class="house-editor__side">
+        <!-- What is selected -->
+        <NbPanel v-if="room" title="Room" :flat="true">
+          <NbField v-slot="{ id }" label="Name" orientation="stack">
+            <NbTextInput :id="id" v-model="room.name" size="sm" :maxlength="80" />
+          </NbField>
+          <NbField v-slot="{ id }" label="Type" orientation="stack">
+            <NbSelect :id="id" v-model="room.kind" :options="ROOM_KINDS" size="sm" />
+          </NbField>
+          <p class="house-editor__muted">
+            {{
+              room.parts?.length
+                ? `${metres(roomArea(room) / CELLS_PER_M)} m², in ${room.parts.length + 1} parts`
+                : `${metres(room.w)} × ${metres(room.h)} m`
+            }}
+          </p>
+          <!-- A wing is another rectangle joined to the room along an edge: an L
              is one wing, a U two. -->
-        <div v-for="(part, i) in room.parts ?? []" :key="i" class="house-editor__row house-editor__row--tight">
-          <span>Wing {{ i + 1 }} · {{ metres(part.w) }} × {{ metres(part.h) }} m</span>
-          <NbButton
-            size="sm"
-            variant="ghost"
-            icon="trash"
-            :aria-label="`Remove wing ${i + 1}`"
-            @click="removeWing(i)"
-          />
-        </div>
-        <div class="house-editor__row">
-          <NbButton
-            size="sm"
-            :variant="wingFor === room.id ? 'primary' : 'secondary'"
-            :aria-pressed="wingFor === room.id"
-            @click="toggleWing"
-          >
-            {{ wingFor === room.id ? 'Drawing a wing' : 'Add a wing' }}
-          </NbButton>
-          <NbButton size="sm" variant="danger" icon="trash" @click="deleteRoom">Delete room</NbButton>
-        </div>
-      </NbPanel>
-
-      <NbPanel v-else-if="opening" :title="OPENING_TITLE[opening.type]" :flat="true">
-        <NbField v-slot="{ id }" label="Type" orientation="stack">
-          <NbSelect :id="id" v-model="opening.type" :options="OPENING_KINDS" size="sm" />
-        </NbField>
-        <NbField v-slot="{ id }" label="Width (m)" orientation="stack">
-          <NbNumberInput
-            :id="id"
-            :model-value="opening.len / CELLS_PER_M"
-            :min="0.5"
-            :max="20"
-            :step="0.25"
-            size="sm"
-            @update:model-value="setOpeningLength"
-          />
-        </NbField>
-        <template v-if="opening.type === 'door'">
-          <p class="house-editor__muted">{{ doorText }}</p>
-          <div class="house-editor__row house-editor__row--tight">
-            <NbButton size="sm" variant="secondary" icon="arrows-left-right" @click="flipHinge">Flip hinge</NbButton>
-            <NbButton size="sm" variant="secondary" icon="arrows-down-up" @click="flipSide">Open other way</NbButton>
+          <div v-for="(part, i) in room.parts ?? []" :key="i" class="house-editor__row house-editor__row--tight">
+            <span>Wing {{ i + 1 }} · {{ metres(part.w) }} × {{ metres(part.h) }} m</span>
+            <NbButton
+              size="sm"
+              variant="ghost"
+              icon="trash"
+              :aria-label="`Remove wing ${i + 1}`"
+              @click="removeWing(i)"
+            />
           </div>
-        </template>
-        <p v-if="opening.type === 'open'" class="house-editor__muted">
-          No wall is drawn here, so the two rooms run into each other. Drag an end to leave part of the wall standing.
-        </p>
-        <p class="house-editor__muted">Drag it along the wall to move it, or drag an end to resize it.</p>
-        <div class="house-editor__row">
-          <span />
-          <NbButton size="sm" variant="danger" icon="trash" @click="deleteOpening">Remove</NbButton>
-        </div>
-      </NbPanel>
+          <div class="house-editor__row">
+            <NbButton
+              size="sm"
+              :variant="wingFor === room.id ? 'primary' : 'secondary'"
+              :aria-pressed="wingFor === room.id"
+              @click="toggleWing"
+            >
+              {{ wingFor === room.id ? 'Drawing a wing' : 'Add a wing' }}
+            </NbButton>
+            <NbButton size="sm" variant="danger" icon="trash" @click="deleteRoom">Delete room</NbButton>
+          </div>
+        </NbPanel>
 
-      <NbPanel v-else-if="placed" :title="placedDevice?.name ?? 'Device'" :flat="true">
-        <p v-if="!placedDevice" class="house-editor__muted">
-          This device is no longer on the bridge. Remove it from the plan, or leave it in case its plugin comes back.
-        </p>
-        <p v-else-if="placedDevice.kind === 'shutter'" class="house-editor__muted">
-          {{
-            placed.opening ? 'Attached to its window, and drawn on it.' : 'Drag it onto a window to attach it there.'
-          }}
-        </p>
-        <NbField v-if="placedDevice?.kind === 'light'" v-slot="{ id }" label="Mounted" orientation="stack">
-          <NbSelect
-            :id="id"
-            :model-value="lightMount(floor, placed)"
-            :options="LIGHT_MOUNTS"
-            size="sm"
-            @update:model-value="(v: unknown) => setMount(v as HouseLightMount)"
-          />
-        </NbField>
-        <template v-if="placedDevice && takesLook(placedDevice)">
-          <NbField
-            v-slot="{ id }"
-            label="Drawn as"
-            hint="The bridge sees a plug or a relay. Say what it powers, and the plan draws that."
-            orientation="stack"
-          >
-            <NbSelect
-              :id="id"
-              :model-value="placed.look ?? ''"
-              :options="lookOptions"
-              size="sm"
-              @update:model-value="(v: unknown) => setLook(v ? (v as HouseLook) : null)"
-            />
+        <NbPanel v-else-if="opening" :title="OPENING_TITLE[opening.type]" :flat="true">
+          <NbField v-slot="{ id }" label="Type" orientation="stack">
+            <NbSelect :id="id" v-model="opening.type" :options="OPENING_KINDS" size="sm" />
           </NbField>
-          <NbField
-            v-if="(placed.look ?? placedDevice.defaultLook) === 'tv'"
-            v-slot="{ id }"
-            label="Screen runs"
-            orientation="stack"
-          >
-            <NbSelect
-              :id="id"
-              :model-value="placed.axis ?? 'h'"
-              :options="GATE_AXES"
-              size="sm"
-              @update:model-value="(v: unknown) => setGateAxis(v === 'v' ? 'v' : 'h')"
-            />
-          </NbField>
-        </template>
-        <NbField
-          v-if="placedDevice?.kind === 'light' && !placedDevice.color"
-          v-slot="{ id }"
-          label="Glow colour"
-          hint="This light cannot report a colour, so the plan uses this one."
-          orientation="stack"
-        >
-          <NbSelect
-            :id="id"
-            :model-value="placed.color ?? WARM_LIGHT"
-            :options="GLOW_COLOURS"
-            size="sm"
-            @update:model-value="(v: unknown) => setColor(String(v))"
-          />
-        </NbField>
-        <template v-if="placedDevice?.kind === 'gate'">
-          <NbField v-slot="{ id }" label="Gate width (m)" orientation="stack">
+          <NbField v-slot="{ id }" label="Width (m)" orientation="stack">
             <NbNumberInput
               :id="id"
-              :model-value="(placed.length ?? 4) / CELLS_PER_M"
+              :model-value="opening.len / CELLS_PER_M"
               :min="0.5"
               :max="20"
-              :step="0.5"
+              :step="0.25"
               size="sm"
-              @update:model-value="setGateLength"
+              @update:model-value="setOpeningLength"
             />
           </NbField>
-          <NbField v-slot="{ id }" label="Runs" orientation="stack">
+          <template v-if="opening.type === 'door'">
+            <p class="house-editor__muted">{{ doorText }}</p>
+            <div class="house-editor__row house-editor__row--tight">
+              <NbButton size="sm" variant="secondary" icon="arrows-left-right" @click="flipHinge">Flip hinge</NbButton>
+              <NbButton size="sm" variant="secondary" icon="arrows-down-up" @click="flipSide">Open other way</NbButton>
+            </div>
+          </template>
+          <p v-if="opening.type === 'open'" class="house-editor__muted">
+            No wall is drawn here, so the two rooms run into each other. Drag an end to leave part of the wall standing.
+          </p>
+          <p class="house-editor__muted">Drag it along the wall to move it, or drag an end to resize it.</p>
+          <div class="house-editor__row">
+            <span />
+            <NbButton size="sm" variant="danger" icon="trash" @click="deleteOpening">Remove</NbButton>
+          </div>
+        </NbPanel>
+
+        <NbPanel v-else-if="placed" :title="placedDevice?.name ?? 'Device'" :flat="true">
+          <p v-if="!placedDevice" class="house-editor__muted">
+            This device is no longer on the bridge. Remove it from the plan, or leave it in case its plugin comes back.
+          </p>
+          <p v-else-if="placedDevice.kind === 'shutter'" class="house-editor__muted">
+            {{
+              placed.opening ? 'Attached to its window, and drawn on it.' : 'Drag it onto a window to attach it there.'
+            }}
+          </p>
+          <NbField v-if="placedDevice?.kind === 'light'" v-slot="{ id }" label="Mounted" orientation="stack">
             <NbSelect
               :id="id"
-              :model-value="placed.axis ?? 'h'"
-              :options="GATE_AXES"
+              :model-value="lightMount(floor, placed)"
+              :options="LIGHT_MOUNTS"
               size="sm"
-              @update:model-value="(v: unknown) => setGateAxis(v === 'v' ? 'v' : 'h')"
+              @update:model-value="(v: unknown) => setMount(v as HouseLightMount)"
             />
           </NbField>
-        </template>
-        <template v-if="placedDevice?.kind === 'heating'">
-          <NbField label="Rooms its water circuit serves" orientation="stack">
-            <div class="house-editor__checks">
-              <NbCheckbox
-                v-for="r in walledRooms"
-                :key="r.id"
-                :label="`${r.name} (${r.floor})`"
-                :model-value="placed.circuitRooms?.includes(r.id) ?? false"
-                @update:model-value="(v?: boolean) => toggleCircuitRoom(r.id, !!v)"
+          <template v-if="placedDevice && takesLook(placedDevice)">
+            <NbField
+              v-slot="{ id }"
+              label="Drawn as"
+              hint="The bridge sees a plug or a relay. Say what it powers, and the plan draws that."
+              orientation="stack"
+            >
+              <NbSelect
+                :id="id"
+                :model-value="placed.look ?? ''"
+                :options="lookOptions"
+                size="sm"
+                @update:model-value="(v: unknown) => setLook(v ? (v as HouseLook) : null)"
               />
-            </div>
-          </NbField>
-        </template>
-        <div class="house-editor__row">
-          <span />
-          <NbButton size="sm" variant="secondary" @click="removePlaced">Remove from plan</NbButton>
-        </div>
-      </NbPanel>
-
-      <NbPanel v-else :title="floor.name" :flat="true">
-        <NbField v-slot="{ id }" label="Floor name" orientation="stack">
-          <NbTextInput :id="id" v-model="floor.name" size="sm" :maxlength="80" />
-        </NbField>
-        <template v-if="floor.level === 0">
-          <NbField v-slot="{ id }" label="Plot width (m)" orientation="stack">
-            <NbNumberInput
-              :id="id"
-              :model-value="plan.plot.w / CELLS_PER_M"
-              :min="minPlot.w / CELLS_PER_M"
-              :max="200"
-              :step="0.5"
-              size="sm"
-              @update:model-value="(v: number | null) => setPlot('w', v)"
-            />
-          </NbField>
-          <NbField v-slot="{ id }" label="Plot depth (m)" orientation="stack">
-            <NbNumberInput
-              :id="id"
-              :model-value="plan.plot.h / CELLS_PER_M"
-              :min="minPlot.h / CELLS_PER_M"
-              :max="200"
-              :step="0.5"
-              size="sm"
-              @update:model-value="(v: number | null) => setPlot('h', v)"
-            />
-          </NbField>
-        </template>
-        <div class="house-editor__row">
-          <span class="house-editor__muted">{{ hasFloorBelow ? 'The dashed outline is the floor below.' : '' }}</span>
-          <NbButton v-if="plan.floors.length > 1" size="sm" variant="danger" icon="trash" @click="deleteFloor">
-            Delete floor
-          </NbButton>
-        </div>
-      </NbPanel>
-
-      <NbPanel title="Not on the plan yet" :flat="true">
-        <p v-if="!unplaced.length" class="house-editor__muted">Every device is on the plan.</p>
-        <p v-else class="house-editor__muted">Drag one onto the plan, or tap it and then tap where it is.</p>
-        <div class="house-editor__tray">
-          <NbButton
-            v-for="d in unplaced"
-            :key="d.ref"
-            size="sm"
-            :variant="armed === d.ref ? 'primary' : 'secondary'"
-            class="house-editor__chip"
-            :aria-pressed="armed === d.ref"
-            @pointerdown="(e: PointerEvent) => chipDown(e, d.ref)"
-            @click="chipClick(d.ref)"
+            </NbField>
+            <NbField
+              v-if="(placed.look ?? placedDevice.defaultLook) === 'tv'"
+              v-slot="{ id }"
+              label="Screen runs"
+              orientation="stack"
+            >
+              <NbSelect
+                :id="id"
+                :model-value="placed.axis ?? 'h'"
+                :options="GATE_AXES"
+                size="sm"
+                @update:model-value="(v: unknown) => setGateAxis(v === 'v' ? 'v' : 'h')"
+              />
+            </NbField>
+          </template>
+          <NbField
+            v-if="placedDevice?.kind === 'light' && !placedDevice.color"
+            v-slot="{ id }"
+            label="Glow colour"
+            hint="This light cannot report a colour, so the plan uses this one."
+            orientation="stack"
           >
-            {{ KIND_LETTER[d.kind] }} · {{ d.name }}
-          </NbButton>
-        </div>
-      </NbPanel>
-    </aside>
+            <NbSelect
+              :id="id"
+              :model-value="placed.color ?? WARM_LIGHT"
+              :options="GLOW_COLOURS"
+              size="sm"
+              @update:model-value="(v: unknown) => setColor(String(v))"
+            />
+          </NbField>
+          <template v-if="placedDevice?.kind === 'gate'">
+            <NbField v-slot="{ id }" label="Gate width (m)" orientation="stack">
+              <NbNumberInput
+                :id="id"
+                :model-value="(placed.length ?? 4) / CELLS_PER_M"
+                :min="0.5"
+                :max="20"
+                :step="0.5"
+                size="sm"
+                @update:model-value="setGateLength"
+              />
+            </NbField>
+            <NbField v-slot="{ id }" label="Runs" orientation="stack">
+              <NbSelect
+                :id="id"
+                :model-value="placed.axis ?? 'h'"
+                :options="GATE_AXES"
+                size="sm"
+                @update:model-value="(v: unknown) => setGateAxis(v === 'v' ? 'v' : 'h')"
+              />
+            </NbField>
+          </template>
+          <template v-if="placedDevice?.kind === 'heating'">
+            <NbField label="Rooms its water circuit serves" orientation="stack">
+              <div class="house-editor__checks">
+                <NbCheckbox
+                  v-for="r in walledRooms"
+                  :key="r.id"
+                  :label="`${r.name} (${r.floor})`"
+                  :model-value="placed.circuitRooms?.includes(r.id) ?? false"
+                  @update:model-value="(v?: boolean) => toggleCircuitRoom(r.id, !!v)"
+                />
+              </div>
+            </NbField>
+          </template>
+          <div class="house-editor__row">
+            <span />
+            <NbButton size="sm" variant="secondary" @click="removePlaced">Remove from plan</NbButton>
+          </div>
+        </NbPanel>
+
+        <NbPanel v-else :title="floor.name" :flat="true">
+          <NbField v-slot="{ id }" label="Floor name" orientation="stack">
+            <NbTextInput :id="id" v-model="floor.name" size="sm" :maxlength="80" />
+          </NbField>
+          <template v-if="floor.level === 0">
+            <NbField v-slot="{ id }" label="Plot width (m)" orientation="stack">
+              <NbNumberInput
+                :id="id"
+                :model-value="plan.plot.w / CELLS_PER_M"
+                :min="minPlot.w / CELLS_PER_M"
+                :max="200"
+                :step="0.5"
+                size="sm"
+                @update:model-value="(v: number | null) => setPlot('w', v)"
+              />
+            </NbField>
+            <NbField v-slot="{ id }" label="Plot depth (m)" orientation="stack">
+              <NbNumberInput
+                :id="id"
+                :model-value="plan.plot.h / CELLS_PER_M"
+                :min="minPlot.h / CELLS_PER_M"
+                :max="200"
+                :step="0.5"
+                size="sm"
+                @update:model-value="(v: number | null) => setPlot('h', v)"
+              />
+            </NbField>
+          </template>
+          <div class="house-editor__row">
+            <span class="house-editor__muted">{{ hasFloorBelow ? 'The dashed outline is the floor below.' : '' }}</span>
+            <NbButton v-if="plan.floors.length > 1" size="sm" variant="danger" icon="trash" @click="deleteFloor">
+              Delete floor
+            </NbButton>
+          </div>
+        </NbPanel>
+
+        <NbPanel title="Not on the plan yet" :flat="true">
+          <p v-if="!unplaced.length" class="house-editor__muted">Every device is on the plan.</p>
+          <p v-else class="house-editor__muted">Drag one onto the plan, or tap it and then tap where it is.</p>
+          <div class="house-editor__tray">
+            <NbButton
+              v-for="d in unplaced"
+              :key="d.ref"
+              size="sm"
+              :variant="armed === d.ref ? 'primary' : 'secondary'"
+              class="house-editor__chip"
+              :aria-pressed="armed === d.ref"
+              @pointerdown="(e: PointerEvent) => chipDown(e, d.ref)"
+              @click="chipClick(d.ref)"
+            >
+              {{ KIND_LETTER[d.kind] }} · {{ d.name }}
+            </NbButton>
+          </div>
+        </NbPanel>
+      </aside>
+    </Teleport>
 
     <div v-if="ghost" class="house-editor__ghost" :style="{ left: `${ghost.x}px`, top: `${ghost.y}px` }">
       {{ ghost.name }}
@@ -281,6 +299,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useConfirm, usePhoneLayout, useToast } from '@nubisco/ui'
+import { useInspectorStore } from '@/stores/inspector'
 import type { HouseFloor, HouseLightMount, HouseLook, HouseOpening, HousePlan, HouseRect, HouseRoom } from '@/api'
 import { CELLS_PER_M, S, clamp, flippedSide, lightMount, roomArea, roomRects } from '@/house/geometry'
 import {
@@ -316,6 +335,14 @@ const props = defineProps<{
 }>()
 
 const { phone } = usePhoneLayout()
+const inspector = useInspectorStore()
+// The panels open with the editor on a wide screen, and go with it.
+onMounted(() => {
+  if (!phone.value) inspector.openHouseEditor()
+})
+onBeforeUnmount(() => {
+  if (inspector.mode === 'house-editor') inspector.close()
+})
 const confirm = useConfirm()
 const toast = useToast()
 
@@ -869,22 +896,53 @@ watch(
 
 <style lang="scss" scoped>
 .house-editor {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: var(--nb-spacing-16);
-  align-items: start;
+  // The blueprint is the page: it fills the content area edge to edge, with
+  // the tools floating over it.
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 
+  // On a phone the panels sit under the blueprint, and the page scrolls.
   &.is-phone {
-    grid-template-columns: minmax(0, 1fr);
+    display: grid;
+    gap: var(--nb-spacing-16);
+  }
+}
+
+.house-editor__main {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+
+  .is-phone & {
+    display: block;
   }
 }
 
 .house-editor__toolbar {
+  position: absolute;
+  z-index: 1;
+  top: var(--nb-spacing-12);
+  left: var(--nb-spacing-12);
+  right: var(--nb-spacing-12);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--nb-spacing-8);
-  margin-bottom: var(--nb-spacing-8);
+  pointer-events: none;
+
+  > * {
+    pointer-events: auto;
+  }
+
+  .is-phone & {
+    position: static;
+    margin-bottom: var(--nb-spacing-8);
+  }
 
   // A tab bar fills its row by default. Here several sit side by side.
   > :deep(.nb-tabs) {
@@ -894,15 +952,29 @@ watch(
 }
 
 .house-editor__canvas {
-  border-radius: var(--nb-radius-md);
-  border: 1px solid var(--nb-c-border);
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
+
+  .is-phone & {
+    border-radius: var(--nb-radius-md);
+    border: 1px solid var(--nb-c-border);
+  }
 }
 
 .house-editor__svg {
   width: 100%;
-  max-height: 74vh;
+  height: 100%;
   display: block;
+  // Room for the toolbar above the plot and the hint below it. The blue is
+  // the canvas behind, so it still runs to every edge.
+  box-sizing: border-box;
+  padding: 64px 16px 60px;
+
+  .is-phone & {
+    height: auto;
+    max-height: 74vh;
+  }
   touch-action: none;
   cursor: crosshair;
   user-select: none;
@@ -914,7 +986,23 @@ watch(
 }
 
 .house-editor__help {
-  margin-top: var(--nb-spacing-8);
+  position: absolute;
+  left: var(--nb-spacing-12);
+  bottom: var(--nb-spacing-12);
+  max-width: min(640px, calc(100% - 24px));
+  // On a page surface, so it reads on the blueprint in light and dark.
+  padding: var(--nb-spacing-4) var(--nb-spacing-12);
+  border-radius: var(--nb-radius-control);
+  background: var(--nb-c-layer-1);
+  border: 1px solid var(--nb-c-border);
+
+  .is-phone & {
+    position: static;
+    margin-top: var(--nb-spacing-8);
+    padding: 0;
+    background: none;
+    border: 0;
+  }
 }
 
 .house-editor__side {

@@ -139,6 +139,9 @@
       <MarketplacePanel v-else-if="inspector.mode === 'marketplace'" />
       <DeviceInspector v-else-if="inspector.mode === 'device'" />
       <HouseInspector v-else-if="inspector.mode === 'house'" />
+      <!-- The House editor's panels are teleported here. The target is always
+           present, so the editor never teleports into nothing. -->
+      <div v-show="inspector.mode === 'house-editor'" id="house-editor-inspector" class="house-editor-inspector" />
     </template>
 
     <!-- ═══ Live logs ═══ -->
@@ -318,5 +321,9 @@ onUnmounted(() => daemon.disconnectLiveLogs())
   width: 100%;
   color: inherit;
   text-decoration: none;
+}
+
+.house-editor-inspector {
+  padding: var(--nb-spacing-8);
 }
 </style>

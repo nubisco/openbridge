@@ -14,7 +14,7 @@ In production, the daemon serves it as static files at [http://localhost:8582](h
 
 A drawing of your home, floor by floor, with every device where it really is and showing what it is doing now. Once a plan is saved, OpenBridge opens on this page instead of the Dashboard.
 
-**Drawing the plan.** Choose **Start drawing** (or **Edit plan** later). You draw rooms, not walls:
+**Drawing the plan.** Choose **Start drawing** (or **Edit plan** later). The blueprint fills the page, and what you select, with the devices not on the plan yet, opens in the inspector beside it (under the blueprint on a phone). You draw rooms, not walls:
 
 - **Room**, **Garden** and **Pool:** drag on the grid to draw a rectangle. It snaps to half a metre. A room gets walls on every edge, and an edge two rooms share is one wall. A garden (or terrace, or drive) and a pool have no walls. You can change a room's type later in its panel.
 - **Rooms within rooms:** draw a room inside another, such as an en-suite inside a bedroom or the house on its garden. A device belongs to the smallest room around it, and moving a room carries the rooms inside it along.
