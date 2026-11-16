@@ -6,6 +6,8 @@
         <span v-if="device.reachable === false">· Not responding</span>
       </p>
 
+      <CameraView v-if="video && deviceId" :key="deviceId" :device-id="deviceId" :name="device.name" :video="video" />
+
       <div v-if="caps.power" class="hdp__row">
         <span>{{ device.kind === 'heating' || device.kind === 'dehumidifier' ? 'Running' : 'Power' }}</span>
         <NbSwitch
@@ -78,6 +80,7 @@ import { computed, ref } from 'vue'
 import { useConfirm, useToast } from '@nubisco/ui'
 import { capabilities, setBrightness, setGate, setPosition, setPower, setTarget } from '@/house/control'
 import { KIND_LABEL, formatPower, type LiveDevice } from '@/house/live'
+import CameraView from '@/components/CameraView.vue'
 
 const props = defineProps<{
   device: LiveDevice | null
@@ -98,6 +101,7 @@ const caps = computed(() =>
 )
 
 const deviceId = computed(() => (props.device?.source.type === 'native' ? props.device.source.device.id : null))
+const video = computed(() => (props.device?.source.type === 'native' ? props.device.source.device.video : undefined))
 
 const readings = computed(() => {
   const d = props.device

@@ -742,3 +742,9 @@ This is what the Terminal view in the UI connects to when in shell mode. The she
 - [The MCP endpoint](/guide/mcp): connecting Claude and other agents
 - [Config Reference](/guide/config-reference): the config schema behind the config endpoints
 - [Homebridge Compatibility](/guide/homebridge-compatibility): the marketplace endpoints in context
+
+---
+
+## Camera video
+
+`GET /api/devices/:id/snapshot` returns one JPEG from a device whose plugin offers video (`video` is set on it in `GET /api/devices`). `GET /api/devices/:id/live` streams Motion JPEG (`multipart/x-mixed-replace`), which an `<img>` plays directly. The stream runs only while the request is open, and at most three viewers per camera are let in (`429` beyond). Plugins offer video with `ctx.registerVideo(deviceId, { snapshot, live })`.

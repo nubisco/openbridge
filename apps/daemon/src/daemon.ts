@@ -5,7 +5,8 @@ import { dirname } from 'path'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
 import os from 'os'
 import { PluginRegistry, PluginLifecycle, loadPluginsFromDirectory, loadPlugin } from '@nubisco/openbridge-core'
-import type { PluginContext, Plugin, DeviceDescriptor, DeviceEventInput } from '@nubisco/openbridge-core'
+import type { PluginContext, Plugin, DeviceDescriptor, DeviceEventInput, VideoSource } from '@nubisco/openbridge-core'
+import { videoSources } from './video.js'
 import { Logger } from '@nubisco/openbridge-logger'
 import { waitForFreePort } from './port.js'
 import { rotateIfLarge } from './log-rotation.js'
@@ -801,6 +802,9 @@ export class Daemon {
         log.info(`Control restricted: ${deviceId}::${controlId}`)
       },
       getHapBridge: () => this.hapBridgeRef,
+      registerVideo(deviceId: string, source: VideoSource) {
+        videoSources.set(deviceId, source)
+      },
     }
   }
 

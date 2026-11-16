@@ -1100,4 +1100,60 @@ describe('OpenBridge Server API', () => {
       }
     })
   })
+
+  describe('Camera video', () => {
+    it('serves a snapshot, and a live stream that stops when the viewer leaves', async () => {
+      const { createServer } = await import('../server.js')
+      const { PluginRegistry } = await import('@nubisco/openbridge-core')
+      const { videoSources, MAX_VIEWERS_PER_DEVICE } = await import('../video.js')
+      const { PassThrough } = await import('stream')
+      const signals: AbortSignal[] = []
+      videoSources.set('cam-test', {
+        snapshot: async () => Buffer.from('JPEGDATA'),
+        live(signal) {
+          signals.push(signal)
+          const out = new PassThrough()
+          const tick = setInterval(() => out.write('--frame\r\nContent-Type: image/jpeg\r\n\r\nJPEG\r\n'), 20)
+          signal.addEventListener('abort', () => {
+            clearInterval(tick)
+            out.end()
+          })
+          return { stream: out, boundary: 'frame' }
+        },
+      })
+      const server = await createServer(new PluginRegistry(), null, null, [], new Set(), new Map())
+      await listen(server)
+      try {
+        const snap = await fetch(`${BASE}/api/devices/cam-test/snapshot`)
+        expect(snap.headers.get('content-type')).toBe('image/jpeg')
+        expect(await snap.text()).toBe('JPEGDATA')
+        expect((await fetch(`${BASE}/api/devices/nothing/snapshot`)).status).toBe(404)
+
+        // Up to the cap, viewers are let in. One more is turned away.
+        const viewers = await Promise.all(
+          Array.from({ length: MAX_VIEWERS_PER_DEVICE }, async () => {
+            const ac = new AbortController()
+            const res = await fetch(`${BASE}/api/devices/cam-test/live`, { signal: ac.signal })
+            return { ac, res }
+          }),
+        )
+        expect(viewers[0].res.headers.get('content-type')).toBe('multipart/x-mixed-replace; boundary=frame')
+        const first = await viewers[0].res.body!.getReader().read()
+        expect(new TextDecoder().decode(first.value)).toContain('--frame')
+        expect((await fetch(`${BASE}/api/devices/cam-test/live`)).status).toBe(429)
+
+        // A viewer that leaves stops its stream and frees its place.
+        viewers[0].ac.abort()
+        await new Promise((r) => setTimeout(r, 150))
+        expect(signals[0].aborted).toBe(true)
+        const again = new AbortController()
+        const res = await fetch(`${BASE}/api/devices/cam-test/live`, { signal: again.signal })
+        expect(res.status).toBe(200)
+        again.abort()
+        for (const v of viewers.slice(1)) v.ac.abort()
+      } finally {
+        await server.close()
+      }
+    })
+  })
 })

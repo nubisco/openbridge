@@ -84,6 +84,7 @@ const uiAvailable = !!uiDist
 let shellAvailable = false
 
 import { OPENBRIDGE_HOME, OB_PLUGINS_DIR, HB_PLUGINS_DIR } from './daemon.js'
+import { videoSources } from './video.js'
 import { DeviceEventLog } from './device-events.js'
 import { ObservationStore, validateObservation } from './observations.js'
 import type { HomeKitVisibility } from './homekit-visibility.js'
@@ -536,6 +537,55 @@ export async function createServer(
       return { events: readDeviceEvents(bridge, req.params.id, Number(req.query.limit ?? 100)) }
     },
   )
+
+  // ─── Camera video ─────────────────────────────────────────────────────────
+  // A snapshot, and a live Motion JPEG stream an <img> plays as it arrives.
+  // Both come from the device's plugin and run only while requested: the
+  // stream's process stops the moment the viewer goes away.
+  app.get<{ Params: { id: string } }>('/api/devices/:id/snapshot', async (req, reply) => {
+    const source = videoSources.get(req.params.id)
+    if (!source) return reply.code(404).send({ error: 'this device has no video' })
+    try {
+      const image = await source.snapshot()
+      return reply.header('Content-Type', 'image/jpeg').header('Cache-Control', 'no-store').send(image)
+    } catch (err) {
+      return reply.code(502).send({ error: `the camera did not return a picture: ${(err as Error).message}` })
+    }
+  })
+
+  app.get<{ Params: { id: string } }>('/api/devices/:id/live', async (req, reply) => {
+    const id = req.params.id
+    const source = videoSources.get(id)
+    if (!source?.live) return reply.code(404).send({ error: 'this device has no live video' })
+    if (!videoSources.enter(id)) {
+      return reply.code(429).send({ error: 'too many people are watching this camera, try again shortly' })
+    }
+    const stop = new AbortController()
+    let left = false
+    const leave = () => {
+      if (left) return
+      left = true
+      stop.abort()
+      videoSources.leave(id)
+    }
+    try {
+      const { stream, boundary } = source.live(stop.signal)
+      req.raw.on('close', leave)
+      stream.on('end', leave)
+      stream.on('error', leave)
+      // The handler owns the response from here: Fastify must not answer too.
+      reply.hijack()
+      reply.raw.writeHead(200, {
+        'Content-Type': `multipart/x-mixed-replace; boundary=${boundary}`,
+        'Cache-Control': 'no-store',
+        Connection: 'close',
+      })
+      stream.pipe(reply.raw)
+    } catch (err) {
+      leave()
+      return reply.code(502).send({ error: `the camera did not start streaming: ${(err as Error).message}` })
+    }
+  })
 
   // ─── Observations ─────────────────────────────────────────────────────────
   // What a person reports about a room, for devices that control something

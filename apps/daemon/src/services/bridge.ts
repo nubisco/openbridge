@@ -12,6 +12,7 @@
  */
 
 import { readFileSync } from 'fs'
+import { videoSources } from '../video.js'
 import { join } from 'path'
 import type { DeviceDescriptor, DeviceHealth, PluginRegistry } from '@nubisco/openbridge-core'
 import { Logger, type LogEntry, type LogLevel } from '@nubisco/openbridge-logger'
@@ -60,6 +61,8 @@ export type DeviceView = DeviceDescriptor & {
   health: DeviceHealth
   /** The room the device is placed in on the house plan, null when it is not on the plan. */
   room: DeviceRoom | null
+  /** Video the UI can show: `snapshot`, or `live` when it can also stream. Absent when none. */
+  video?: 'snapshot' | 'live'
 }
 
 function customNames(home: string): Record<string, string> {
@@ -105,7 +108,18 @@ export function listDevices(ctx: BridgeContext): DeviceView[] {
 
       const room = ctx.house?.roomOf(`device:${device.id}`) ?? null
 
-      devices.push({ ...device, name, telemetry, pluginStatus: instance.status, homekitType, health, room })
+      const source = videoSources.get(device.id)
+      const video = source ? (source.live ? ('live' as const) : ('snapshot' as const)) : undefined
+      devices.push({
+        ...device,
+        name,
+        telemetry,
+        pluginStatus: instance.status,
+        homekitType,
+        health,
+        room,
+        ...(video ? { video } : {}),
+      })
     }
   }
   return devices

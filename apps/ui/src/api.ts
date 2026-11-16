@@ -339,6 +339,8 @@ export interface DeviceDescriptor {
   actions?: DeviceActionDescriptor[]
   telemetryIntervalSeconds?: number
   health?: DeviceHealth
+  /** Video OpenBridge can show: a snapshot, or a live stream too. */
+  video?: 'snapshot' | 'live'
 }
 
 /** A token that opens the MCP endpoint. The secret itself is shown once, at creation. */
