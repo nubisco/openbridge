@@ -1,3 +1,10 @@
+# [1.16.0](https://github.com/nubisco/openbridge/compare/v1.15.1...v1.16.0) (2026-11-16)
+
+
+### Features
+
+* **house:** paving, for terraces, paths, drives and the deck round a pool ([#22](https://github.com/nubisco/openbridge/issues/22)) ([7b8f631](https://github.com/nubisco/openbridge/commit/7b8f63111bfaa4b3e3da652fb222d80c72aa8bfc))
+
 ## [1.15.1](https://github.com/nubisco/openbridge/compare/v1.15.0...v1.15.1) (2026-11-16)
 
 
