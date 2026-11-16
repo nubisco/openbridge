@@ -85,6 +85,7 @@ function compactDevice(d: DeviceView, ctx: McpContext) {
     name: d.name,
     type: d.homekitType ?? d.widgetType,
     plugin: d.pluginId,
+    ...(d.room ? { room: d.room.name, floor: d.room.floor.name } : {}),
     health: d.health.status,
     ...(d.health.reason ? { health_reason: d.health.reason } : {}),
     last_seen: d.health.lastSeen,

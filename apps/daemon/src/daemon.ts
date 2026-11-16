@@ -19,6 +19,7 @@ import { createServer, type HapInfo } from './server.js'
 import { DeviceSeries, DEFAULT_TIERS } from './timeseries.js'
 import { HomeKitVisibility } from './homekit-visibility.js'
 import { HomeKitServiceTypes } from './homekit-service-type.js'
+import { HouseStore } from './house.js'
 import { HomebridgeAPI, loadHomebridgePlugin, serializeAccessory } from '@nubisco/openbridge-compatibility-homebridge'
 
 const log = Logger.create('system')
@@ -72,6 +73,8 @@ export class Daemon {
   private observations = new ObservationStore(OPENBRIDGE_HOME)
   /** The bell: devices that stop answering, plugins that fail, updates. */
   private notifications = new NotificationStore(join(OPENBRIDGE_HOME, 'notifications.json'))
+  /** The house plan: floors, rooms, and where each device is. The source of device rooms. */
+  private house = new HouseStore(join(OPENBRIDGE_HOME, 'house.json'))
   /**
    * Per-device providers of machine state to attach to an observation.
    *
@@ -442,6 +445,7 @@ export class Daemon {
       this.observations,
       (deviceId) => this.observationContexts.get(deviceId)?.(),
       this.notifications,
+      this.house,
     )
     await server.listen({ port, host: '0.0.0.0' })
 
@@ -461,6 +465,7 @@ export class Daemon {
       observations: this.observations,
       homekitServiceTypes: this.homekitServiceTypes,
       nativeAccessoryUuid: null,
+      house: this.house,
     }
     const watchForNotifications = () => {
       try {

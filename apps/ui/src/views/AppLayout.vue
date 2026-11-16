@@ -13,7 +13,7 @@
   >
     <!-- ═══ Brand ═══ -->
     <template #sidebar-logo>
-      <RouterLink to="/dashboard" class="sidebar-brand-link" aria-label="OpenBridge, dashboard">
+      <RouterLink to="/" class="sidebar-brand-link" aria-label="OpenBridge, home">
         <NbSidebarBrand title="OpenBridge">
           <template #icon>
             <img src="/logo.svg" width="28" height="28" alt="" />
@@ -260,6 +260,7 @@ async function checkForUpdate() {
 }
 
 const navItems = [
+  { name: 'house', icon: 'blueprint', label: 'House', href: '/house' },
   { name: 'dashboard', icon: 'house', label: 'Dashboard', href: '/dashboard' },
   { name: 'plugins', icon: 'puzzle-piece', label: 'Plugins', href: '/plugins' },
   { name: 'devices', icon: 'devices', label: 'Devices', href: '/devices' },

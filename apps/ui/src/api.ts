@@ -230,6 +230,70 @@ export interface DeviceHealth {
   reason: string | null
 }
 
+/** The room a device is placed in on the house plan. Mirrors DeviceRoom in the daemon's house.ts. */
+export interface DeviceRoom {
+  id: string
+  name: string
+  floor: { id: string; name: string; level: number }
+}
+
+// ─── House plan (mirrors apps/daemon/src/house.ts) ───────────────────────────
+// Geometry is in grid cells of `grid` metres. Room edges sit on cell lines,
+// devices on half cells.
+
+export type HouseRoomKind = 'room' | 'outdoor' | 'pool'
+
+export interface HouseRoom {
+  id: string
+  name: string
+  kind: HouseRoomKind
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+export interface HouseOpening {
+  id: string
+  type: 'door' | 'window'
+  x: number
+  y: number
+  axis: 'h' | 'v'
+  len: number
+}
+
+export interface HousePlacement {
+  /** `device:<id>` for a native device, `accessory:<uuid>` for a HomeKit accessory. */
+  ref: string
+  x: number
+  y: number
+  opening?: string
+  color?: string
+  circuitRooms?: string[]
+}
+
+export interface HouseFloor {
+  id: string
+  name: string
+  level: number
+  rooms: HouseRoom[]
+  openings: HouseOpening[]
+  placements: HousePlacement[]
+}
+
+export interface HousePlan {
+  version: 1
+  grid: number
+  plot: { w: number; h: number }
+  floors: HouseFloor[]
+}
+
+export interface StoredHouse {
+  plan: HousePlan | null
+  rev: number
+  updatedAt: string | null
+}
+
 export interface DeviceDescriptor {
   id: string
   name: string
@@ -340,9 +404,33 @@ export const api = {
     }),
   accessories: () => get<{ accessories: Accessory[] }>('/accessories'),
   devices: () =>
-    get<{ devices: Array<DeviceDescriptor & { telemetry: Record<string, unknown>; pluginStatus: string }> }>(
-      '/devices',
-    ),
+    get<{
+      devices: Array<
+        DeviceDescriptor & { telemetry: Record<string, unknown>; pluginStatus: string; room?: DeviceRoom | null }
+      >
+    }>('/devices'),
+  house: {
+    get: () => get<StoredHouse>('/house'),
+    /**
+     * Replace the plan. Resolves to `conflict` with the server's current state
+     * when somebody saved since `rev` was read, so the caller can reload rather
+     * than overwrite their work.
+     */
+    save: async (
+      plan: HousePlan | null,
+      rev: number,
+    ): Promise<{ ok: true; house: StoredHouse } | { ok: false; conflict: StoredHouse }> => {
+      const res = await fetch(`${BASE}/house`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plan, rev }),
+      })
+      const data = (await res.json().catch(() => null)) as (StoredHouse & { error?: string }) | null
+      if (res.status === 409 && data) return { ok: false, conflict: data }
+      if (!res.ok || !data) throw new Error(data?.error ?? `Saving the house plan failed: ${res.status}`)
+      return { ok: true, house: data }
+    },
+  },
   controlDevice: (deviceId: string, control: string, value: unknown) =>
     fetch(`/api/devices/${encodeURIComponent(deviceId)}/control`, {
       method: 'POST',

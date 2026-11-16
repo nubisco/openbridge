@@ -21,6 +21,7 @@ import type { DeviceEvent, DeviceEventLog } from '../device-events.js'
 import type { DeviceObservation, ObservationStore } from '../observations.js'
 import { DeviceSeries, type Point } from '../timeseries.js'
 import type { HomeKitServiceTypes } from '../homekit-service-type.js'
+import type { DeviceRoom, HouseStore } from '../house.js'
 
 export type ControlHandler = (value: unknown) => void | Promise<void>
 
@@ -48,6 +49,8 @@ export interface BridgeContext {
   observations: ObservationStore | null
   homekitServiceTypes: HomeKitServiceTypes | null
   nativeAccessoryUuid: ((deviceId: string) => string | null) | null
+  /** The house plan, the source of each device's room. Optional so older callers need not pass it. */
+  house?: HouseStore | null
 }
 
 export type DeviceView = DeviceDescriptor & {
@@ -55,6 +58,8 @@ export type DeviceView = DeviceDescriptor & {
   pluginStatus: string
   homekitType: string | null
   health: DeviceHealth
+  /** The room the device is placed in on the house plan, null when it is not on the plan. */
+  room: DeviceRoom | null
 }
 
 function customNames(home: string): Record<string, string> {
@@ -98,7 +103,9 @@ export function listDevices(ctx: BridgeContext): DeviceView[] {
         pluginStatus: instance.status,
       })
 
-      devices.push({ ...device, name, telemetry, pluginStatus: instance.status, homekitType, health })
+      const room = ctx.house?.roomOf(`device:${device.id}`) ?? null
+
+      devices.push({ ...device, name, telemetry, pluginStatus: instance.status, homekitType, health, room })
     }
   }
   return devices
