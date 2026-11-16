@@ -1,3 +1,10 @@
+## [1.13.1](https://github.com/nubisco/openbridge/compare/v1.13.0...v1.13.1) (2026-11-16)
+
+
+### Bug Fixes
+
+* **house:** keep the floors in the temperature and humidity views, and draw native colour, blinds and plugs ([#17](https://github.com/nubisco/openbridge/issues/17)) ([e7e1f4a](https://github.com/nubisco/openbridge/commit/e7e1f4a6cec8f0fb8017b2112035b7640fc21a01))
+
 # [1.13.0](https://github.com/nubisco/openbridge/compare/v1.12.0...v1.13.0) (2026-11-16)
 
 
