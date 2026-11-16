@@ -1,3 +1,10 @@
+# [1.15.0](https://github.com/nubisco/openbridge/compare/v1.14.0...v1.15.0) (2026-11-16)
+
+
+### Features
+
+* **house:** the blueprint fills the page, its panels open in the inspector, rounded controls on the plan ([#20](https://github.com/nubisco/openbridge/issues/20)) ([04e83bd](https://github.com/nubisco/openbridge/commit/04e83bd781de30dda14c0dd06919b416bdc6bd82))
+
 # [1.14.0](https://github.com/nubisco/openbridge/compare/v1.13.2...v1.14.0) (2026-11-16)
 
 
