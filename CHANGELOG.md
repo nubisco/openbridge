@@ -1,3 +1,10 @@
+# [1.12.0](https://github.com/nubisco/openbridge/compare/v1.11.0...v1.12.0) (2026-11-16)
+
+
+### Features
+
+* **house:** a house that looks like one, movable doors and windows, lamps and appliances ([#15](https://github.com/nubisco/openbridge/issues/15)) ([15a8eff](https://github.com/nubisco/openbridge/commit/15a8effbc8a1a09405dc1c5cf4c56a6059da0b39))
+
 # [1.11.0](https://github.com/nubisco/openbridge/compare/v1.10.0...v1.11.0) (2026-11-16)
 
 
