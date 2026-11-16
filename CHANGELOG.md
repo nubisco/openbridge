@@ -1,3 +1,10 @@
+# [1.13.0](https://github.com/nubisco/openbridge/compare/v1.12.0...v1.13.0) (2026-11-16)
+
+
+### Features
+
+* **house:** lit rooms, a lit pool with waves, open walls, quarter-metre doors, a folded sidebar ([#16](https://github.com/nubisco/openbridge/issues/16)) ([e256812](https://github.com/nubisco/openbridge/commit/e256812f7712b2876f540aa5bbb48f09cc99c504))
+
 # [1.12.0](https://github.com/nubisco/openbridge/compare/v1.11.0...v1.12.0) (2026-11-16)
 
 
