@@ -13,18 +13,46 @@
       :viewBox="viewBox"
       @click="onClick"
       @keydown="onSvgKey"
+      @wheel="preview ? undefined : onWheel($event)"
+      @pointerdown="preview ? undefined : onPointerDown($event)"
+      @pointermove="onPointerMove"
+      @pointerup="onPointerUp"
+      @pointercancel="onPointerUp"
     >
-      <g class="hv-world" :style="{ transform: worldTransform }">
-        <g
-          v-for="f in floorsBottomUp"
-          :key="f.id"
-          class="hv-floor"
-          :style="floorStyle(f.id)"
-          :aria-hidden="!visible(f.id)"
-          v-html="markup[f.id] ?? ''"
-        />
+      <g class="hv-view" :style="{ transform: viewTransform }">
+        <g class="hv-world" :style="{ transform: worldTransform }">
+          <g
+            v-for="f in floorsBottomUp"
+            :key="f.id"
+            class="hv-floor"
+            :style="floorStyle(f.id)"
+            :aria-hidden="!visible(f.id)"
+            v-html="markup[f.id] ?? ''"
+          />
+        </g>
       </g>
     </svg>
+
+    <div v-if="!preview" class="house-stage__view" role="group" aria-label="View">
+      <NbButton size="sm" variant="ghost" icon="magnifying-glass-plus" aria-label="Zoom in" @click="zoomBy(1.4)" />
+      <NbButton
+        size="sm"
+        variant="ghost"
+        icon="magnifying-glass-minus"
+        aria-label="Zoom out"
+        @click="zoomBy(1 / 1.4)"
+      />
+      <NbButton
+        size="sm"
+        variant="ghost"
+        icon="frame-corners"
+        aria-label="Fit the house, at normal zoom"
+        :disabled="zoom === 1 && pan[0] === 0 && pan[1] === 0"
+        @click="resetView"
+      />
+      <NbButton size="sm" variant="ghost" icon="arrow-counter-clockwise" aria-label="Turn left" @click="turn(-1)" />
+      <NbButton size="sm" variant="ghost" icon="arrow-clockwise" aria-label="Turn right" @click="turn(1)" />
+    </div>
 
     <div v-if="!preview" class="house-stage__rail" role="group" aria-label="Floors">
       <NbButton
@@ -66,7 +94,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { usePhoneLayout } from '@nubisco/ui'
 import type { HouseFloor, HousePlan } from '@/api'
-import { CELLS_PER_M, drawnBounds, project, r1, S, type Point } from '@/house/geometry'
+import { CELLS_PER_M, clamp, drawnBounds, project, r1, rotatePlan, S, type Point } from '@/house/geometry'
 import { renderFloor, wallHeight, type SceneOptions } from '@/house/scene'
 import type { LiveDevice } from '@/house/live'
 
@@ -106,7 +134,112 @@ const stageEl = ref<HTMLElement | null>(null)
 const svgEl = ref<SVGSVGElement | null>(null)
 const size = ref({ w: 0, h: 0 })
 
-const floorsBottomUp = computed(() => props.plan.floors.slice().sort((a, b) => a.level - b.level))
+// ─── Turning, zooming and panning ───────────────────────────────────────────
+
+const TURNS_KEY = 'openbridge.house.turns'
+const readTurns = () => {
+  try {
+    return Number(localStorage.getItem(TURNS_KEY)) || 0
+  } catch {
+    return 0
+  }
+}
+/** Quarter turns of the house, remembered per browser. A preview is never turned. */
+const turns = ref(props.preview ? 0 : readTurns())
+function turn(dir: 1 | -1) {
+  turns.value = (turns.value + dir + 4) % 4
+  try {
+    localStorage.setItem(TURNS_KEY, String(turns.value))
+  } catch {
+    /* remembered for this visit only */
+  }
+}
+/** The plan as drawn: turned. Ids and refs are the plan's own. */
+const viewPlan = computed(() => rotatePlan(props.plan, turns.value))
+
+const zoom = ref(1)
+/** Pan, in viewBox units. */
+const pan = ref<Point>([0, 0])
+const viewTransform = computed(
+  () => `translate(${r1(pan.value[0])}px,${r1(pan.value[1])}px) scale(${zoom.value.toFixed(4)})`,
+)
+function resetView() {
+  zoom.value = 1
+  pan.value = [0, 0]
+}
+/** Zoom about a point in viewBox units, the centre by default, keeping it still. */
+function zoomBy(f: number, at?: Point) {
+  const l = layout.value
+  const c: Point = at ?? [(l?.VW ?? 1000) / 2, (l?.VH ?? 600) / 2]
+  const next = clamp(zoom.value * f, 0.5, 8)
+  const k = next / zoom.value
+  pan.value = [c[0] - k * (c[0] - pan.value[0]), c[1] - k * (c[1] - pan.value[1])]
+  zoom.value = next
+}
+/** A screen point in viewBox units. */
+function toView(clientX: number, clientY: number): Point {
+  const r = svgEl.value!.getBoundingClientRect()
+  const l = layout.value
+  return [((clientX - r.left) * (l?.VW ?? 1000)) / r.width, ((clientY - r.top) * (l?.VW ?? 1000)) / r.width]
+}
+function onWheel(e: WheelEvent) {
+  e.preventDefault()
+  // A trackpad pinch arrives as a wheel with ctrlKey, in small steps.
+  zoomBy(Math.exp(-e.deltaY * (e.ctrlKey ? 0.012 : 0.0018)), toView(e.clientX, e.clientY))
+}
+// One finger or the mouse pans, two fingers pinch. A drag is never a tap.
+const pointers = new Map<number, Point>()
+let dragged = false
+let startPan: Point = [0, 0]
+let startAt: Point = [0, 0]
+let pinch: { dist: number; zoom: number } | null = null
+function onPointerDown(e: PointerEvent) {
+  pointers.set(e.pointerId, [e.clientX, e.clientY])
+  if (pointers.size === 1) {
+    dragged = false
+    startPan = [...pan.value] as Point
+    startAt = [e.clientX, e.clientY]
+  } else if (pointers.size === 2) {
+    const [a, b] = [...pointers.values()]
+    pinch = { dist: Math.hypot(a[0] - b[0], a[1] - b[1]), zoom: zoom.value }
+  }
+}
+function onPointerMove(e: PointerEvent) {
+  if (!pointers.has(e.pointerId)) return
+  pointers.set(e.pointerId, [e.clientX, e.clientY])
+  if (pointers.size === 2 && pinch) {
+    const [a, b] = [...pointers.values()]
+    const mid = toView((a[0] + b[0]) / 2, (a[1] + b[1]) / 2)
+    zoomBy((pinch.zoom * Math.hypot(a[0] - b[0], a[1] - b[1])) / pinch.dist / zoom.value, mid)
+    dragged = true
+    return
+  }
+  const dx = e.clientX - startAt[0]
+  const dy = e.clientY - startAt[1]
+  if (!dragged && Math.hypot(dx, dy) < 5) return
+  if (!dragged) svgEl.value?.setPointerCapture(e.pointerId)
+  dragged = true
+  const r = svgEl.value!.getBoundingClientRect()
+  const s = (layout.value?.VW ?? 1000) / r.width
+  pan.value = [startPan[0] + dx * s, startPan[1] + dy * s]
+}
+function onPointerUp(e: PointerEvent) {
+  pointers.delete(e.pointerId)
+  if (pointers.size < 2) pinch = null
+  if (pointers.size === 1) {
+    // Back to one finger after a pinch: pan from here, without a jump.
+    const [p] = [...pointers.values()]
+    startAt = p
+    startPan = [...pan.value] as Point
+  }
+}
+// A new floor or view starts framed.
+watch(
+  () => [props.floor, props.mode],
+  () => resetView(),
+)
+
+const floorsBottomUp = computed(() => viewPlan.value.floors.slice().sort((a, b) => a.level - b.level))
 const floorsTopDown = computed(() => floorsBottomUp.value.slice().reverse())
 const all = computed(() => props.floor === 'all' || !props.plan.floors.some((f) => f.id === props.floor))
 
@@ -137,7 +270,7 @@ const layout = computed(() => {
   let cursor = 0
   const portrait = VH / VW > 0.85
   floorsBottomUp.value.forEach((f, i) => {
-    const b = drawnBounds(props.plan, f)
+    const b = drawnBounds(viewPlan.value, f)
     if (iso) {
       if (i > 0) cum -= (b.w + b.h) * 0.5 * S + H * S + 34
       offsets[f.id] = all.value ? [0, cum] : [0, 0]
@@ -152,7 +285,7 @@ const layout = computed(() => {
   let y2 = -Infinity
   for (const f of floorsBottomUp.value) {
     if (!visible(f.id)) continue
-    const b = drawnBounds(props.plan, f)
+    const b = drawnBounds(viewPlan.value, f)
     const o = offsets[f.id]
     for (const [cx, cy] of [
       [b.x, b.y],
@@ -175,10 +308,12 @@ const layout = computed(() => {
   // rail beside the plan on a wide stage or under it on a phone.
   const px = VW / cw
   const padTop = props.preview ? 10 : ((props.insetTop ?? 0) + 12) * px
-  const padBottom = props.preview || !phone.value ? 0 : 56 * px
+  // and the view buttons at the right, or above the rail on a phone.
+  const padBottom = props.preview || !phone.value ? 0 : 108 * px
   const padLeft = props.preview || phone.value ? 0 : 170 * px
-  const k = Math.min((VW - padLeft) / (x2 - x1 + 50), (VH - padTop - padBottom) / (y2 - y1 + 50), 2.2)
-  const tx = padLeft / 2 + VW / 2 - (k * (x1 + x2)) / 2
+  const padRight = props.preview || phone.value ? 0 : 64 * px
+  const k = Math.min((VW - padLeft - padRight) / (x2 - x1 + 50), (VH - padTop - padBottom) / (y2 - y1 + 50), 2.2)
+  const tx = (padLeft - padRight) / 2 + VW / 2 - (k * (x1 + x2)) / 2
   const ty = (padTop - padBottom) / 2 + VH / 2 - (k * (y1 + y2)) / 2
   return { VW, VH, k, tx, ty, offsets, unit: (VW / (cw * k)) * (cw < 520 ? 0.82 : 1) }
 })
@@ -215,14 +350,15 @@ const markup = computed<Record<string, string>>(() => {
     overlay: props.overlay,
     labels: props.labels,
     selected: props.selected,
-    unit: l.unit,
+    // Markers keep their size on screen while the house is zoomed.
+    unit: l.unit / zoom.value,
     compact: size.value.w < 520,
     offsets: l.offsets,
     all: all.value,
   }
   const out: Record<string, string> = {}
-  for (const f of props.plan.floors) {
-    const svg = renderFloor(props.plan, f, props.devices, options)
+  for (const f of viewPlan.value.floors) {
+    const svg = renderFloor(viewPlan.value, f, props.devices, options)
     // A preview is a picture: its devices must not take keyboard focus or
     // announce themselves as buttons inside a link.
     out[f.id] = props.preview ? svg.replace(/ role="button" tabindex="0"/g, '') : svg
@@ -237,6 +373,10 @@ function refOf(target: EventTarget | null): string | null {
 
 function onClick(e: MouseEvent) {
   if (props.preview) return
+  if (dragged) {
+    dragged = false
+    return
+  }
   // Hit-tested from the point, not the event target: a floor sliding away
   // still has its shapes under the pointer for a moment, and pointer-events
   // is what keeps them from taking the tap.
@@ -319,7 +459,9 @@ onBeforeUnmount(() => observer?.disconnect())
   width: 100%;
   height: 100%;
   display: block;
-  touch-action: manipulation;
+  // The stage takes pinch and drag itself, for zoom and pan.
+  touch-action: none;
+  cursor: grab;
 
   .is-preview & {
     pointer-events: none;
@@ -349,6 +491,28 @@ onBeforeUnmount(() => observer?.disconnect())
   .is-phone & {
     top: auto;
     bottom: var(--nb-spacing-8);
+    transform: none;
+    flex-direction: row;
+  }
+}
+
+.house-stage__view {
+  position: absolute;
+  right: var(--nb-spacing-8);
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--nb-spacing-2);
+  padding: var(--nb-spacing-4);
+  border-radius: var(--nb-radius-md);
+  background: var(--nb-c-layer-1);
+  border: 1px solid var(--nb-c-border);
+
+  // On a phone, a row above the floor rail, out of the plan's middle.
+  .is-phone & {
+    top: auto;
+    bottom: calc(var(--nb-spacing-8) + 52px);
     transform: none;
     flex-direction: row;
   }

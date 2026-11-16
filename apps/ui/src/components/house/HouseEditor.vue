@@ -124,7 +124,7 @@
         <NbField v-if="placedDevice?.kind === 'light'" v-slot="{ id }" label="Mounted" orientation="stack">
           <NbSelect
             :id="id"
-            :model-value="placed.mount ?? 'ceiling'"
+            :model-value="lightMount(floor, placed)"
             :options="LIGHT_MOUNTS"
             size="sm"
             @update:model-value="(v: unknown) => setMount(v as HouseLightMount)"
@@ -282,7 +282,7 @@
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useConfirm, usePhoneLayout, useToast } from '@nubisco/ui'
 import type { HouseFloor, HouseLightMount, HouseLook, HouseOpening, HousePlan, HouseRect, HouseRoom } from '@/api'
-import { CELLS_PER_M, S, clamp, flippedSide, roomArea, roomRects } from '@/house/geometry'
+import { CELLS_PER_M, S, clamp, flippedSide, lightMount, roomArea, roomRects } from '@/house/geometry'
 import {
   addFloor,
   addOpenWall,
@@ -350,6 +350,7 @@ const LIGHT_MOUNTS = [
   { label: 'Wall', value: 'wall' },
   { label: 'Floor lamp', value: 'floor' },
   { label: 'Table lamp', value: 'table' },
+  { label: 'In the pool', value: 'pool' },
 ]
 const GLOW_COLOURS = [
   { label: 'Warm white', value: WARM_LIGHT },
@@ -532,7 +533,9 @@ function setLook(look: HouseLook | null) {
 function setMount(mount: HouseLightMount) {
   const p = placed.value
   if (!p) return
-  if (mount === 'ceiling') delete p.mount
+  // The default for where it stands is left unset, so moving the light
+  // into or out of a pool keeps it right.
+  if (mount === lightMount(floor.value, { x: p.x, y: p.y })) delete p.mount
   else p.mount = mount
 }
 
