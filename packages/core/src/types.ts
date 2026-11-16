@@ -177,6 +177,21 @@ export interface DeviceEventInput {
   data?: Record<string, unknown>
 }
 
+/**
+ * Video a device can show in OpenBridge itself, beside whatever it gives
+ * HomeKit. Both are pulled only while someone is looking: nothing runs for a
+ * camera nobody has open.
+ */
+export interface VideoSource {
+  /** One JPEG frame, current or a few seconds old. */
+  snapshot(): Promise<Buffer>
+  /**
+   * A live Motion JPEG stream (multipart, parts separated by `boundary`),
+   * running until `signal` aborts, when the plugin must stop producing it.
+   */
+  live?(signal: AbortSignal): { stream: NodeJS.ReadableStream; boundary: string }
+}
+
 export interface PluginContext {
   config: Record<string, unknown>
   log: PluginLogger
@@ -209,6 +224,11 @@ export interface PluginContext {
   registerObservationContext?(deviceId: string, provider: () => Record<string, unknown>): void
   /** Register a HAP bridge so its QR/PIN appear in the OpenBridge UI */
   registerHapBridge(info: { setupURI: string; pincode: string; port: number; name: string }): void
+  /**
+   * Offer a device's video to OpenBridge's own UI: a snapshot, and a live
+   * stream when the plugin can make one. Optional, for older daemons.
+   */
+  registerVideo?(deviceId: string, source: VideoSource): void
   /** Block a device control from being changed via UI or HomeKit */
   restrictControl(deviceId: string, controlId: string): void
   /**

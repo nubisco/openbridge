@@ -88,6 +88,13 @@
           {{ deviceHealth.reason }}
         </NbBanner>
         <NbBanner v-if="actionNotice" :status="actionStatus" :title="actionNotice" class="section-banner" />
+        <CameraView
+          v-if="(selected as any).dev.video"
+          :key="(selected as any).dev.id"
+          :device-id="(selected as any).dev.id"
+          :name="(selected as any).dev.name"
+          :video="(selected as any).dev.video"
+        />
         <NbDefinitionList compact>
           <NbDefinitionListItem term="Plugin">{{ (selected as any).dev.pluginId }}</NbDefinitionListItem>
           <NbDefinitionListItem v-if="(selected as any).dev.manufacturer" term="Manufacturer">
@@ -509,6 +516,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import CameraView from '@/components/CameraView.vue'
 import { useConfirm, type IDefinitionListItem, type ITabItem } from '@nubisco/ui'
 import { useInspectorStore, type NativeDevice } from '@/stores/inspector'
 import {

@@ -12,6 +12,7 @@ export type {
   DeviceEventInput,
   MetricDescriptor,
   InterpolationDescriptor,
+  VideoSource,
 } from './types.js'
 export { PluginRegistry } from './registry.js'
 export { PluginLifecycle } from './lifecycle.js'
