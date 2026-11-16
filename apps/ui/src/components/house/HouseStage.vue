@@ -33,7 +33,7 @@
       </g>
     </svg>
 
-    <div v-if="!preview" class="house-stage__view" role="group" aria-label="View">
+    <div v-if="!preview" class="house-stage__view" role="group" aria-label="View" data-nb-appearance="rounded">
       <NbButton size="sm" variant="ghost" icon="magnifying-glass-plus" aria-label="Zoom in" @click="zoomBy(1.4)" />
       <NbButton
         size="sm"
@@ -54,7 +54,7 @@
       <NbButton size="sm" variant="ghost" icon="arrow-clockwise" aria-label="Turn right" @click="turn(1)" />
     </div>
 
-    <div v-if="!preview" class="house-stage__rail" role="group" aria-label="Floors">
+    <div v-if="!preview" class="house-stage__rail" role="group" aria-label="Floors" data-nb-appearance="rounded">
       <NbButton
         v-if="plan.floors.length > 1"
         size="sm"

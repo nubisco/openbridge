@@ -53,7 +53,7 @@
         @activate="activate"
         @clear="deselect"
       />
-      <div class="house__toolbar">
+      <div class="house__toolbar" data-nb-appearance="rounded">
         <NbTabs v-model="view" :items="VIEW_ITEMS" variant="contained" size="sm" aria-label="View" />
         <NbTabs
           v-if="view === 'iso'"
@@ -78,7 +78,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
-import { useConfirm, useShellSlot, useToast } from '@nubisco/ui'
+import { useConfirm, usePhoneLayout, useShellSlot, useToast } from '@nubisco/ui'
 import type { HousePlan } from '@/api'
 import { useHouseStore } from '@/stores/house'
 import { useInspectorStore } from '@/stores/inspector'
@@ -138,16 +138,18 @@ const labels = computed({
   set: (v: boolean) => (labelsSetting.value = v ? 'on' : 'off'),
 })
 
+const { phone } = usePhoneLayout()
 const floor = ref<string>('all')
 const mode = ref<'live' | 'edit'>('live')
 const draft = ref<HousePlan | null>(null)
 const saving = ref(false)
 
-// The live house runs edge to edge. The empty state and the editor keep the
-// page's padding, as every other page does. The rail folds to icons while the
-// House is open, to give the plan the width.
+// The house, live or as a blueprint being edited, runs edge to edge. The empty
+// state keeps the page's padding, and so does the editor on a phone, where
+// its panels sit under the blueprint. The rail folds to icons while the House
+// is open, to give the plan the width.
 watch(
-  () => mode.value === 'live' && house.hasPlan,
+  () => (mode.value === 'live' ? house.hasPlan : !phone.value),
   (bleed) => layout.setPage('House', { fullBleed: bleed, compactNav: true }),
   { immediate: true },
 )

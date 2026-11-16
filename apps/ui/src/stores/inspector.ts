@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { PluginInstance, Accessory, DeviceDescriptor } from '@/api'
 
-export type InspectorMode = 'plugin' | 'marketplace' | 'device' | 'house'
+export type InspectorMode = 'plugin' | 'marketplace' | 'device' | 'house' | 'house-editor'
 
 export type NativeDevice = DeviceDescriptor & { telemetry: Record<string, unknown>; pluginStatus: string }
 export type DeviceItem = { kind: 'hap'; acc: Accessory } | { kind: 'native'; dev: NativeDevice }
@@ -44,6 +44,18 @@ export const useInspectorStore = defineStore('inspector', () => {
     visible.value = true
   }
 
+  /**
+   * The House editor's panels: what is selected on the blueprint, and the
+   * devices not on it yet. The editor teleports them into the inspector.
+   */
+  function openHouseEditor() {
+    houseRef.value = null
+    selectedDevice.value = null
+    selectedPlugin.value = null
+    mode.value = 'house-editor'
+    visible.value = true
+  }
+
   function updateDevice(device: DeviceItem) {
     if (selectedDevice.value && mode.value === 'device') {
       if (device.kind === 'native' && selectedDevice.value.kind === 'native') {
@@ -75,6 +87,7 @@ export const useInspectorStore = defineStore('inspector', () => {
     openMarketplace,
     openDevice,
     openHouse,
+    openHouseEditor,
     updateDevice,
     close,
   }
