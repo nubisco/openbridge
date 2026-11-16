@@ -1,3 +1,10 @@
+# [1.18.0](https://github.com/nubisco/openbridge/compare/v1.17.1...v1.18.0) (2026-11-16)
+
+
+### Features
+
+* **devices:** a camera's live picture in OpenBridge, on the House and the Devices page ([#25](https://github.com/nubisco/openbridge/issues/25)) ([f9b6e7f](https://github.com/nubisco/openbridge/commit/f9b6e7f7c526059b4399398169e59b0ba5109715))
+
 ## [1.17.1](https://github.com/nubisco/openbridge/compare/v1.17.0...v1.17.1) (2026-11-16)
 
 
