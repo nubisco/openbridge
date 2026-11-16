@@ -615,6 +615,49 @@ Marks rows read for the person asking. Send `{ "ids": ["3f6b2c1e-8a4d-4f0e-9c1a-
 
 ---
 
+## House plan
+
+### `GET /api/house`
+
+The house plan, its revision, and when it was last saved. `plan` is `null` until one is drawn.
+
+Geometry is in grid cells of `grid` metres (0.5). Rooms sit on cell lines. A device sits on a half cell at most. A placement's `ref` is `device:<id>` for a native device or `accessory:<uuid>` for a HomeKit accessory. `opening` attaches a shutter to a window, `color` is the glow of a light that cannot report one, and `circuitRooms` lists the rooms a heating device's water circuit serves.
+
+```json
+{
+  "plan": {
+    "version": 1,
+    "grid": 0.5,
+    "plot": { "w": 32, "h": 22 },
+    "floors": [
+      {
+        "id": "ground",
+        "name": "Ground floor",
+        "level": 0,
+        "rooms": [{ "id": "room1", "name": "Living room", "kind": "room", "x": 2, "y": 2, "w": 10, "h": 8 }],
+        "openings": [{ "id": "window1", "type": "window", "axis": "h", "x": 4, "y": 2, "len": 2 }],
+        "placements": [
+          { "ref": "device:shelly-ec6260887f18-switch0", "x": 6.5, "y": 5, "color": "#ffb45e" },
+          { "ref": "device:bf0df8f538a5ea6d2a2j39", "x": 9, "y": 3, "circuitRooms": ["room1"] }
+        ]
+      }
+    ]
+  },
+  "rev": 3,
+  "updatedAt": "2026-11-16T12:00:00.000Z"
+}
+```
+
+### `PUT /api/house`
+
+Replaces the plan. Send `{ "plan": {...}, "rev": 3 }`, where `rev` is the revision you read. Returns the new state, with `rev` one higher. Send `"plan": null` to remove the plan.
+
+The daemon checks that the plan holds together: rooms inside the plot and on the grid, room ids unique across the whole house, one placement per device, a shutter only on a window, and circuit rooms that exist. A plan that does not is refused with `400` and a message naming the field. If somebody saved since your `rev`, the save is refused with `409` and the current state, so a stale tab cannot undo someone else's work.
+
+Each device in `GET /api/devices` carries the `room` it is placed in, as `{ "id", "name", "floor": { "id", "name", "level" } }`, or `null` when it is not on the plan.
+
+---
+
 ## WebSocket streams
 
 All WebSocket endpoints are at `ws://localhost:8582/ws/*`. Connect using any standard WebSocket client.

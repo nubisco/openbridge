@@ -10,9 +10,31 @@ In production, the daemon serves it as static files at [http://localhost:8582](h
 
 ---
 
+## House
+
+A drawing of your home, floor by floor, with every device where it really is and showing what it is doing now. Once a plan is saved, OpenBridge opens on this page instead of the Dashboard.
+
+**Drawing the plan.** Choose **Start drawing** (or **Edit plan** later). You draw rooms, not walls:
+
+- **Room:** drag on the grid to draw a rectangle. It snaps to half a metre. Walls appear on every room edge, and an edge two rooms share is one wall. A room can also be an outdoor zone or a pool, which have no walls.
+- **Door** and **Window:** tap a wall. Tap one you placed to change its width or remove it.
+- **Select:** drag a room to move it (its doors, windows and devices move with it), or drag a corner to resize it.
+- **+ Floor** adds a floor above the top one, starting as one room the size of the floor below. The floor below shows as a dashed outline, so you can trace over it.
+- **Devices:** drag a device from _Not on the plan yet_ onto the plan, or tap it and then tap where it is. A shutter dropped near a window attaches to that window. For a heating device, tick the rooms its water circuit serves.
+
+Nothing is saved until you choose **Save plan**. If the plan was saved from another tab in the meantime, OpenBridge loads that version and asks you to redo your change on top of it.
+
+**What the plan shows.** Lights glow in their colour and brightness (a relay driving a lamp glows in a colour you pick). Shutters show how far they are open, on their window. Heating circuits run through the rooms they serve, coloured from blue to red by water temperature, with moving flow while the pump runs. A pool's water moves while a pump placed in it runs. Sensors, dehumidifiers, energy meters, cameras and gates show their reading or state. A device that stopped answering is drawn dimmed, never as off.
+
+**Using it.** Switch floors with the floor rail (or the up and down arrow keys), or choose **All floors** to see them stacked. **3D** and **2D** switch between the isometric and the top-down view, and **Temperature** and **Humidity** tint each room by a sensor in it. Tapping a light or a plain switch turns it on or off. Tapping anything else opens its controls beside the plan. A gate always asks before it moves.
+
+**Rooms are the bridge's rooms.** Each device's room comes from the plan, so the device list (`GET /api/devices`) and the AI agent tools report it too. The plan is stored in `~/.openbridge/house.json`.
+
+---
+
 ## Dashboard
 
-The Dashboard is the landing page. It gives you an at-a-glance view of the entire system.
+The Dashboard gives you an at-a-glance view of the entire system. It is the landing page until a house plan is drawn.
 
 ### Plugin status cards
 
@@ -170,7 +192,7 @@ Devices that never report telemetry (most Homebridge accessories) cannot be watc
 
 ## On a phone
 
-Every page works on a phone. The sidebar becomes a drawer behind the menu button, tables become cards, page actions fold into a single menu, and inspectors open as a full-height sheet. The desktop layout is unchanged.
+Every page works on a phone. On the House page the floor rail moves above the plan and the controls move below it. The sidebar becomes a drawer behind the menu button, tables become cards, page actions fold into a single menu, and inspectors open as a full-height sheet. The desktop layout is unchanged.
 
 ---
 
