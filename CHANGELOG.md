@@ -1,3 +1,10 @@
+# [1.17.0](https://github.com/nubisco/openbridge/compare/v1.16.0...v1.17.0) (2026-11-16)
+
+
+### Features
+
+* **house:** radiators on walls, with the heating circuit running through them ([#23](https://github.com/nubisco/openbridge/issues/23)) ([9ebb962](https://github.com/nubisco/openbridge/commit/9ebb962d13f6f19c66ff040890c99972e18c230d))
+
 # [1.16.0](https://github.com/nubisco/openbridge/compare/v1.15.1...v1.16.0) (2026-11-16)
 
 
