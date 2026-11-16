@@ -489,6 +489,33 @@ function appliance(o: SceneOptions, d: LiveDevice, p: HousePlacement, look: Hous
 }
 
 /**
+ * Each walled room's reading for an overlay, from a sensor standing in it. A
+ * heating device's temperature is its water, not the room's, so it never
+ * counts. A device on a window (a shutter) is in no room.
+ */
+export function roomReadings(
+  floor: HouseFloor,
+  devices: Map<string, LiveDevice>,
+  overlay: 'temperature' | 'humidity',
+): Map<string, number> {
+  const out = new Map<string, number>()
+  for (const p of floor.placements) {
+    const d = devices.get(p.ref)
+    if (!d || !d.reachable || p.opening) continue
+    const v = overlay === 'temperature' ? (d.kind === 'heating' ? undefined : d.temperature) : d.humidity
+    if (v === undefined) continue
+    const r = roomAt(floor, p.x, p.y)
+    if (r?.kind === 'room' && !out.has(r.id)) out.set(r.id, v)
+  }
+  return out
+}
+
+export const overlayColor = (overlay: 'temperature' | 'humidity', v: number) =>
+  overlay === 'temperature' ? roomTempColor(v) : humidityColor(v)
+export const overlayText = (overlay: 'temperature' | 'humidity', v: number) =>
+  overlay === 'temperature' ? `${v.toFixed(1)}°` : `${Math.round(v)}%`
+
+/**
  * One floor. `devices` holds every live device by ref, and the floor's own
  * placements decide which of them appear here.
  */
@@ -515,6 +542,8 @@ export function renderFloor(
 
   // Rooms, with the overlay tint from a sensor in the room.
   const roomOf = (p: HousePlacement) => roomAt(floor, p.x, p.y)
+  const readings = o.overlay === 'none' ? new Map<string, number>() : roomReadings(floor, devices, o.overlay)
+  let badges = ''
   // The lights that are on, each with the room it lights.
   const lit = placed
     .filter(({ d }) => d.kind === 'light' && d.on && d.reachable)
@@ -541,16 +570,21 @@ export function renderFloor(
     // The floor is always drawn. An overlay is a tint laid over it, so the
     // house stays a house while showing temperature or humidity.
     let tint = ''
-    let extra = ''
-    if (o.overlay !== 'none' && r.kind === 'room') {
-      const reading = placed
-        .filter(({ p, d }) => d.reachable && roomOf(p) === r && !p.opening)
-        .map(({ d }) => (o.overlay === 'temperature' ? (d.kind === 'heating' ? undefined : d.temperature) : d.humidity))
-        .find((v) => v !== undefined)
+    if (o.overlay !== 'none') {
+      const reading = readings.get(r.id)
       if (reading !== undefined) {
-        const fill = o.overlay === 'temperature' ? roomTempColor(reading) : humidityColor(reading)
+        const fill = overlayColor(o.overlay, reading)
         tint = fill
-        extra = o.overlay === 'temperature' ? ` ${reading.toFixed(1)}°` : ` ${Math.round(reading)}%`
+        // The reading floats over the room, above the walls, so it reads in
+        // 3D as well as from above.
+        const q = roomRects(r).reduce((a, b) => (b.w * b.h > a.w * a.h ? b : a))
+        const c = project(o.mode, q.x + q.w / 2, q.y + q.h / 2, zm(o, 1.6))
+        const text = overlayText(o.overlay, reading)
+        const w = text.length * 9 + 22
+        badges +=
+          `<g class="hv-reading" transform="translate(${r1(c[0])},${r1(c[1])}) scale(${o.unit.toFixed(4)})" pointer-events="none">` +
+          `<rect x="${r1(-w / 2)}" y="-15" width="${r1(w)}" height="30" rx="15" fill="${fill}"/>` +
+          `<text y="5.5" text-anchor="middle">${esc(text)}</text></g>`
       }
     }
     // Each part is filled on its own, with no stroke, and the room's outline
@@ -580,10 +614,10 @@ export function renderFloor(
     }
     base += `<path class="hv-room-edge hv-k-${r.kind}" d="${outline}"/>`
     if (r.kind === 'pool') water += poolWater(o, floor, r, shapes, placed, lit, roomOf)
-    if (o.labels || extra) {
+    if (o.labels) {
       // On the largest part, which is where the eye looks for the room's name.
       const q = rects.reduce((a, b) => (b.w * b.h > a.w * a.h ? b : a))
-      const name = (o.labels ? r.name : '').concat(extra).trim()
+      const name = r.name
       const c = project(o.mode, q.x + q.w / 2, q.y + q.h / 2)
       const fs = Math.min(11 * o.unit, (q.w * S * 0.86) / Math.max(1, name.length * 0.72), q.h * S * 0.3)
       base += `<text class="hv-rlabel" transform="translate(${r1(c[0])},${r1(c[1])}) ${iso ? ISO_FLOOR_MATRIX : ''}" font-size="${r1(fs)}" dy="${r1(fs * 0.35)}">${esc(name)}</text>`
@@ -594,6 +628,8 @@ export function renderFloor(
   // takes the light's colour, brightest under the lamp, so a room with the
   // lights on reads as lit from across the house.
   for (const { p, room: r, color, k } of lit) {
+    // An overlay's colours are data: light on the floors would read as data too.
+    if (o.overlay !== 'none') break
     if (r?.kind === 'pool') continue
     const mount = lightMount(floor, p)
     if (mount === 'pool') continue
@@ -742,7 +778,7 @@ export function renderFloor(
   for (const { p, d } of placed) if (p.opening) shutters.set(p.opening, d)
   // The walls of a lit room catch its light, on the side facing into it.
   const litRooms = new Map<string, { color: string; k: number }>()
-  for (const l of lit) if (l.room && l.room.kind === 'room') litRooms.set(l.room.id, l)
+  if (o.overlay === 'none') for (const l of lit) if (l.room && l.room.kind === 'room') litRooms.set(l.room.id, l)
   for (const w of wallRuns(floor)) {
     // An open stretch is a wall that is not there: nothing to draw.
     if (w.type === 'open') continue
@@ -1077,5 +1113,8 @@ export function renderFloor(
   items.sort((a, b) => a.depth - b.depth)
   marks.sort((a, b) => a.depth - b.depth)
   separate(marks, o.unit)
-  return `<defs>${defs}</defs>${base}${water}${glow}${pipes}${items.map((i) => i.svg).join('')}${marks.map((i) => i.svg).join('')}`
+  // With an overlay on, the devices step back and the rooms' readings lead.
+  const markup = marks.map((i) => i.svg).join('')
+  const top = o.overlay === 'none' ? markup : `<g class="hv-dimmed">${markup}</g>${badges}`
+  return `<defs>${defs}</defs>${base}${water}${glow}${pipes}${items.map((i) => i.svg).join('')}${top}`
 }
