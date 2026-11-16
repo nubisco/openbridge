@@ -492,7 +492,9 @@ export function renderFloor(
       ]),
     )
     defs += `<clipPath id="hv-cp-${svgId(floor.id)}-${svgId(r.id)}">${shapes.map((pts) => `<polygon points="${pts}"/>`).join('')}</clipPath>`
-    let style = ''
+    // The floor is always drawn. An overlay is a tint laid over it, so the
+    // house stays a house while showing temperature or humidity.
+    let tint = ''
     let extra = ''
     if (o.overlay !== 'none' && r.kind === 'room') {
       const reading = placed
@@ -501,15 +503,18 @@ export function renderFloor(
         .find((v) => v !== undefined)
       if (reading !== undefined) {
         const fill = o.overlay === 'temperature' ? roomTempColor(reading) : humidityColor(reading)
-        style = ` style="fill:${fill};fill-opacity:0.42"`
+        tint = fill
         extra = o.overlay === 'temperature' ? ` ${reading.toFixed(1)}°` : ` ${Math.round(reading)}%`
-      } else style = ' style="fill-opacity:0.04"'
+      }
     }
     // Each part is filled on its own, with no stroke, and the room's outline
     // is drawn once over them, so an L reads as one room with no seam.
     // In the exploded view a tap on a floor's rooms brings that floor forward.
     const pick = o.all ? ` hv-pick" data-plate="${esc(floor.id)}` : ''
-    for (const pts of shapes) base += `<polygon class="hv-room-fill hv-k-${r.kind}${pick}"${style} points="${pts}"/>`
+    for (const pts of shapes) {
+      base += `<polygon class="hv-room-fill hv-k-${r.kind}${pick}" points="${pts}"/>`
+      if (tint) base += `<polygon class="hv-tint" fill="${tint}" fill-opacity="0.55" points="${pts}"/>`
+    }
     let outline = ''
     for (const u of roomOutline(r)) {
       const a = project(o.mode, u.x, u.y)

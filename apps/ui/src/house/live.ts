@@ -70,6 +70,8 @@ const NATIVE_KIND: Record<string, LiveKind> = {
   gate: 'gate',
   sensor: 'sensor',
   camera: 'camera',
+  shutter: 'shutter',
+  outlet: 'switch',
 }
 
 /** What a relay was re-presented as in HomeKit beats the plugin's own guess. */
@@ -94,8 +96,12 @@ export function fromNative(d: NativeDevice & { homekitType?: string | null }): L
   out.return = num(t.returnTemperature)
   out.humidity = num(t.currentHumidity)
   out.power = num(t.power)
+  out.position = num(t.position)
+  const hue = num(t.hue)
+  const sat = num(t.saturation)
+  if (hue !== undefined && sat !== undefined) out.color = hueSatColor(hue, sat)
   if (kind === 'gate' && typeof t.state === 'string') out.gateState = t.state as LiveDevice['gateState']
-  if (d.homekitType === 'outlet') out.defaultLook = 'outlet'
+  if (d.homekitType === 'outlet' || (!d.homekitType && d.widgetType === 'outlet')) out.defaultLook = 'outlet'
   if (kind === 'dehumidifier') out.defaultLook = 'dehumidifier'
   return out
 }

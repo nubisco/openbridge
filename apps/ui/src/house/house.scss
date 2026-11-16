@@ -79,7 +79,9 @@
   animation-duration: 3.1s;
   animation-direction: reverse;
 }
-// Light on floors and walls never takes a tap meant for the room under it.
+// Light on floors and walls, and an overlay's tint, never take a tap meant
+// for the room under them.
+.hv-tint,
 .hv-wash,
 .hv-walllit {
   pointer-events: none;
