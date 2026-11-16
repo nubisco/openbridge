@@ -107,10 +107,44 @@ function poly(o: SceneOptions, pts: Array<[number, number, number]>): string {
     .join(' ')
 }
 
-function pipe(o: SceneOptions, pts: Point[], color: string, flowing: boolean): string {
+/**
+ * A circuit's pipe. With one water temperature the pipe is that colour along
+ * its length. With supply and return it shades from one to the other, cut
+ * into short pieces so the shading follows the pipe round every bend.
+ */
+function pipe(
+  o: SceneOptions,
+  pts: Point[],
+  supply: number | undefined,
+  ret: number | undefined,
+  flowing: boolean,
+): string {
   const w = Math.max(5, 2.6 * o.unit)
   const points = pts.map(([x, y]) => project(o.mode, x, y, 0.04)).map((p) => `${r1(p[0])},${r1(p[1])}`)
-  let s = `<polyline class="hv-pipe" points="${points.join(' ')}" stroke="${color}" stroke-width="${r1(w)}" opacity="${flowing ? 0.95 : 0.5}"/>`
+  const opacity = flowing ? 0.95 : 0.5
+  let s = ''
+  if (supply !== undefined && ret !== undefined) {
+    const lens = pts.slice(1).map((p, i) => Math.abs(p[0] - pts[i][0]) + Math.abs(p[1] - pts[i][1]))
+    const total = lens.reduce((a, b) => a + b, 0) || 1
+    let acc = 0
+    let pieces = ''
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1]
+      const b = pts[i]
+      const n = Math.max(1, Math.ceil(lens[i - 1]))
+      for (let j = 0; j < n; j++) {
+        const p = project(o.mode, lerp(a[0], b[0], j / n), lerp(a[1], b[1], j / n), 0.04)
+        const q = project(o.mode, lerp(a[0], b[0], (j + 1) / n), lerp(a[1], b[1], (j + 1) / n), 0.04)
+        const t = (acc + ((j + 0.5) / n) * lens[i - 1]) / total
+        pieces += `<line x1="${r1(p[0])}" y1="${r1(p[1])}" x2="${r1(q[0])}" y2="${r1(q[1])}" stroke="${waterColor(lerp(supply, ret, t))}"/>`
+      }
+      acc += lens[i - 1]
+    }
+    s = `<g class="hv-pipe" stroke-width="${r1(w)}" opacity="${opacity}">${pieces}</g>`
+  } else {
+    const color = waterColor(supply ?? 20)
+    s = `<polyline class="hv-pipe" points="${points.join(' ')}" stroke="${color}" stroke-width="${r1(w)}" opacity="${opacity}"/>`
+  }
   if (flowing) s += `<polyline class="hv-flow" stroke-width="${r1(w * 0.36)}" points="${points.join(' ')}"/>`
   return s
 }
@@ -237,11 +271,12 @@ export function renderFloor(
         .filter((r): r is NonNullable<typeof r> => !!r)
       if (!rooms.length) continue
       const flowing = !!d?.on && !!d.reachable
-      const color = d?.temperature !== undefined ? waterColor(d.temperature) : waterColor(20)
+      const supply = d?.supply ?? d?.temperature
+      const color = waterColor(supply ?? 20)
       // On another floor the circuit rises at the same spot, so it starts there.
       const pts = circuitPath({ x: p.x, y: p.y }, rooms)
       if (!pts) continue
-      pipes += pipe(o, pts, color, flowing)
+      pipes += pipe(o, pts, supply, d?.return, flowing)
       if (f.id !== floor.id) {
         // The riser: where the circuit arrives from the floor its source is on.
         const at = project(o.mode, p.x, p.y)
@@ -451,25 +486,37 @@ export function renderFloor(
         break
       }
       case 'gate': {
-        // A sliding leaf along x, four cells (two metres) wide, that moves
-        // aside as the gate opens. The plan does not know the gate's real
-        // width yet, so this is a symbol, not a measurement.
+        // A sliding leaf as wide as the gate, centred on its placement, that
+        // moves aside as the gate opens. Half open while it is moving, since
+        // the gate reports where it is going, not how far it got.
         const open = d.gateState === 'open' ? 1 : d.gateState === 'opening' || d.gateState === 'closing' ? 0.5 : 0
-        const len = 4
-        const x0 = p.x - len / 2
-        const slide = open * len * 0.94
+        const len = p.length ?? 4
+        const along = (p.axis ?? 'h') === 'h'
+        const at = (t: number): [number, number] => (along ? [p.x - len / 2 + t, p.y] : [p.x, p.y - len / 2 + t])
+        // It slides along its fence toward whichever side of the plot has
+        // more room, so an open gate never leaves the plot.
+        const centre = along ? p.x : p.y
+        const span = along ? plan.plot.w : plan.plot.h
+        const slide = open * len * 0.94 * (centre > span / 2 ? -1 : 1)
         const gh = iso ? 0.55 * CELLS_PER_M : 0
+        const [ax, ay] = at(slide)
+        const [bx, by] = at(len + slide)
         let leaf = ''
         if (iso) {
           leaf = `<polygon class="hv-leaf" points="${poly(o, [
-            [x0 + slide, p.y, 0.08],
-            [x0 + len + slide, p.y, 0.08],
-            [x0 + len + slide, p.y, gh],
-            [x0 + slide, p.y, gh],
+            [ax, ay, 0.08],
+            [bx, by, 0.08],
+            [bx, by, gh],
+            [ax, ay, gh],
           ])}"/>`
+          for (const [px, py] of [at(0), at(len)]) {
+            const a = project(o.mode, px, py, 0)
+            const b = project(o.mode, px, py, 0.75 * CELLS_PER_M)
+            leaf += `<line x1="${r1(a[0])}" y1="${r1(a[1])}" x2="${r1(b[0])}" y2="${r1(b[1])}" stroke="#ffc76b" stroke-width="3" stroke-linecap="round"/>`
+          }
         } else {
-          const a = project(o.mode, x0 + slide, p.y)
-          const e = project(o.mode, x0 + len + slide, p.y)
+          const a = project(o.mode, ax, ay)
+          const e = project(o.mode, bx, by)
           leaf = `<line x1="${r1(a[0])}" y1="${r1(a[1])}" x2="${r1(e[0])}" y2="${r1(e[1])}" stroke="#ffc76b" stroke-width="5"/>`
         }
         svg =

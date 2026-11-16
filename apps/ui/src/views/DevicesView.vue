@@ -57,7 +57,7 @@
           class="device-card"
           :class="{ unhealthy: isUnhealthy(dev) }"
           :icon="widgetIcon(effectiveType(dev))"
-          :description="widgetLabel(effectiveType(dev))"
+          :description="withRoom(widgetLabel(effectiveType(dev)), `device:${dev.id}`)"
           :selected="selectedDeviceId === dev.id"
           @select="selectNative(dev)"
           @dblclick="openDetail(dev)"
@@ -162,7 +162,7 @@
           class="device-card"
           :class="{ unhealthy: !acc.reachable }"
           :icon="categoryInfo(acc.category).icon"
-          :description="`${categoryInfo(acc.category).label} · HomeKit`"
+          :description="withRoom(`${categoryInfo(acc.category).label} · HomeKit`, `accessory:${acc.uuid}`)"
           :selected="selectedDeviceId === acc.uuid"
           @select="selectHap(acc)"
         >
@@ -252,6 +252,8 @@ import { useRouter } from 'vue-router'
 import { useDaemonStore } from '@/stores/daemon'
 import { useInspectorStore, type NativeDevice } from '@/stores/inspector'
 import { useLayoutStore } from '@/stores/layout'
+import { useHouseStore } from '@/stores/house'
+import { placementRoom } from '@/house/geometry'
 import { api, type Accessory } from '@/api'
 // Controls this view puts in the shell topbar. Only on the right: the left
 // is the frame's trail and nothing else.
@@ -262,6 +264,7 @@ const topbarRight = useShellSlot('topbar-right')
 const { phone } = usePhoneLayout()
 
 const daemon = useDaemonStore()
+const house = useHouseStore()
 const inspector = useInspectorStore()
 const confirm = useConfirm()
 
@@ -386,6 +389,8 @@ const deviceColumns: IDataTableColumn[] = [
   { key: 'name', header: 'Device', sortable: true, primary: true },
   { key: 'type', header: 'Type', sortable: true, width: 160, phoneMeta: true },
   { key: 'source', header: 'Source', sortable: true, width: 120, phoneMeta: true },
+  // From the house plan. Sorting by it groups the list by room.
+  { key: 'room', header: 'Room', sortable: true, width: 160 },
   { key: 'state', header: 'State', sortable: true, width: 120 },
   { key: 'detail', header: 'Reading', sortable: true, width: 160 },
 ]
@@ -400,6 +405,7 @@ interface DeviceRow {
   name: string
   type: string
   source: string
+  room: string
   state: string
   stateOn: boolean
   detail: string
@@ -416,6 +422,7 @@ const deviceRows = computed<DeviceRow[]>(() => {
       name: dev.name,
       type: widgetLabel(effectiveType(dev)),
       source: 'Native',
+      room: roomLabel(`device:${dev.id}`),
       state: dev.telemetry.active === undefined ? '' : dev.telemetry.active ? 'On' : 'Off',
       stateOn: !!dev.telemetry.active,
       detail: nativeSummary(dev),
@@ -431,6 +438,7 @@ const deviceRows = computed<DeviceRow[]>(() => {
         name: acc.displayName,
         type: categoryInfo(acc.category).label,
         source: 'HomeKit',
+        room: roomLabel(`accessory:${acc.uuid}`),
         state: acc.reachable ? (on ? (on.value ? 'On' : 'Off') : '') : 'Not responding',
         stateOn: acc.reachable && !!on?.value,
         detail: hapPrimaryValue(acc) ?? '',
@@ -450,6 +458,26 @@ const deviceRows = computed<DeviceRow[]>(() => {
       dir * String(a[sort.key as keyof DeviceRow] ?? '').localeCompare(String(b[sort.key as keyof DeviceRow] ?? '')),
   )
 })
+
+/**
+ * Where a device is on the house plan, for the table and the cards. Read from
+ * the plan here rather than from each device's `room`, because HomeKit
+ * accessories come from a different endpoint that does not carry it. The
+ * floor is named only when the house has more than one.
+ */
+function roomLabel(ref: string): string {
+  const at = placementRoom(house.plan, ref)
+  if (!at) return ''
+  const multi = (house.plan?.floors.length ?? 0) > 1
+  if (!at.room) return multi ? at.floor.name : ''
+  return multi ? `${at.room.name}, ${at.floor.name}` : at.room.name
+}
+
+/** A card's support line, with the room appended when the device is on the plan. */
+function withRoom(line: string, ref: string): string {
+  const room = roomLabel(ref)
+  return room ? `${line} · ${room}` : line
+}
 
 /** The one number worth showing for a device in a single table cell. */
 function nativeSummary(dev: NativeDevice): string {
@@ -757,6 +785,7 @@ layout.setPage('Devices')
 const DEVICE_FORMS = { one: '{count} device', other: '{count} devices' }
 
 onMounted(async () => {
+  void house.load().catch(() => undefined)
   await poll()
   pollInterval = setInterval(poll, 3000)
 })

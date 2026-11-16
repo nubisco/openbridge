@@ -283,3 +283,67 @@ export function setCharacteristic(
     throw new ServiceError(500, `setValue failed: ${err}`)
   }
 }
+
+/**
+ * The house as a person would describe it: floors, rooms with their sizes in
+ * metres, and which devices are in each, by name. For an agent answering
+ * "what is in the kitchen" or "which rooms does the heating serve". Live
+ * readings stay in `listDevices`, so there is one place to read state from.
+ */
+export function houseView(ctx: BridgeContext) {
+  const stored = ctx.house?.get()
+  const plan = stored?.plan
+  if (!plan) return { drawn: false as const }
+  const devices = new Map(
+    listDevices(ctx).map((d) => [`device:${d.id}`, { id: d.id, name: d.name, type: d.homekitType ?? d.widgetType }]),
+  )
+  for (const a of listAccessories(ctx)) {
+    devices.set(`accessory:${a.uuid}`, { id: a.uuid, name: a.displayName, type: 'homekit' })
+  }
+  const metres = (cells: number) => cells * plan.grid
+  const roomName = new Map(plan.floors.flatMap((f) => f.rooms.map((r) => [r.id, r.name] as const)))
+  const placed = new Set<string>()
+  const floors = plan.floors
+    .slice()
+    .sort((a, b) => a.level - b.level)
+    .map((f) => {
+      const inRoom = new Map<string, Array<{ id: string; name: string; type: string }>>()
+      const outside: Array<{ id: string; name: string; type: string }> = []
+      for (const p of f.placements) {
+        const d = devices.get(p.ref)
+        if (!d) continue
+        placed.add(p.ref)
+        const room = ctx.house?.roomOf(p.ref)
+        if (room) inRoom.set(room.id, [...(inRoom.get(room.id) ?? []), d])
+        else outside.push(d)
+      }
+      return {
+        name: f.name,
+        level: f.level,
+        rooms: f.rooms.map((r) => ({
+          name: r.name,
+          kind: r.kind,
+          width_m: metres(r.w),
+          depth_m: metres(r.h),
+          devices: inRoom.get(r.id) ?? [],
+        })),
+        ...(outside.length ? { devices_outside_rooms: outside } : {}),
+      }
+    })
+  const circuits = plan.floors.flatMap((f) =>
+    f.placements
+      .filter((p) => p.circuitRooms?.length && devices.has(p.ref))
+      .map((p) => ({
+        device: devices.get(p.ref)!.name,
+        rooms: p.circuitRooms!.map((id) => roomName.get(id) ?? id),
+      })),
+  )
+  const notOnPlan = [...devices.entries()].filter(([ref]) => !placed.has(ref)).map(([, d]) => d.name)
+  return {
+    drawn: true as const,
+    updated_at: stored.updatedAt,
+    floors,
+    ...(circuits.length ? { heating_circuits: circuits } : {}),
+    ...(notOnPlan.length ? { not_on_plan: notOnPlan } : {}),
+  }
+}

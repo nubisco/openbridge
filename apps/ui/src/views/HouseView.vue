@@ -108,8 +108,8 @@ import { api, type HousePlan } from '@/api'
 import { useDaemonStore } from '@/stores/daemon'
 import { useHouseStore } from '@/stores/house'
 import { useLayoutStore } from '@/stores/layout'
-import { emptyPlan, placementOf, tidy } from '@/house/editor'
-import { roomAt } from '@/house/geometry'
+import { emptyPlan, tidy } from '@/house/editor'
+import { placementRoom } from '@/house/geometry'
 import { KIND_LABEL, isActive, liveDevices, stateText, type LiveDevice, type NativeDevice } from '@/house/live'
 import { setPower, tapToggles } from '@/house/control'
 import HouseStage from '@/components/house/HouseStage.vue'
@@ -183,14 +183,9 @@ const selectedDevice = computed(() => (selected.value ? (byRef.value.get(selecte
 /** "Kitchen, Ground floor", read from the plan as it is now. */
 function whereOf(ref: string | null): string {
   if (!ref || !house.plan) return ''
-  const at = placementOf(house.plan, ref)
+  const at = placementRoom(house.plan, ref)
   if (!at) return 'Not on the plan'
-  const { floor: f, placement: p } = at
-  const o = p.opening ? f.openings.find((x) => x.id === p.opening) : undefined
-  const x = o ? o.x + (o.axis === 'h' ? o.len / 2 : 0) : p.x
-  const y = o ? o.y + (o.axis === 'v' ? o.len / 2 : 0) : p.y
-  const r = roomAt(f, x, y)
-  return r ? `${r.name}, ${f.name}` : f.name
+  return at.room ? `${at.room.name}, ${at.floor.name}` : at.floor.name
 }
 
 const listTitle = computed(() => {

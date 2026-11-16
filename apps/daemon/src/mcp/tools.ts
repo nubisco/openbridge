@@ -23,6 +23,7 @@ import {
   getDevice,
   listAccessories,
   listDevices,
+  houseView,
   readLogs,
   setCharacteristic,
   type BridgeContext,
@@ -239,6 +240,8 @@ const observationsArgs = z.object({
   limit: z.number().int().min(1).max(1000).default(50),
 })
 
+const houseArgs = z.object({})
+
 const logsArgs = z.object({
   plugin: z.string().optional().describe('Only this plugin (or "system" for the daemon itself)'),
   level: z.enum(['debug', 'info', 'warn', 'error']).optional().describe('This level and above'),
@@ -393,6 +396,17 @@ export const MCP_TOOLS: McpTool[] = [
             }),
       }
     },
+  }),
+
+  tool({
+    name: 'house',
+    description:
+      'The house plan the person drew: floors, rooms with their size in metres, which devices are in each room, ' +
+      'which rooms each heating circuit serves, and devices not on the plan yet. Use it for questions about ' +
+      'rooms and floors. Current readings are in `overview`. `drawn` is false when there is no plan yet.',
+    schema: houseArgs,
+    scope: READ_SCOPE,
+    handler: (_args, ctx) => houseView(ctx.bridge),
   }),
 
   tool({

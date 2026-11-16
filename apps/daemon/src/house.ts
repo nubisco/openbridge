@@ -61,6 +61,10 @@ export interface HousePlacement {
   color?: string
   /** Rooms a heating or cooling device's water circuit runs through, in order. */
   circuitRooms?: string[]
+  /** A gate's width in cells. Drawn centred on (x, y). */
+  length?: number
+  /** Which way a gate runs: `h` along x, `v` along y. */
+  axis?: 'h' | 'v'
 }
 
 export interface HouseFloor {
@@ -226,6 +230,11 @@ export function validateHousePlan(raw: unknown): HousePlan {
       if (pl.color !== undefined) {
         if (typeof pl.color !== 'string' || !COLOR.test(pl.color)) fail(`${pp}.color`, 'must be a #rrggbb colour')
         out.color = pl.color.toLowerCase()
+      }
+      if (pl.length !== undefined) out.length = int(pl.length, `${pp}.length`, 1, 40)
+      if (pl.axis !== undefined) {
+        if (pl.axis !== 'h' && pl.axis !== 'v') fail(`${pp}.axis`, 'must be h or v')
+        out.axis = pl.axis
       }
       if (pl.circuitRooms !== undefined) {
         out.circuitRooms = arr(pl.circuitRooms, `${pp}.circuitRooms`, 50).map((c, ci) =>

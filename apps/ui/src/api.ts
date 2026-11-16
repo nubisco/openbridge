@@ -270,6 +270,10 @@ export interface HousePlacement {
   opening?: string
   color?: string
   circuitRooms?: string[]
+  /** A gate's width in cells, centred on (x, y). */
+  length?: number
+  /** Which way a gate runs. */
+  axis?: 'h' | 'v'
 }
 
 export interface HouseFloor {

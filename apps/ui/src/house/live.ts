@@ -8,7 +8,8 @@
  *
  * Telemetry keys follow what the plugins report today: `active` and
  * `brightness` (WiZ, Shelly), `currentTemperature` and `targetTemperature`
- * (Tuya heating), `currentHumidity` (Tuya dehumidifier), `power` (Shelly
+ * (Tuya heating), `supplyTemperature` and `returnTemperature` (any heating
+ * plugin that reads both pipes), `currentHumidity` (Tuya dehumidifier), `power` (Shelly
  * meters) and the gate's `state` and `target` (Shelly gate).
  */
 import type { Accessory, AccessoryCharacteristic, AccessoryService, DeviceDescriptor } from '@/api'
@@ -42,6 +43,9 @@ export interface LiveDevice {
   /** Shutter open share, 0-100. */
   position?: number
   temperature?: number
+  /** Water leaving and coming back, for a heating device that reports both. */
+  supply?: number
+  return?: number
   target?: number
   humidity?: number
   power?: number
@@ -84,6 +88,8 @@ export function fromNative(d: NativeDevice & { homekitType?: string | null }): L
   out.brightness = num(t.brightness)
   out.temperature = num(t.currentTemperature)
   out.target = num(t.targetTemperature)
+  out.supply = num(t.supplyTemperature) ?? num(t.flowTemperature)
+  out.return = num(t.returnTemperature)
   out.humidity = num(t.currentHumidity)
   out.power = num(t.power)
   if (kind === 'gate' && typeof t.state === 'string') out.gateState = t.state as LiveDevice['gateState']

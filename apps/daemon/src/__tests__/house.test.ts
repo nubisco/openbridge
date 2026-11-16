@@ -51,6 +51,18 @@ function plan(): HousePlan {
 }
 
 describe('validateHousePlan', () => {
+  it('keeps the width and direction of a gate', () => {
+    const p = plan()
+    p.floors[0].placements.push({ ref: 'device:gate', x: 20, y: 22, length: 8, axis: 'v' })
+    expect(validateHousePlan(p).floors[0].placements[3]).toEqual({
+      ref: 'device:gate',
+      x: 20,
+      y: 22,
+      length: 8,
+      axis: 'v',
+    })
+  })
+
   it('accepts a sound plan and normalises it', () => {
     const out = validateHousePlan({ ...plan(), extra: 'dropped' })
     expect(out.floors).toHaveLength(2)
@@ -72,6 +84,8 @@ describe('validateHousePlan', () => {
     ],
     ['a device between half cells', (p) => (p.floors[0].placements[0].x = 6.2), /multiple of 0\.5/],
     ['an unknown ref kind', (p) => (p.floors[0].placements[0].ref = 'lamp'), /device:<id>/],
+    ['a gate with no width', (p) => (p.floors[0].placements[0].length = 0), /length/],
+    ['a gate running diagonally', (p) => ((p.floors[0].placements[0] as { axis: string }).axis = 'd'), /axis/],
     ['an empty name', (p) => (p.floors[0].rooms[0].name = '  '), /name/],
     ['a wrong version', (p) => ((p as { version: number }).version = 2), /version/],
   ]
@@ -212,5 +226,63 @@ describe('house routes', () => {
     const cleared = await a.inject({ method: 'PUT', url: '/api/house', payload: { plan: null, rev: 1 } })
     expect(cleared.json()).toMatchObject({ plan: null, rev: 2 })
     await a.close()
+  })
+})
+
+describe('houseView, what an agent reads', () => {
+  let dir: string
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'ob-house-view-'))
+  })
+  afterEach(() => rmSync(dir, { recursive: true, force: true }))
+
+  async function bridge(withPlan: boolean) {
+    const { PluginRegistry } = await import('@nubisco/openbridge-core')
+    const { houseView, listDevices } = await import('../services/bridge.js')
+    const registry = new PluginRegistry()
+    const instance = registry.register({ manifest: { name: 'p', version: '1.0.0' } })
+    instance.devices = {
+      lamp: { id: 'lamp', name: 'Reading lamp', widgetType: 'light', pluginId: 'p' },
+      heating: { id: 'heating', name: 'Heat pump', widgetType: 'thermostat', pluginId: 'p' },
+      meter: { id: 'meter', name: 'Meter', widgetType: 'energy_meter', pluginId: 'p' },
+    }
+    const house = new HouseStore(join(dir, 'house.json'))
+    if (withPlan) house.set(plan(), 0)
+    const ctx = {
+      registry,
+      home: dir,
+      hapAPI: null,
+      controls: new Map(),
+      restrictedControls: new Set<string>(),
+      deviceEvents: null,
+      observations: null,
+      homekitServiceTypes: null,
+      nativeAccessoryUuid: null,
+      house,
+    }
+    return { view: houseView(ctx), devices: listDevices(ctx) }
+  }
+
+  it('says there is no plan yet', async () => {
+    expect((await bridge(false)).view).toEqual({ drawn: false })
+  })
+
+  it('lists rooms in metres with their devices, circuits by room name, and what is not placed', async () => {
+    const { view, devices } = await bridge(true)
+    if (!view.drawn) throw new Error('expected a plan')
+    const ground = view.floors[0]
+    expect(ground.rooms[0]).toEqual({
+      name: 'Living room',
+      kind: 'room',
+      width_m: 5,
+      depth_m: 4,
+      devices: [{ id: 'lamp', name: 'Reading lamp', type: 'light' }],
+    })
+    expect(ground.rooms[1].devices.map((d) => d.name)).toEqual(['Heat pump'])
+    expect(view.heating_circuits).toEqual([{ device: 'Heat pump', rooms: ['Living room', 'Bedroom'] }])
+    expect(view.not_on_plan).toEqual(['Meter'])
+    // The same rooms reach the device list.
+    expect(devices.find((d) => d.id === 'lamp')?.room?.name).toBe('Living room')
+    expect(devices.find((d) => d.id === 'meter')?.room).toBeNull()
   })
 })

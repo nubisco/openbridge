@@ -104,6 +104,8 @@ const readings = computed(() => {
   if (!d) return []
   const out: Array<{ term: string; value: string }> = [{ term: 'Kind', value: KIND_LABEL[d.kind] }]
   if (d.temperature !== undefined) out.push({ term: 'Temperature', value: `${d.temperature.toFixed(1)} °C` })
+  if (d.supply !== undefined) out.push({ term: 'Water out', value: `${d.supply.toFixed(1)} °C` })
+  if (d.return !== undefined) out.push({ term: 'Water back', value: `${d.return.toFixed(1)} °C` })
   if (d.target !== undefined && !caps.value.target) out.push({ term: 'Target', value: `${d.target.toFixed(1)} °C` })
   if (d.humidity !== undefined) out.push({ term: 'Humidity', value: `${Math.round(d.humidity)}%` })
   if (d.power !== undefined) out.push({ term: 'Power', value: formatPower(d.power) })

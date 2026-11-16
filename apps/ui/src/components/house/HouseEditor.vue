@@ -99,6 +99,28 @@
             @update:model-value="(v: unknown) => setColor(String(v))"
           />
         </NbField>
+        <template v-if="placedDevice?.kind === 'gate'">
+          <NbField v-slot="{ id }" label="Gate width (m)" orientation="stack">
+            <NbNumberInput
+              :id="id"
+              :model-value="(placed.length ?? 4) / CELLS_PER_M"
+              :min="0.5"
+              :max="20"
+              :step="0.5"
+              size="sm"
+              @update:model-value="setGateLength"
+            />
+          </NbField>
+          <NbField v-slot="{ id }" label="Runs" orientation="stack">
+            <NbSelect
+              :id="id"
+              :model-value="placed.axis ?? 'h'"
+              :options="GATE_AXES"
+              size="sm"
+              @update:model-value="(v: unknown) => setGateAxis(v === 'v' ? 'v' : 'h')"
+            />
+          </NbField>
+        </template>
         <template v-if="placedDevice?.kind === 'heating'">
           <NbField label="Rooms its water circuit serves" orientation="stack">
             <div class="house-editor__checks">
@@ -227,6 +249,10 @@ const ROOM_KINDS = [
 const OPENING_KINDS = [
   { label: 'Door', value: 'door' },
   { label: 'Window', value: 'window' },
+]
+const GATE_AXES = [
+  { label: 'Left to right', value: 'h' },
+  { label: 'Front to back', value: 'v' },
 ]
 const GLOW_COLOURS = [
   { label: 'Warm white', value: WARM_LIGHT },
@@ -380,6 +406,14 @@ function setOpeningLength(v: number | null) {
 
 function setColor(c: string) {
   if (placed.value) placed.value.color = c
+}
+
+function setGateLength(v: number | null) {
+  if (placed.value && v !== null) placed.value.length = clamp(Math.round(v * CELLS_PER_M), 1, 40)
+}
+
+function setGateAxis(axis: 'h' | 'v') {
+  if (placed.value) placed.value.axis = axis
 }
 
 function toggleCircuitRoom(id: string, on: boolean) {
