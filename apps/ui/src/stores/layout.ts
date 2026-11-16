@@ -21,13 +21,23 @@ export const useLayoutStore = defineStore('layout', () => {
    * terminal surfaces, which should fill the space rather than float in it.
    */
   const fullBleed = ref(false)
+  /**
+   * Fold the sidebar to icons while this page is open, for a page that wants
+   * the width (the House). The person's own choice is untouched and is what
+   * every other page shows.
+   */
+  const compactNav = ref(false)
 
-  /** Opt-in per page: setPage resets it, so a view must ask on every mount. */
-  function setPage(pageTitle: string, options?: { fullBleed?: boolean; crumbs?: IBreadcrumbItem[] }) {
+  /** Opt-in per page: setPage resets both, so a view must ask on every mount. */
+  function setPage(
+    pageTitle: string,
+    options?: { fullBleed?: boolean; compactNav?: boolean; crumbs?: IBreadcrumbItem[] },
+  ) {
     title.value = pageTitle
     fullBleed.value = options?.fullBleed ?? false
+    compactNav.value = options?.compactNav ?? false
     crumbs.value = options?.crumbs ?? []
   }
 
-  return { title, crumbs, fullBleed, setPage }
+  return { title, crumbs, fullBleed, compactNav, setPage }
 })

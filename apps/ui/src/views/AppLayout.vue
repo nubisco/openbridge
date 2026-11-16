@@ -7,7 +7,7 @@
     ref="shell"
     :inspector-visible="inspector.visible"
     :main-padding="!layout.fullBleed"
-    :sidebar-variant="nav.variant.value"
+    :sidebar-variant="sidebarVariant"
     sidebar-header-action-position="start"
     sidebar-header-action-compact="swap"
     @update:inspector-visible="(v: boolean) => !v && inspector.close()"
@@ -23,7 +23,7 @@
       </RouterLink>
     </template>
     <template #sidebar-header-action>
-      <NbSidebarHeaderToggle @toggle="nav.toggle" />
+      <NbSidebarHeaderToggle @toggle="toggleNav" />
     </template>
 
     <!-- ═══ Navigation ═══ -->
@@ -175,9 +175,23 @@ const inspector = useInspectorStore()
 const layout = useLayoutStore()
 const auth = useAuth()
 
-// Collapsed or expanded is the person's choice, remembered per browser, never
-// derived from the route.
+// Collapsed or expanded is the person's choice, remembered per browser. A
+// page that wants the width (the House) folds it while it is open without
+// touching that choice: the toggle there opens it for this visit only, and
+// the next page shows the person's own setting again.
 const nav = useSidebarVariant({ storageKey: 'openbridge.sidebar' })
+const openedHere = ref(false)
+const sidebarVariant = computed(() =>
+  layout.compactNav ? (openedHere.value ? 'verbose' : 'compact') : nav.variant.value,
+)
+function toggleNav(): void {
+  if (layout.compactNav) openedHere.value = !openedHere.value
+  else nav.toggle()
+}
+watch(
+  () => route.name,
+  () => (openedHere.value = false),
+)
 
 // A drawer that stays open after the page changed covers the page you went
 // to. The shell closes it when a link inside it is used. This catches the

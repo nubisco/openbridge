@@ -72,13 +72,20 @@ const touches = (a: HouseRect, b: HouseRect) => {
 
 export interface HouseOpening {
   id: string
-  type: 'door' | 'window'
-  /** Start of the opening, on a wall line. */
+  /**
+   * `open` is a stretch with no wall at all: two rooms that run into each
+   * other, such as a kitchen open to the living room.
+   */
+  type: 'door' | 'window' | 'open'
+  /**
+   * Start of the opening, on a wall line. Along the wall it may sit on a half
+   * cell (a quarter metre), so a door can be centred on a wall of any length.
+   */
   x: number
   y: number
   /** `h` runs along x, `v` along y. */
   axis: 'h' | 'v'
-  /** Length in cells. */
+  /** Length in cells, in half cells. */
   len: number
   /** A door's hinge: the end at the lower x or y (`start`), or the other one. Default `start`. */
   hinge?: 'start' | 'end'
@@ -269,12 +276,14 @@ export function validateHousePlan(raw: unknown): HousePlan {
       const oid = id(o.id, `${op}.id`)
       if (openingIds.has(oid)) fail(`${op}.id`, `'${oid}' is used twice`)
       openingIds.add(oid)
-      if (o.type !== 'door' && o.type !== 'window') fail(`${op}.type`, 'must be door or window')
+      if (o.type !== 'door' && o.type !== 'window' && o.type !== 'open')
+        fail(`${op}.type`, 'must be door, window or open')
       if (o.axis !== 'h' && o.axis !== 'v') fail(`${op}.axis`, 'must be h or v')
       if (o.type === 'window') windows.add(oid)
-      const x = int(o.x, `${op}.x`, 0, plot.w)
-      const y = int(o.y, `${op}.y`, 0, plot.h)
-      const len = int(o.len, `${op}.len`, 1, o.axis === 'h' ? plot.w - x : plot.h - y)
+      // On the wall's line in whole cells, along it in half cells.
+      const x = (o.axis === 'h' ? half : int)(o.x, `${op}.x`, 0, plot.w)
+      const y = (o.axis === 'v' ? half : int)(o.y, `${op}.y`, 0, plot.h)
+      const len = half(o.len, `${op}.len`, 1, o.axis === 'h' ? plot.w - x : plot.h - y)
       const out: HouseOpening = { id: oid, type: o.type, axis: o.axis, x, y, len }
       if (o.hinge !== undefined) {
         if (o.hinge !== 'start' && o.hinge !== 'end') fail(`${op}.hinge`, 'must be start or end')

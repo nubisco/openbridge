@@ -73,6 +73,20 @@ describe('validateHousePlan', () => {
     expect(() => validateHousePlan(p)).toThrow(/hinge/)
   })
 
+  it('lets a door sit a quarter metre along its wall, and a wall be left open', () => {
+    const p = plan()
+    Object.assign(p.floors[0].openings[1], { x: 4.5, len: 1.5 })
+    p.floors[0].openings.push({ id: 'o1', type: 'open', axis: 'v', x: 12, y: 3, len: 4 })
+    const out = validateHousePlan(p).floors[0].openings
+    expect(out[1]).toMatchObject({ x: 4.5, len: 1.5 })
+    expect(out[2].type).toBe('open')
+    // Across the wall it stays on the wall's line.
+    Object.assign(p.floors[0].openings[1], { x: 4, y: 10.5 })
+    expect(() => validateHousePlan(p)).toThrow(/openings\[1\]\.y: must be a whole number/)
+    Object.assign(p.floors[0].openings[1], { y: 10, x: 4.25 })
+    expect(() => validateHousePlan(p)).toThrow(/multiple of 0\.5/)
+  })
+
   it('keeps how a lamp is mounted and what a device is drawn as', () => {
     const p = plan()
     Object.assign(p.floors[0].placements[0], { mount: 'floor' })
