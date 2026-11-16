@@ -10,6 +10,7 @@
     :sidebar-variant="nav.variant.value"
     sidebar-header-action-position="start"
     sidebar-header-action-compact="swap"
+    @update:inspector-visible="(v: boolean) => !v && inspector.close()"
   >
     <!-- ═══ Brand ═══ -->
     <template #sidebar-logo>
@@ -137,6 +138,7 @@
       <PluginInspector v-if="inspector.mode === 'plugin'" />
       <MarketplacePanel v-else-if="inspector.mode === 'marketplace'" />
       <DeviceInspector v-else-if="inspector.mode === 'device'" />
+      <HouseInspector v-else-if="inspector.mode === 'house'" />
     </template>
 
     <!-- ═══ Live logs ═══ -->
@@ -163,6 +165,7 @@ import { useAuth, type PlatformIdentity } from '@/composables/useAuth'
 import PluginInspector from '@/components/PluginInspector.vue'
 import MarketplacePanel from '@/components/MarketplacePanel.vue'
 import DeviceInspector from '@/components/DeviceInspector.vue'
+import HouseInspector from '@/components/house/HouseInspector.vue'
 import LiveLogsPanel from '@/components/LiveLogsPanel.vue'
 import NotificationBell from '@/components/NotificationBell.vue'
 

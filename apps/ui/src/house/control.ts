@@ -62,6 +62,13 @@ export async function setGate(d: LiveDevice, target: 'open' | 'closed'): Promise
 }
 
 /** A tap on the plan acts only where acting is safe and obvious: lights and plain switches. */
-export function tapToggles(d: LiveDevice): boolean {
+/**
+ * Whether a tap on the plan switches the device. Only lights and plain
+ * switches do. Anything drawn as an appliance or an outlet never does: a
+ * plug drawn as the fridge switched off by a stray tap is a spoiled fridge.
+ * Those open their controls instead.
+ */
+export function tapToggles(d: LiveDevice, look?: string): boolean {
+  if (look) return false
   return (d.kind === 'light' || d.kind === 'switch') && d.reachable && capabilities(d).power
 }

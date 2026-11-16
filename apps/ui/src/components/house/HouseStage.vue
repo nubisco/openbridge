@@ -1,8 +1,8 @@
 <template>
   <div
     ref="stageEl"
-    class="house-stage hv-stage-bg"
-    :class="{ 'is-phone': phone, 'is-preview': preview }"
+    class="house-stage"
+    :class="{ 'is-phone': phone, 'is-preview': preview, 'is-fill': fill }"
     @keydown="preview ? undefined : onKey($event)"
   >
     <svg
@@ -66,7 +66,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { usePhoneLayout } from '@nubisco/ui'
 import type { HouseFloor, HousePlan } from '@/api'
-import { CELLS_PER_M, floorBounds, project, r1, S, type Point } from '@/house/geometry'
+import { CELLS_PER_M, drawnBounds, project, r1, S, type Point } from '@/house/geometry'
 import { renderFloor, wallHeight, type SceneOptions } from '@/house/scene'
 import type { LiveDevice } from '@/house/live'
 
@@ -86,12 +86,18 @@ const props = defineProps<{
    * the card links to.
    */
   preview?: boolean
+  /** Fill the parent's height, for a page that is all house. */
+  fill?: boolean
+  /** Screen pixels at the top kept clear of the house, for a toolbar floating over it. */
+  insetTop?: number
 }>()
 
 const emit = defineEmits<{
   'update:floor': [floor: string]
   /** A device was activated on the plan (tap, Enter or Space). */
   activate: [ref: string]
+  /** A tap on nothing in particular. */
+  clear: []
 }>()
 
 const { phone } = usePhoneLayout()
@@ -131,7 +137,7 @@ const layout = computed(() => {
   let cursor = 0
   const portrait = VH / VW > 0.85
   floorsBottomUp.value.forEach((f, i) => {
-    const b = floorBounds(props.plan, f)
+    const b = drawnBounds(props.plan, f)
     if (iso) {
       if (i > 0) cum -= (b.w + b.h) * 0.5 * S + H * S + 34
       offsets[f.id] = all.value ? [0, cum] : [0, 0]
@@ -146,7 +152,7 @@ const layout = computed(() => {
   let y2 = -Infinity
   for (const f of floorsBottomUp.value) {
     if (!visible(f.id)) continue
-    const b = floorBounds(props.plan, f)
+    const b = drawnBounds(props.plan, f)
     const o = offsets[f.id]
     for (const [cx, cy] of [
       [b.x, b.y],
@@ -165,11 +171,15 @@ const layout = computed(() => {
   }
   if (!Number.isFinite(x1)) return null
   // Room for the floor rail: beside the plan on a wide stage, above it on a phone.
-  const padTop = props.preview ? 10 : phone.value ? 70 : 20
-  const padLeft = props.preview || phone.value ? 0 : (170 * VW) / cw
-  const k = Math.min((VW - padLeft) / (x2 - x1 + 50), (VH - padTop) / (y2 - y1 + 50), 2.2)
+  // Room for what floats over the stage: the toolbar above, and the floor
+  // rail beside the plan on a wide stage or under it on a phone.
+  const px = VW / cw
+  const padTop = props.preview ? 10 : ((props.insetTop ?? 0) + 12) * px
+  const padBottom = props.preview || !phone.value ? 0 : 56 * px
+  const padLeft = props.preview || phone.value ? 0 : 170 * px
+  const k = Math.min((VW - padLeft) / (x2 - x1 + 50), (VH - padTop - padBottom) / (y2 - y1 + 50), 2.2)
   const tx = padLeft / 2 + VW / 2 - (k * (x1 + x2)) / 2
-  const ty = padTop / 2 + VH / 2 - (k * (y1 + y2)) / 2
+  const ty = (padTop - padBottom) / 2 + VH / 2 - (k * (y1 + y2)) / 2
   return { VW, VH, k, tx, ty, offsets, unit: (VW / (cw * k)) * (cw < 520 ? 0.82 : 1) }
 })
 
@@ -235,6 +245,7 @@ function onClick(e: MouseEvent) {
   if (ref) return emit('activate', ref)
   const plate = hit instanceof Element ? hit.closest('[data-plate]') : null
   if (plate && all.value) emit('update:floor', plate.getAttribute('data-plate') as string)
+  else emit('clear')
 }
 
 function onSvgKey(e: KeyboardEvent) {
@@ -285,20 +296,22 @@ onBeforeUnmount(() => observer?.disconnect())
   position: relative;
   height: min(70vh, 680px);
   min-height: 380px;
-  border-radius: var(--nb-radius-md);
   overflow: hidden;
-  border: 1px solid var(--nb-c-border);
 
   &.is-phone {
     height: min(108vw, 66vh);
     min-height: 340px;
   }
 
+  // The house page: the house is the page, with no frame round it.
+  &.is-fill {
+    height: 100%;
+    min-height: 0;
+  }
+
   &.is-preview {
     height: 220px;
     min-height: 0;
-    border: 0;
-    border-radius: var(--nb-radius-control);
   }
 }
 
@@ -334,7 +347,8 @@ onBeforeUnmount(() => observer?.disconnect())
   border: 1px solid var(--nb-c-border);
 
   .is-phone & {
-    top: var(--nb-spacing-8);
+    top: auto;
+    bottom: var(--nb-spacing-8);
     transform: none;
     flex-direction: row;
   }
@@ -344,12 +358,12 @@ onBeforeUnmount(() => observer?.disconnect())
   position: absolute;
   right: var(--nb-spacing-8);
   bottom: var(--nb-spacing-8);
-  color: #dcebff;
+  color: var(--nb-c-text-muted);
   font-size: 11px;
   padding: 6px 9px;
   border-radius: var(--nb-radius-md);
-  background: rgba(6, 14, 32, 0.6);
-  border: 1px solid rgba(120, 180, 255, 0.16);
+  background: var(--nb-c-layer-1);
+  border: 1px solid var(--nb-c-border);
 }
 
 .house-stage__legend-bar {

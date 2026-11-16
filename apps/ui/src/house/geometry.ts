@@ -228,6 +228,63 @@ export function floorBounds(plan: HousePlan, floor: HouseFloor) {
   return { x: x1, y: y1, w: x2 - x1, h: y2 - y1 }
 }
 
+/**
+ * What is drawn on a floor: its rooms and devices, not the empty plot
+ * around them. The live view frames this, so a house on a big plot fills the
+ * page instead of floating in a field of nothing.
+ */
+export function drawnBounds(plan: HousePlan, floor: HouseFloor) {
+  const xs: number[] = []
+  const ys: number[] = []
+  for (const q of floor.rooms.flatMap(roomRects)) {
+    xs.push(q.x, q.x + q.w)
+    ys.push(q.y, q.y + q.h)
+  }
+  for (const p of floor.placements) {
+    const half = (p.length ?? 0) / 2
+    xs.push(p.x - (p.axis === 'v' ? 0 : half), p.x + (p.axis === 'v' ? 0 : half))
+    ys.push(p.y - (p.axis === 'v' ? half : 0), p.y + (p.axis === 'v' ? half : 0))
+  }
+  if (!xs.length) return floorBounds(plan, floor)
+  const x = Math.min(...xs)
+  const y = Math.min(...ys)
+  return { x, y, w: Math.max(1, Math.max(...xs) - x), h: Math.max(1, Math.max(...ys) - y) }
+}
+
+// ─── Doors ──────────────────────────────────────────────────────────────────
+
+/**
+ * How a door swings: its hinge, where the leaf's free end rests when shut,
+ * and where it reaches fully open, in cells. `at(t)` is the free end at a
+ * share of the way open, 0 shut and 1 at a right angle.
+ */
+export function doorSwing(o: HouseOpening) {
+  const a: Point = [o.x, o.y]
+  const b: Point = o.axis === 'h' ? [o.x + o.len, o.y] : [o.x, o.y + o.len]
+  const hinge = o.hinge === 'end' ? b : a
+  const free = o.hinge === 'end' ? a : b
+  const sign = o.opens === 'up' || o.opens === 'left' ? -1 : 1
+  const open: Point = o.axis === 'h' ? [hinge[0], hinge[1] + sign * o.len] : [hinge[0] + sign * o.len, hinge[1]]
+  const at = (t: number): Point => {
+    const c = Math.cos((t * Math.PI) / 2)
+    const s = Math.sin((t * Math.PI) / 2)
+    return [
+      hinge[0] + c * (free[0] - hinge[0]) + s * (open[0] - hinge[0]),
+      hinge[1] + c * (free[1] - hinge[1]) + s * (open[1] - hinge[1]),
+    ]
+  }
+  // SVG's sweep flag for the arc from the open end back to the shut end:
+  // 1 when that turn is clockwise on screen, where y points down.
+  const cross = (open[0] - hinge[0]) * (free[1] - hinge[1]) - (open[1] - hinge[1]) * (free[0] - hinge[0])
+  return { hinge, free, open, at, sweep: cross > 0 ? 1 : 0 }
+}
+
+/** The door side flipped: the same door, opening into the other room. */
+export function flippedSide(o: HouseOpening): HouseOpening['opens'] {
+  if (o.axis === 'h') return o.opens === 'up' ? 'down' : 'up'
+  return o.opens === 'left' ? 'right' : 'left'
+}
+
 // ─── Heating circuits ───────────────────────────────────────────────────────
 
 /**

@@ -12,6 +12,7 @@ import {
   CELLS_PER_M,
   S,
   clamp,
+  doorSwing,
   esc,
   openingFits,
   openingUnits,
@@ -264,6 +265,50 @@ export function nearestFreeWindow(floor: HouseFloor, x: number, y: number, reach
   return best
 }
 
+/** Whether an opening would sit wholly on wall, clear of every other opening. */
+function fitsFree(floor: HouseFloor, o: HouseOpening): boolean {
+  const units = wallUnits(floor)
+  const taken = new Set(floor.openings.filter((x) => x.id !== o.id).flatMap(openingUnits))
+  return openingUnits(o).every((k) => units.has(k) && !taken.has(k))
+}
+
+/**
+ * Slide an opening so the spot it was grabbed by (`grab` cells from its
+ * start) follows the pointer. It can jump to another wall, turning with it.
+ * Nothing changes where it would not fit, so a drag past a corner or onto
+ * another door just stops at the last place that worked.
+ */
+export function moveOpening(floor: HouseFloor, o: HouseOpening, x: number, y: number, grab: number): boolean {
+  const u = nearestWall(floor, x, y)
+  if (!u) return false
+  const start = Math.round((u.axis === 'h' ? x : y) - grab)
+  const next: HouseOpening = { ...o, axis: u.axis, x: u.axis === 'h' ? start : u.x, y: u.axis === 'v' ? start : u.y }
+  // A side is named for the wall's direction, so a turned door opens the default way.
+  if (next.axis !== o.axis) delete next.opens
+  if (!fitsFree(floor, next)) return false
+  Object.assign(o, next)
+  if (!next.opens) delete o.opens
+  return true
+}
+
+/** Drag one end of an opening along its wall, never under a cell long. */
+export function resizeOpening(floor: HouseFloor, o: HouseOpening, end: 'start' | 'end', x: number, y: number): boolean {
+  const at = Math.round(o.axis === 'h' ? x : y)
+  const s0 = o.axis === 'h' ? o.x : o.y
+  const s1 = s0 + o.len
+  const start = end === 'start' ? Math.min(at, s1 - 1) : s0
+  const stop = end === 'end' ? Math.max(at, s0 + 1) : s1
+  const next: HouseOpening = {
+    ...o,
+    x: o.axis === 'h' ? start : o.x,
+    y: o.axis === 'v' ? start : o.y,
+    len: stop - start,
+  }
+  if (!fitsFree(floor, next)) return false
+  Object.assign(o, next)
+  return true
+}
+
 export function removeOpening(floor: HouseFloor, id: string): void {
   floor.openings = floor.openings.filter((o) => o.id !== id)
   for (const p of floor.placements) if (p.opening === id) delete p.opening
@@ -404,11 +449,16 @@ export function renderEditor(
     const sel = w.opening && w.opening.id === o.selectedOpening ? ' hv-sel' : ''
     if (w.type === 'wall') h += `<line class="hv-ewall" ${c}/>`
     else if (w.type === 'window') h += `<line class="hv-ewinb" ${c}/><line class="hv-ewin${sel}" ${c}/>`
-    else {
-      const len = (w.axis === 'h' ? w.x2 - w.x1 : w.y2 - w.y1) * S
-      const corner = w.axis === 'h' ? `${w.x1 * S},${w.y1 * S + len}` : `${w.x1 * S + len},${w.y1 * S}`
-      h += `<line class="hv-ewinb" ${c}/><path class="hv-edoor${sel}" d="M${w.x1 * S},${w.y1 * S} L${corner} A${len},${len} 0 0 ${w.axis === 'h' ? 0 : 1} ${w.x2 * S},${w.y2 * S}"/>`
+    else if (w.opening) {
+      const sw = doorSwing(w.opening)
+      const len = w.opening.len * S
+      h +=
+        `<line class="hv-ewinb" ${c}/>` +
+        `<path class="hv-edoor${sel}" d="M${sw.hinge[0] * S},${sw.hinge[1] * S} L${sw.open[0] * S},${sw.open[1] * S} ` +
+        `A${len},${len} 0 0 ${sw.sweep} ${sw.free[0] * S},${sw.free[1] * S}"/>`
     }
+    // A wide invisible line over every opening, so a finger can grab it.
+    if (w.opening) h += `<line class="hv-ehit" data-opening="${esc(w.opening.id)}" ${c}/>`
   }
   const rr = Math.max(11, 11 * U)
   for (const p of floor.placements) {
@@ -425,6 +475,18 @@ export function renderEditor(
     h +=
       `<g class="hv-edev${o.selectedRef === p.ref ? ' hv-sel' : ''}${d ? '' : ' hv-missing'}" data-ref="${esc(p.ref)}" transform="translate(${x * S},${y * S})">` +
       `<title>${esc(name)}</title><circle r="${r1(rr)}"/><text font-size="${r1(rr)}" dy="${r1(rr * 0.36)}">${letter}</text></g>`
+  }
+  // The selected door's or window's ends, over everything, so a device
+  // standing beside it never hides them.
+  const so = floor.openings.find((x) => x.id === o.selectedOpening)
+  if (so) {
+    const ends: Array<['start' | 'end', number, number]> = [
+      ['start', so.x, so.y],
+      ['end', so.axis === 'h' ? so.x + so.len : so.x, so.axis === 'v' ? so.y + so.len : so.y],
+    ]
+    for (const [end, x, y] of ends) {
+      h += `<circle class="hv-eh hv-eoh-${so.axis}" data-ohandle="${end}" cx="${x * S}" cy="${y * S}" r="${r1(Math.max(6, 8 * U))}"/>`
+    }
   }
   const sel = floor.rooms.find((r) => r.id === o.selectedRoom)
   if (sel && o.showHandles) {

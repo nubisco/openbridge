@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { PluginInstance, Accessory, DeviceDescriptor } from '@/api'
 
-export type InspectorMode = 'plugin' | 'marketplace' | 'device'
+export type InspectorMode = 'plugin' | 'marketplace' | 'device' | 'house'
 
 export type NativeDevice = DeviceDescriptor & { telemetry: Record<string, unknown>; pluginStatus: string }
 export type DeviceItem = { kind: 'hap'; acc: Accessory } | { kind: 'native'; dev: NativeDevice }
@@ -12,6 +12,8 @@ export const useInspectorStore = defineStore('inspector', () => {
   const mode = ref<InspectorMode>('plugin')
   const selectedPlugin = ref<PluginInstance | null>(null)
   const selectedDevice = ref<DeviceItem | null>(null)
+  /** The device picked on the House plan, by its plan ref. */
+  const houseRef = ref<string | null>(null)
 
   function openPlugin(plugin: PluginInstance) {
     selectedPlugin.value = plugin
@@ -34,6 +36,14 @@ export const useInspectorStore = defineStore('inspector', () => {
     visible.value = true
   }
 
+  function openHouse(ref: string) {
+    houseRef.value = ref
+    selectedDevice.value = null
+    selectedPlugin.value = null
+    mode.value = 'house'
+    visible.value = true
+  }
+
   function updateDevice(device: DeviceItem) {
     if (selectedDevice.value && mode.value === 'device') {
       if (device.kind === 'native' && selectedDevice.value.kind === 'native') {
@@ -52,7 +62,20 @@ export const useInspectorStore = defineStore('inspector', () => {
     visible.value = false
     selectedPlugin.value = null
     selectedDevice.value = null
+    houseRef.value = null
   }
 
-  return { visible, mode, selectedPlugin, selectedDevice, openPlugin, openMarketplace, openDevice, updateDevice, close }
+  return {
+    visible,
+    mode,
+    selectedPlugin,
+    selectedDevice,
+    houseRef,
+    openPlugin,
+    openMarketplace,
+    openDevice,
+    openHouse,
+    updateDevice,
+    close,
+  }
 })

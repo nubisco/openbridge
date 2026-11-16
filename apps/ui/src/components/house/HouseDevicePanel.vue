@@ -69,7 +69,7 @@
         </NbButton>
       </div>
     </template>
-    <p v-else class="hdp__where type-body-sm">Tap a device on the plan or in the list.</p>
+    <p v-else class="hdp__where type-body-sm">Tap a device on the plan.</p>
   </NbPanel>
 </template>
 

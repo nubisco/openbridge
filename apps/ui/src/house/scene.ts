@@ -8,15 +8,15 @@
  * elements (`role="button"`, a label, `data-ref`), and the view handles taps
  * and keys on the stage by delegation.
  */
-import type { HouseFloor, HousePlacement, HousePlan } from '@/api'
+import type { HouseFloor, HouseLook, HousePlacement, HousePlan } from '@/api'
 import {
   CELLS_PER_M,
   ISO_FLOOR_MATRIX,
   S,
   clamp,
   circuitPath,
+  doorSwing,
   esc,
-  floorBounds,
   humidityColor,
   lerp,
   project,
@@ -34,6 +34,9 @@ import {
 import { formatPower, stateText, type LiveDevice } from './live'
 
 export const WARM_LIGHT = '#ffb45e'
+
+/** How high each kind of light sits, in metres. */
+const LAMP_HEIGHT = { ceiling: 2.35, wall: 1.8, floor: 1.5, table: 0.75 } as const
 
 export interface SceneOptions {
   mode: ViewMode
@@ -54,15 +57,23 @@ export interface SceneOptions {
 export const wallHeight = (o: Pick<SceneOptions, 'mode' | 'walls'>) =>
   o.mode === 'flat' ? 0 : o.walls === 'up' ? 1.35 * CELLS_PER_M : 0.4 * CELLS_PER_M
 
+/**
+ * Heights are drawn at about half scale, as the walls are (a 2.5 m wall
+ * stands 1.35 m), so a fridge or a floor lamp does not hide the room behind
+ * it. `zm` turns real metres into drawn height.
+ */
+const Z = 0.54
+const zm = (o: Pick<SceneOptions, 'mode'>, metres: number) => (o.mode === 'iso' ? metres * CELLS_PER_M * Z : 0)
+
 const ICON = {
-  drop: '<path d="M0,-6 C3,-2 4.5,0 4.5,2.5 A4.5,4.5 0 1 1 -4.5,2.5 C-4.5,0 -3,-2 0,-6Z" fill="#6fd0ff"/>',
-  bolt: '<path d="M1.5,-7 L-4,1 H-0.5 L-1.5,7 L4,-1 H0.5 Z" fill="#ffd24d"/>',
+  drop: '<path d="M0,-6 C3,-2 4.5,0 4.5,2.5 A4.5,4.5 0 1 1 -4.5,2.5 C-4.5,0 -3,-2 0,-6Z" fill="#2f9fe0"/>',
+  bolt: '<path d="M1.5,-7 L-4,1 H-0.5 L-1.5,7 L4,-1 H0.5 Z" fill="#e3a008"/>',
   heat: '<path d="M-4,4 C-6,0 -2,-1 -3,-6 M0,4 C-2,0 2,-1 1,-6 M4,4 C2,0 6,-1 5,-6" fill="none" stroke="#ff8a5c" stroke-width="1.5" stroke-linecap="round"/>',
   camera:
-    '<rect x="-6" y="-4" width="9" height="8" rx="1.5" fill="none" stroke="#9fd0ff" stroke-width="1.5"/><path d="M3,-1.5 L6.5,-3.5 V3.5 L3,1.5" fill="none" stroke="#9fd0ff" stroke-width="1.5" stroke-linejoin="round"/>',
-  gate: '<path d="M-6,4 V-4 M6,4 V-4 M-6,-1 H6 M-3,-1 V4 M0,-1 V4 M3,-1 V4" fill="none" stroke="#ffc76b" stroke-width="1.4" stroke-linecap="round"/>',
+    '<rect x="-6" y="-4" width="9" height="8" rx="1.5" fill="none" stroke="#4b5563" stroke-width="1.5"/><path d="M3,-1.5 L6.5,-3.5 V3.5 L3,1.5" fill="none" stroke="#4b5563" stroke-width="1.5" stroke-linejoin="round"/>',
+  gate: '<path d="M-6,4 V-4 M6,4 V-4 M-6,-1 H6 M-3,-1 V4 M0,-1 V4 M3,-1 V4" fill="none" stroke="#8a6a3d" stroke-width="1.4" stroke-linecap="round"/>',
   power: (on: boolean) =>
-    `<path d="M0,-5.5 V-0.5 M-3.6,-3.4 A5,5 0 1 0 3.6,-3.4" fill="none" stroke="${on ? '#57d98a' : '#8fa3c4'}" stroke-width="1.8" stroke-linecap="round"/>`,
+    `<path d="M0,-5.5 V-0.5 M-3.6,-3.4 A5,5 0 1 0 3.6,-3.4" fill="none" stroke="${on ? '#1f9d55' : '#8b8f96'}" stroke-width="1.8" stroke-linecap="round"/>`,
 }
 
 function pill(text: string, opt: { icon?: string; cls?: string } = {}): string {
@@ -82,18 +93,33 @@ function label(d: LiveDevice): string {
   return esc(s ? `${d.name}, ${s}` : d.name)
 }
 
-/** A marker that stands on the floor at (x,y), raised to height z with a drop line. */
-function marker(o: SceneOptions, d: LiveDevice, x: number, y: number, z: number, inner: string): string {
+/**
+ * A marker at (x,y), raised to height z. What holds it up says what it is: a
+ * dotted drop line marks the spot under something hanging or floating, a pole
+ * is a floor or table lamp's stand.
+ */
+function marker(
+  o: SceneOptions,
+  d: LiveDevice,
+  x: number,
+  y: number,
+  z: number,
+  inner: string,
+  stem: 'dotted' | 'pole' | 'none' = 'dotted',
+): string {
   const p = project(o.mode, x, y, z)
   const p0 = project(o.mode, x, y, 0)
   const drop = (p0[1] - p[1]) / o.unit
   const sel = o.selected === d.ref
+  let under = ''
+  if (drop > 2 && stem === 'dotted')
+    under = `<line class="hv-drop" x1="0" y1="0" x2="0" y2="${r1(drop)}"/><ellipse class="hv-foot" cx="0" cy="${r1(drop)}" rx="5" ry="2.5"/>`
+  if (drop > 2 && stem === 'pole')
+    under = `<ellipse class="hv-lampbase" cx="0" cy="${r1(drop)}" rx="6" ry="3"/><line class="hv-pole" x1="0" y1="2" x2="0" y2="${r1(drop)}"/>`
   return (
     `<g class="hv-dev${d.reachable ? '' : ' hv-off'}" data-ref="${esc(d.ref)}" role="button" tabindex="0" ` +
     `aria-label="${label(d)}" transform="translate(${r1(p[0])},${r1(p[1])}) scale(${o.unit.toFixed(4)})">` +
-    (drop > 2
-      ? `<line class="hv-drop" x1="0" y1="0" x2="0" y2="${r1(drop)}"/><ellipse class="hv-foot" cx="0" cy="${r1(drop)}" rx="5" ry="2.5"/>`
-      : '') +
+    under +
     '<circle class="hv-hit" r="20"/>' +
     (sel ? '<circle class="hv-selring" r="18"/>' : '') +
     inner +
@@ -122,9 +148,10 @@ function pipe(
   ret: number | undefined,
   flowing: boolean,
 ): string {
-  const w = Math.max(5, 2.6 * o.unit)
+  // Under the floor, so drawn quieter than the things standing on it.
+  const w = Math.max(3.5, 2 * o.unit)
   const points = pts.map(([x, y]) => project(o.mode, x, y, 0.04)).map((p) => `${r1(p[0])},${r1(p[1])}`)
-  const opacity = flowing ? 0.95 : 0.5
+  const opacity = flowing ? 0.6 : 0.3
   let s = ''
   if (supply !== undefined && ret !== undefined) {
     const lens = pts.slice(1).map((p, i) => Math.abs(p[0] - pts[i][0]) + Math.abs(p[1] - pts[i][1]))
@@ -153,6 +180,194 @@ function pipe(
 }
 
 /**
+ * The visible edges of a floor's slab: the faces toward the viewer (larger y
+ * and larger x) of every cell a room covers, merged into straight runs.
+ */
+function slab(o: SceneOptions, floor: HouseFloor): string {
+  const cells = new Set<string>()
+  for (const r of floor.rooms)
+    for (const q of roomRects(r))
+      for (let x = q.x; x < q.x + q.w; x++) for (let y = q.y; y < q.y + q.h; y++) cells.add(`${x},${y}`)
+  const t = 0.35
+  const front = new Map<number, number[]>()
+  const side = new Map<number, number[]>()
+  for (const c of cells) {
+    const [x, y] = c.split(',').map(Number)
+    if (!cells.has(`${x},${y + 1}`)) front.set(y + 1, [...(front.get(y + 1) ?? []), x])
+    if (!cells.has(`${x + 1},${y}`)) side.set(x + 1, [...(side.get(x + 1) ?? []), y])
+  }
+  let out = ''
+  const runs = (list: number[]) => {
+    const sorted = list.sort((a, b) => a - b)
+    const res: Array<[number, number]> = []
+    for (const v of sorted) {
+      const last = res[res.length - 1]
+      if (last && last[1] === v) last[1] = v + 1
+      else res.push([v, v + 1])
+    }
+    return res
+  }
+  for (const [y, xs] of front)
+    for (const [x1, x2] of runs(xs))
+      out += `<polygon class="hv-slab" points="${poly(o, [
+        [x1, y, 0],
+        [x2, y, 0],
+        [x2, y, -t],
+        [x1, y, -t],
+      ])}"/>`
+  for (const [x, ys] of side)
+    for (const [y1, y2] of runs(ys))
+      out += `<polygon class="hv-slab hv-r" points="${poly(o, [
+        [x, y1, 0],
+        [x, y2, 0],
+        [x, y2, -t],
+        [x, y1, -t],
+      ])}"/>`
+  return out
+}
+
+/**
+ * A box standing on the floor, centred on (cx, cy): `w` along x and `d`
+ * along y in cells, from height z0 to z1. Three faces in the isometric view
+ * (the ones toward the viewer), the top alone in the flat one.
+ */
+function box(
+  o: SceneOptions,
+  cx: number,
+  cy: number,
+  w: number,
+  d: number,
+  z0: number,
+  z1: number,
+  cls: string,
+  faces: { front?: string; side?: string } = {},
+): string {
+  const x1 = cx - w / 2
+  const x2 = cx + w / 2
+  const y1 = cy - d / 2
+  const y2 = cy + d / 2
+  const top = `<polygon class="${cls} hv-t" points="${poly(o, [
+    [x1, y1, z1],
+    [x2, y1, z1],
+    [x2, y2, z1],
+    [x1, y2, z1],
+  ])}"/>`
+  if (o.mode !== 'iso') return top
+  return (
+    `<polygon class="${cls} hv-f ${faces.front ?? ''}" points="${poly(o, [
+      [x1, y2, z0],
+      [x2, y2, z0],
+      [x2, y2, z1],
+      [x1, y2, z1],
+    ])}"/>` +
+    `<polygon class="${cls} hv-s ${faces.side ?? ''}" points="${poly(o, [
+      [x2, y1, z0],
+      [x2, y2, z0],
+      [x2, y2, z1],
+      [x2, y1, z1],
+    ])}"/>` +
+    top
+  )
+}
+
+/** A circle lying on the floor (or at height z), as the ellipse it projects to. */
+function disc(o: SceneOptions, x: number, y: number, z: number, r: number, cls: string): string {
+  const c = project(o.mode, x, y, z)
+  const iso = o.mode === 'iso'
+  return `<ellipse class="${cls}" cx="${r1(c[0])}" cy="${r1(c[1])}" rx="${r1(r * S * (iso ? 1.2247 : 1))}" ry="${r1(r * S * (iso ? 0.7071 : 1))}"/>`
+}
+
+/** A circle standing upright on the plane y = const, as polygon points (a washing machine's door). */
+function uprightCircle(o: SceneOptions, x: number, y: number, z: number, r: number): string {
+  const pts: Array<[number, number, number]> = []
+  for (let i = 0; i < 20; i++) {
+    const a = (i / 20) * Math.PI * 2
+    pts.push([x + r * Math.cos(a), y, z + r * Math.sin(a)])
+  }
+  return poly(o, pts)
+}
+
+/** What an appliance's badge says: its power draw while it runs, when it reports one. */
+function applianceText(d: LiveDevice): string {
+  if (d.reachable && d.on && d.power !== undefined) return formatPower(d.power)
+  return stateText(d) || d.name
+}
+
+/**
+ * An appliance drawn as what it is, from the look set on the plan. Returns the
+ * shape and the height its badge floats at.
+ */
+function appliance(o: SceneOptions, d: LiveDevice, p: HousePlacement, look: HouseLook): { svg: string; top: number } {
+  const on = !!d.on && d.reachable
+  const m = (metres: number) => metres * CELLS_PER_M
+  switch (look) {
+    case 'fridge': {
+      const h = zm(o, 1.85)
+      let svg = box(o, p.x, p.y, m(0.7), m(0.68), 0, h, 'hv-ap')
+      if (o.mode === 'iso') {
+        const a = project(o.mode, p.x - m(0.35), p.y + m(0.34), h * 0.62)
+        const b = project(o.mode, p.x + m(0.35), p.y + m(0.34), h * 0.62)
+        const c = project(o.mode, p.x + m(0.25), p.y + m(0.34), h * 0.8)
+        const e = project(o.mode, p.x + m(0.25), p.y + m(0.34), h * 0.7)
+        svg += `<line class="hv-apline" x1="${r1(a[0])}" y1="${r1(a[1])}" x2="${r1(b[0])}" y2="${r1(b[1])}"/>`
+        svg += `<line class="hv-aphandle" x1="${r1(c[0])}" y1="${r1(c[1])}" x2="${r1(e[0])}" y2="${r1(e[1])}"/>`
+      }
+      return { svg, top: h }
+    }
+    case 'washer': {
+      const h = zm(o, 0.85)
+      let svg = box(o, p.x, p.y, m(0.6), m(0.6), 0, h, 'hv-ap')
+      if (o.mode === 'iso') {
+        svg += `<polygon class="hv-apdoor" points="${uprightCircle(o, p.x, p.y + m(0.3), h * 0.45, m(0.2))}"/>`
+        svg += `<polygon class="hv-apdrum${on ? ' hv-spin' : ''}" points="${uprightCircle(o, p.x, p.y + m(0.3), h * 0.45, m(0.13))}"/>`
+      } else svg += disc(o, p.x, p.y, 0, m(0.2), 'hv-apdoor')
+      return { svg, top: h }
+    }
+    case 'dehumidifier': {
+      const h = zm(o, 0.6)
+      const svg = box(o, p.x, p.y, m(0.38), m(0.3), 0, h, 'hv-ap')
+      return { svg, top: h }
+    }
+    case 'tv': {
+      const along = (p.axis ?? 'h') === 'h'
+      const w = along ? m(1.2) : m(0.08)
+      const dd = along ? m(0.08) : m(1.2)
+      const z0 = zm(o, 0.55)
+      const z1 = zm(o, 1.25)
+      const screen = on ? 'hv-screen hv-on' : 'hv-screen'
+      let svg = box(o, p.x, p.y, w, dd, z0, z1, 'hv-tv', along ? { front: screen } : { side: screen })
+      // The stand under it.
+      svg += box(o, p.x, p.y, along ? m(0.35) : m(0.2), along ? m(0.2) : m(0.35), 0, z0, 'hv-tvstand')
+      if (o.mode !== 'iso') {
+        const c = project(o.mode, p.x, p.y)
+        svg += `<circle cx="${r1(c[0])}" cy="${r1(c[1])}" r="3" class="${on ? 'hv-led hv-on' : 'hv-led'}"/>`
+      }
+      return { svg, top: z1 }
+    }
+    case 'vacuum': {
+      const r = m(0.17)
+      const h = zm(o, 0.09)
+      const lo = project(o.mode, p.x, p.y, 0)
+      const hi = project(o.mode, p.x, p.y, h)
+      const rx = r * S * (o.mode === 'iso' ? 1.2247 : 1)
+      let svg = disc(o, p.x, p.y, 0, r, 'hv-vac')
+      svg += `<rect class="hv-vac" x="${r1(lo[0] - rx)}" y="${r1(hi[1])}" width="${r1(rx * 2)}" height="${r1(lo[1] - hi[1])}"/>`
+      svg += disc(o, p.x, p.y, h, r, 'hv-vac hv-t')
+      svg += disc(o, p.x, p.y, h, r * 0.35, on ? 'hv-vaclid hv-on' : 'hv-vaclid')
+      return { svg, top: h }
+    }
+    case 'mower': {
+      const h = zm(o, 0.28)
+      let svg = box(o, p.x, p.y, m(0.6), m(0.45), zm(o, 0.04), h, 'hv-mower')
+      svg += box(o, p.x - m(0.05), p.y, m(0.28), m(0.3), h, h + zm(o, 0.03), 'hv-mowerlid')
+      return { svg, top: h }
+    }
+    case 'outlet':
+      return { svg: '', top: zm(o, 0.3) }
+  }
+}
+
+/**
  * One floor. `devices` holds every live device by ref, and the floor's own
  * placements decide which of them appear here.
  */
@@ -164,7 +379,6 @@ export function renderFloor(
 ): string {
   const iso = o.mode === 'iso'
   const H = wallHeight(o)
-  const b = floorBounds(plan, floor)
   const placed = floor.placements
     .map((p) => ({ p, d: devices.get(p.ref) }))
     .filter((x): x is { p: HousePlacement; d: LiveDevice } => !!x.d)
@@ -174,37 +388,9 @@ export function renderFloor(
   let pipes = ''
   const items: Array<{ depth: number; svg: string }> = []
 
-  // Ground plate, edges and grid (one line per metre).
-  if (iso) {
-    const t = 0.4
-    base += `<polygon class="hv-plate-side" points="${poly(o, [
-      [b.x, b.y + b.h, 0],
-      [b.x + b.w, b.y + b.h, 0],
-      [b.x + b.w, b.y + b.h, -t],
-      [b.x, b.y + b.h, -t],
-    ])}"/>`
-    base += `<polygon class="hv-plate-side" points="${poly(o, [
-      [b.x + b.w, b.y, 0],
-      [b.x + b.w, b.y + b.h, 0],
-      [b.x + b.w, b.y + b.h, -t],
-      [b.x + b.w, b.y, -t],
-    ])}"/>`
-  }
-  base += `<polygon class="hv-plate${o.all ? ' hv-pick' : ''}" data-plate="${esc(floor.id)}" points="${poly(o, [
-    [b.x, b.y, 0],
-    [b.x + b.w, b.y, 0],
-    [b.x + b.w, b.y + b.h, 0],
-    [b.x, b.y + b.h, 0],
-  ])}"/>`
-  let grid = ''
-  const line = (x1: number, y1: number, x2: number, y2: number) => {
-    const p = project(o.mode, x1, y1)
-    const q = project(o.mode, x2, y2)
-    grid += `M${r1(p[0])},${r1(p[1])}L${r1(q[0])},${r1(q[1])}`
-  }
-  for (let x = b.x + CELLS_PER_M; x < b.x + b.w; x += CELLS_PER_M) line(x, b.y, x, b.y + b.h)
-  for (let y = b.y + CELLS_PER_M; y < b.y + b.h; y += CELLS_PER_M) line(b.x, y, b.x + b.w, y)
-  base += `<path class="hv-grid" d="${grid}"/>`
+  // No plot and no grid: the floor is what was drawn on it, standing on a
+  // slab like an architect's model, so the house reads as a house.
+  if (iso) base += slab(o, floor)
 
   // Rooms, with the overlay tint from a sensor in the room.
   const roomOf = (p: HousePlacement) => roomAt(floor, p.x, p.y)
@@ -235,7 +421,9 @@ export function renderFloor(
     }
     // Each part is filled on its own, with no stroke, and the room's outline
     // is drawn once over them, so an L reads as one room with no seam.
-    for (const pts of shapes) base += `<polygon class="hv-room-fill hv-k-${r.kind}"${style} points="${pts}"/>`
+    // In the exploded view a tap on a floor's rooms brings that floor forward.
+    const pick = o.all ? ` hv-pick" data-plate="${esc(floor.id)}` : ''
+    for (const pts of shapes) base += `<polygon class="hv-room-fill hv-k-${r.kind}${pick}"${style} points="${pts}"/>`
     let outline = ''
     for (const u of roomOutline(r)) {
       const a = project(o.mode, u.x, u.y)
@@ -269,7 +457,9 @@ export function renderFloor(
     const k = clamp((d.brightness ?? 80) / 100, 0.08, 1)
     const color = d.color ?? p.color ?? WARM_LIGHT
     const r = roomOf(p)
-    const R = (1.3 + 2.5 * k) * CELLS_PER_M
+    // A ceiling light fills the room, a table lamp lights the corner it is in.
+    const reach = { ceiling: [1.3, 2.5], wall: [1, 1.8], floor: [0.9, 1.6], table: [0.7, 1.1] }[p.mount ?? 'ceiling']
+    const R = (reach[0] + reach[1] * k) * CELLS_PER_M
     const c = project(o.mode, p.x, p.y)
     const gid = `hv-lg-${svgId(floor.id)}-${svgId(p.ref)}`
     defs +=
@@ -304,7 +494,7 @@ export function renderFloor(
           const len = o.offsets[f.id][1] - o.offsets[floor.id][1] - 0.8 * CELLS_PER_M * S
           pipes += `<line x1="${r1(at[0])}" y1="${r1(at[1])}" x2="${r1(at[0])}" y2="${r1(at[1] + len)}" stroke="${color}" stroke-width="4" stroke-linecap="round" opacity="0.9"/>`
         }
-        pipes += `<circle cx="${r1(at[0])}" cy="${r1(at[1])}" r="${r1(5 * o.unit)}" fill="#0a1830" stroke="${color}" stroke-width="${r1(2 * o.unit)}"/>`
+        pipes += `<circle cx="${r1(at[0])}" cy="${r1(at[1])}" r="${r1(5 * o.unit)}" class="hv-riser" stroke="${color}" stroke-width="${r1(2 * o.unit)}"/>`
       }
     }
   }
@@ -324,10 +514,17 @@ export function renderFloor(
       const ln = (cls: string, p: Point, q: Point, extra = '') =>
         `<line class="${cls}" x1="${r1(p[0])}" y1="${r1(p[1])}" x2="${r1(q[0])}" y2="${r1(q[1])}"${extra}/>`
       if (w.type === 'wall') svg = ln('hv-wall2d', a, c)
-      else if (w.type === 'door') {
-        const len = Math.hypot(c[0] - a[0], c[1] - a[1])
-        const corner = w.axis === 'h' ? `${r1(a[0])},${r1(a[1] + len)}` : `${r1(a[0] + len)},${r1(a[1])}`
-        svg = `<path class="hv-door" d="M${r1(a[0])},${r1(a[1])} L${corner} A${r1(len)},${r1(len)} 0 0 ${w.axis === 'h' ? 0 : 1} ${r1(c[0])},${r1(c[1])}"/>`
+      else if (w.type === 'door' && w.opening) {
+        // The leaf drawn open, and the arc its free end sweeps, on the side
+        // and from the hinge the plan says.
+        const sw = doorSwing(w.opening)
+        const h = project(o.mode, ...sw.hinge)
+        const q = project(o.mode, ...sw.open)
+        const f = project(o.mode, ...sw.free)
+        const len = w.opening.len * S
+        svg =
+          ln('hv-sill2d', a, c) +
+          `<path class="hv-door2d" d="M${r1(h[0])},${r1(h[1])} L${r1(q[0])},${r1(q[1])} A${r1(len)},${r1(len)} 0 0 ${sw.sweep} ${r1(f[0])},${r1(f[1])}"/>`
       } else {
         svg = ln('hv-wall2d hv-glass2d', a, c) + ln('hv-pane2d', a, c)
         if (sh) {
@@ -354,21 +551,37 @@ export function renderFloor(
         [B[0], B[1], z2],
         [A[0], A[1], z2],
       ])
+    // The top of a wall, drawn as a thick light line with a darker rim, which
+    // is what makes a wall read as solid plaster rather than a pane.
+    const cap = (z: number) => {
+      const p = project(o.mode, A[0], A[1], z)
+      const q = project(o.mode, B[0], B[1], z)
+      const c = `x1="${r1(p[0])}" y1="${r1(p[1])}" x2="${r1(q[0])}" y2="${r1(q[1])}"`
+      return `<line class="hv-caprim" ${c}/><line class="hv-cap" ${c}/>`
+    }
     if (w.type === 'wall') {
-      svg = `<polygon class="hv-wall" points="${quad(0, H)}"/><polygon class="hv-walledge" points="${quad(0, H)}"/>`
-    } else if (w.type === 'door') {
+      svg = `<polygon class="hv-wall" points="${quad(0, H)}"/>${cap(H)}`
+    } else if (w.type === 'door' && w.opening) {
       const hd = Math.min(H, 1.05 * CELLS_PER_M)
-      svg = `<polyline class="hv-door" points="${poly(o, [
-        [A[0], A[1], 0],
-        [A[0], A[1], hd],
-        [B[0], B[1], hd],
-        [B[0], B[1], 0],
-      ])}"/>`
-      if (H > hd + 0.1)
-        svg += `<polygon class="hv-wall" points="${quad(hd, H)}"/><polygon class="hv-walledge" points="${quad(hd, H)}"/>`
+      const sw = doorSwing(w.opening)
+      const q = sw.at(0.78)
+      svg =
+        `<polygon class="hv-doorleaf" points="${poly(o, [
+          [sw.hinge[0], sw.hinge[1], 0.03],
+          [q[0], q[1], 0.03],
+          [q[0], q[1], hd * 0.96],
+          [sw.hinge[0], sw.hinge[1], hd * 0.96],
+        ])}"/>` +
+        `<polyline class="hv-doorframe" points="${poly(o, [
+          [A[0], A[1], 0],
+          [A[0], A[1], hd],
+          [B[0], B[1], hd],
+          [B[0], B[1], 0],
+        ])}"/>`
+      if (H > hd + 0.1) svg += `<polygon class="hv-wall" points="${quad(hd, H)}"/>${cap(H)}`
     } else {
       const z0 = H * 0.3
-      svg = `<polygon class="hv-wall" points="${quad(0, z0)}"/><polygon class="hv-walledge" points="${quad(0, H)}"/><polygon class="hv-pane" points="${quad(z0, H)}"/>`
+      svg = `<polygon class="hv-wall" points="${quad(0, z0)}"/><polygon class="hv-pane" points="${quad(z0, H)}"/>${cap(H)}`
       if (sh) {
         const closed = 1 - clamp(sh.position ?? 100, 0, 100) / 100
         const zb = H - (H - z0) * closed
@@ -394,27 +607,67 @@ export function renderFloor(
     items.push({ depth, svg })
   }
 
-  // Devices standing in the rooms.
+  // Devices standing in the rooms. What a device is (a fridge, a gate leaf)
+  // is depth-sorted with the walls. Its marker and badge go on a layer
+  // above every wall, so a reading is never hidden behind one.
+  const marks: Array<{ depth: number; svg: string }> = []
+  const push = (depth: number, svg: string) => {
+    const at = svg.indexOf('<g class="hv-dev')
+    if (at > 0) items.push({ depth, svg: svg.slice(0, at) })
+    marks.push({ depth, svg: at >= 0 ? svg.slice(at) : svg })
+  }
   for (const { p, d } of placed) {
     if (p.opening) continue
     let svg = ''
     let depth = p.x + p.y + 0.04
     const lift = (m: number) => (iso ? m * CELLS_PER_M : 0)
+    const look = d.kind === 'light' || d.kind === 'shutter' || d.kind === 'gate' ? undefined : (p.look ?? d.defaultLook)
+    if (look) {
+      // Drawn as what it is, with its state on a badge above it.
+      const a = appliance(o, d, p, look)
+      const badge =
+        look === 'outlet'
+          ? `<rect class="hv-outlet" x="-9" y="-9" width="18" height="18" rx="4"/><circle cx="-3" cy="0" r="1.6" class="hv-outlethole"/><circle cx="3" cy="0" r="1.6" class="hv-outlethole"/><circle cx="6" cy="-6" r="2.2" class="${d.on ? 'hv-led hv-on' : 'hv-led'}"/>`
+          : look === 'dehumidifier'
+            ? pill(d.humidity !== undefined ? `${Math.round(d.humidity)}%` : d.on ? 'On' : 'Off', {
+                icon: `<g class="${d.on ? 'hv-pulse' : ''}">${ICON.drop}</g>`,
+                cls: d.on ? 'hv-on' : '',
+              })
+            : pill(applianceText(d), { cls: d.on && d.reachable ? 'hv-on' : '' })
+      const raise = look === 'outlet' ? 0 : iso ? 0.9 : 0
+      svg =
+        `<g pointer-events="none">${a.svg}</g>` +
+        marker(o, d, p.x, p.y, a.top + raise, badge, look === 'outlet' ? 'dotted' : 'none')
+      push(depth + 0.3, svg)
+      continue
+    }
     switch (d.kind) {
       case 'light': {
         const lit = !!d.on && d.reachable
         const color = d.color ?? p.color ?? WARM_LIGHT
         const k = clamp((d.brightness ?? 80) / 100, 0.08, 1)
+        const mount = p.mount ?? 'ceiling'
+        const z = zm(o, LAMP_HEIGHT[mount])
+        // A shade over the bulb for a standing lamp, a dome for one hanging.
+        const shade =
+          mount === 'floor' || mount === 'table'
+            ? `<path class="hv-shade${lit ? ' hv-on' : ''}" d="M-7,-4 L7,-4 L10,5 L-10,5 Z"/>`
+            : mount === 'ceiling'
+              ? `<line class="hv-cord" x1="0" y1="-7" x2="0" y2="-16"/><path class="hv-shade${lit ? ' hv-on' : ''}" d="M-9,1 A9,8 0 0 1 9,1 Z"/>`
+              : `<rect class="hv-shade${lit ? ' hv-on' : ''}" x="-3" y="-9" width="6" height="8" rx="1.5"/>`
+        const bulb = lit
+          ? `<circle r="14" fill="${color}" opacity="${(0.22 + 0.3 * k).toFixed(2)}"/><circle class="hv-bulb" r="5.5" fill="${color}"/>`
+          : '<circle class="hv-bulb hv-off-bulb" r="5"/>'
         svg = marker(
           o,
           d,
           p.x,
           p.y,
-          iso ? Math.min(0.8 * CELLS_PER_M, H + 0.25 * CELLS_PER_M) : 0,
-          lit
-            ? `<circle r="13" fill="${color}" opacity="${(0.18 + 0.3 * k).toFixed(2)}"/><circle r="6.5" fill="${color}" stroke="#fff" stroke-width="1.2"/>`
-            : '<circle r="6" fill="#0d1c38" stroke="#7f95bb" stroke-width="1.4"/>',
+          z,
+          mount === 'ceiling' ? shade + bulb : bulb + shade,
+          mount === 'floor' || mount === 'table' ? 'pole' : 'dotted',
         )
+        depth += mount === 'ceiling' ? 0.3 : 0
         break
       }
       case 'sensor': {
@@ -532,12 +785,12 @@ export function renderFloor(
           for (const [px, py] of [at(0), at(len)]) {
             const a = project(o.mode, px, py, 0)
             const b = project(o.mode, px, py, 0.75 * CELLS_PER_M)
-            leaf += `<line x1="${r1(a[0])}" y1="${r1(a[1])}" x2="${r1(b[0])}" y2="${r1(b[1])}" stroke="#ffc76b" stroke-width="3" stroke-linecap="round"/>`
+            leaf += `<line x1="${r1(a[0])}" y1="${r1(a[1])}" x2="${r1(b[0])}" y2="${r1(b[1])}" class="hv-gatepost" stroke-width="3" stroke-linecap="round"/>`
           }
         } else {
           const a = project(o.mode, ax, ay)
           const e = project(o.mode, bx, by)
-          leaf = `<line x1="${r1(a[0])}" y1="${r1(a[1])}" x2="${r1(e[0])}" y2="${r1(e[1])}" stroke="#ffc76b" stroke-width="5"/>`
+          leaf = `<line x1="${r1(a[0])}" y1="${r1(a[1])}" x2="${r1(e[0])}" y2="${r1(e[1])}" class="hv-gatepost" stroke-width="5"/>`
         }
         svg =
           `<g pointer-events="none">${leaf}</g>` +
@@ -561,9 +814,10 @@ export function renderFloor(
       default:
         svg = marker(o, d, p.x, p.y, lift(0.45), pill(stateText(d) || d.name))
     }
-    items.push({ depth, svg })
+    push(depth, svg)
   }
 
   items.sort((a, b) => a.depth - b.depth)
-  return `<defs>${defs}</defs>${base}${glow}${pipes}${items.map((i) => i.svg).join('')}`
+  marks.sort((a, b) => a.depth - b.depth)
+  return `<defs>${defs}</defs>${base}${glow}${pipes}${items.map((i) => i.svg).join('')}${marks.map((i) => i.svg).join('')}`
 }

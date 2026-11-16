@@ -12,7 +12,7 @@
  * plugin that reads both pipes), `currentHumidity` (Tuya dehumidifier), `power` (Shelly
  * meters) and the gate's `state` and `target` (Shelly gate).
  */
-import type { Accessory, AccessoryCharacteristic, AccessoryService, DeviceDescriptor } from '@/api'
+import type { Accessory, AccessoryCharacteristic, AccessoryService, DeviceDescriptor, HouseLook } from '@/api'
 import { hueSatColor } from './geometry'
 
 export type LiveKind =
@@ -50,6 +50,8 @@ export interface LiveDevice {
   humidity?: number
   power?: number
   gateState?: 'open' | 'closed' | 'opening' | 'closing' | 'stopped'
+  /** What it is drawn as when the plan does not say: a socket for an outlet, and so on. */
+  defaultLook?: HouseLook
   /** Where it lives, for the device page link and for controls. */
   source: { type: 'native'; device: NativeDevice } | { type: 'hap'; accessory: Accessory; service: AccessoryService }
 }
@@ -93,6 +95,8 @@ export function fromNative(d: NativeDevice & { homekitType?: string | null }): L
   out.humidity = num(t.currentHumidity)
   out.power = num(t.power)
   if (kind === 'gate' && typeof t.state === 'string') out.gateState = t.state as LiveDevice['gateState']
+  if (d.homekitType === 'outlet') out.defaultLook = 'outlet'
+  if (kind === 'dehumidifier') out.defaultLook = 'dehumidifier'
   return out
 }
 
@@ -160,6 +164,8 @@ export function fromAccessory(acc: Accessory): LiveDevice | null {
   out.temperature = num(v('CurrentTemperature'))
   out.target = num(v('TargetTemperature')) ?? num(v('HeatingThresholdTemperature'))
   out.humidity = num(v('CurrentRelativeHumidity'))
+  if (svc.name === 'Outlet') out.defaultLook = 'outlet'
+  if (kind === 'dehumidifier') out.defaultLook = 'dehumidifier'
   const door = num(v('CurrentDoorState'))
   if (door !== undefined) out.gateState = DOOR_STATE[door]
   // A temperature sensor that also carries humidity does so on a sibling service.
@@ -234,6 +240,16 @@ export const KIND_LETTER: Record<LiveKind, string> = {
   sensor: 'T',
   camera: 'C',
   other: '?',
+}
+
+export const LOOK_LABEL: Record<HouseLook, string> = {
+  outlet: 'Power outlet',
+  tv: 'TV',
+  fridge: 'Fridge',
+  washer: 'Washing machine',
+  dehumidifier: 'Dehumidifier',
+  vacuum: 'Robot vacuum',
+  mower: 'Lawn mower',
 }
 
 export const KIND_LABEL: Record<LiveKind, string> = {
