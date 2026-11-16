@@ -352,6 +352,7 @@ const TOOLS = [
   { id: 'select', label: 'Select' },
   { id: 'room', label: 'Room' },
   { id: 'outdoor', label: 'Garden' },
+  { id: 'paved', label: 'Paving' },
   { id: 'pool', label: 'Pool' },
   { id: 'door', label: 'Door' },
   { id: 'window', label: 'Window' },
@@ -360,6 +361,7 @@ const TOOLS = [
 const ROOM_KINDS = [
   { label: 'Room (has walls)', value: 'room' },
   { label: 'Outdoor zone', value: 'outdoor' },
+  { label: 'Paving', value: 'paved' },
   { label: 'Pool', value: 'pool' },
 ]
 const OPENING_KINDS = [
@@ -389,8 +391,9 @@ const GLOW_COLOURS = [
   { label: 'Red', value: '#ff5a4d' },
 ]
 
-type Tool = 'select' | 'room' | 'outdoor' | 'pool' | 'door' | 'window' | 'open'
-const isAreaTool = (t: Tool): t is 'room' | 'outdoor' | 'pool' => t === 'room' || t === 'outdoor' || t === 'pool'
+type Tool = 'select' | 'room' | 'outdoor' | 'paved' | 'pool' | 'door' | 'window' | 'open'
+const isAreaTool = (t: Tool): t is 'room' | 'outdoor' | 'paved' | 'pool' =>
+  t === 'room' || t === 'outdoor' || t === 'paved' || t === 'pool'
 const tool = ref<Tool>('room')
 const floorId = ref(props.initialFloor ?? props.plan.floors[0].id)
 const selRoom = ref<string | null>(null)
@@ -450,7 +453,9 @@ const help = computed(() => {
   return {
     select: 'Drag a room to move it, or its corners to resize it. Drag a device to move it. Tap anything to edit it.',
     room: 'Drag on the grid to draw a room. It snaps to half a metre. Draw one inside another for a room within a room.',
-    outdoor: 'Drag on the grid to draw a garden, terrace or drive. It has no walls.',
+    outdoor: 'Drag on the grid to draw a garden or a lawn. It has no walls.',
+    paved:
+      'Drag on the grid to draw paving: a terrace, a path, a drive, or the deck round the pool. Draw the pool inside it.',
     pool: 'Drag on the grid to draw a pool.',
     door: 'Tap a wall to put a door there. Drag a door to move it, or its ends to resize it.',
     window: 'Tap a wall to put a window there. Drag a window to move it, or its ends to resize it.',

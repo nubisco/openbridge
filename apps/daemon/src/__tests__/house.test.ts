@@ -87,6 +87,18 @@ describe('validateHousePlan', () => {
     expect(() => validateHousePlan(p)).toThrow(/multiple of 0\.5/)
   })
 
+  it('accepts paving, and a pool drawn inside it', () => {
+    const p = plan()
+    p.floors[0].rooms.push(
+      { id: 'deck', name: 'Deck', kind: 'paved', x: 20, y: 12, w: 10, h: 8 },
+      { id: 'pool', name: 'Pool', kind: 'pool', x: 22, y: 14, w: 6, h: 4 },
+    )
+    const out = validateHousePlan(p).floors[0].rooms
+    expect(out.find((r) => r.id === 'deck')?.kind).toBe('paved')
+    p.floors[0].rooms[3].kind = 'gravel' as never
+    expect(() => validateHousePlan(p)).toThrow(/must be room, outdoor, paved or pool/)
+  })
+
   it('keeps how a lamp is mounted and what a device is drawn as', () => {
     const p = plan()
     Object.assign(p.floors[0].placements[0], { mount: 'floor' })

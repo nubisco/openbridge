@@ -241,7 +241,7 @@ export interface DeviceRoom {
 // Geometry is in grid cells of `grid` metres. Room edges sit on cell lines,
 // devices on half cells.
 
-export type HouseRoomKind = 'room' | 'outdoor' | 'pool'
+export type HouseRoomKind = 'room' | 'outdoor' | 'paved' | 'pool'
 
 export interface HouseRect {
   x: number

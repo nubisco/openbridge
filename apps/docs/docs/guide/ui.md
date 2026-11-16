@@ -16,7 +16,7 @@ A drawing of your home, floor by floor, with every device where it really is and
 
 **Drawing the plan.** Choose **Start drawing** (or **Edit plan** later). The blueprint fills the page, and what you select, with the devices not on the plan yet, opens in the inspector beside it (under the blueprint on a phone). You draw rooms, not walls:
 
-- **Room**, **Garden** and **Pool:** drag on the grid to draw a rectangle. It snaps to half a metre. A room gets walls on every edge, and an edge two rooms share is one wall. A garden (or terrace, or drive) and a pool have no walls. You can change a room's type later in its panel.
+- **Room**, **Garden**, **Paving** and **Pool:** drag on the grid to draw a rectangle. It snaps to half a metre. A room gets walls on every edge, and an edge two rooms share is one wall. A garden, paving (a terrace, a path, a drive, the deck round a pool) and a pool have no walls. Draw a pool inside its paving. You can change a room's type later in its panel.
 - **Rooms within rooms:** draw a room inside another, such as an en-suite inside a bedroom or the house on its garden. A device belongs to the smallest room around it, and moving a room carries the rooms inside it along.
 - **L and U shapes:** select a room, choose **Add a wing**, and draw a rectangle along one of its edges. The wing joins the room with no wall between them. Each part has its own corner handles, and a part can be removed from the room's panel.
 - **Door** and **Window:** tap a wall. Drag one you placed along the wall to move it (it can go round onto another wall), or drag one of its ends to resize it. Both move in quarter metres, so a door can sit in the middle of any wall. Select a door to flip its hinge or the side it opens into.
