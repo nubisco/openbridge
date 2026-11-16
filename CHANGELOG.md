@@ -1,3 +1,10 @@
+# [1.19.0](https://github.com/nubisco/openbridge/compare/v1.18.0...v1.19.0) (2026-11-16)
+
+
+### Features
+
+* **house:** furniture on the plan, and the editor's tools as icons ([#26](https://github.com/nubisco/openbridge/issues/26)) ([707591a](https://github.com/nubisco/openbridge/commit/707591a9955e1b27d2b5378158592f132be30381))
+
 # [1.18.0](https://github.com/nubisco/openbridge/compare/v1.17.1...v1.18.0) (2026-11-16)
 
 
