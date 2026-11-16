@@ -34,19 +34,28 @@
   stroke-width: 1;
   fill: none;
 }
-.hv-room {
+.hv-room-fill {
   fill: rgba(110, 165, 255, 0.09);
+  stroke: none;
+  pointer-events: none;
+}
+.hv-room-fill.hv-k-outdoor {
+  fill: rgba(90, 210, 150, 0.07);
+}
+.hv-room-fill.hv-k-pool {
+  fill: rgba(40, 170, 255, 0.4);
+}
+.hv-room-edge {
+  fill: none;
   stroke: rgba(140, 195, 255, 0.28);
   stroke-width: 1;
   pointer-events: none;
 }
-.hv-room.hv-k-outdoor {
-  fill: rgba(90, 210, 150, 0.07);
+.hv-room-edge.hv-k-outdoor {
   stroke: rgba(110, 230, 170, 0.35);
   stroke-dasharray: 5 5;
 }
-.hv-room.hv-k-pool {
-  fill: rgba(40, 170, 255, 0.4);
+.hv-room-edge.hv-k-pool {
   stroke: rgba(140, 230, 255, 0.9);
   stroke-width: 1.5;
 }
@@ -210,23 +219,34 @@
 }
 .hv-eroom rect {
   fill: rgba(110, 165, 255, 0.14);
+}
+// The outline is drawn once over the parts, so an L shows no seam.
+.hv-eroom .hv-eedge {
+  fill: none;
   stroke: rgba(140, 195, 255, 0.35);
   stroke-width: 1;
+  pointer-events: none;
 }
 .hv-tool-select .hv-eroom rect {
   cursor: move;
 }
 .hv-eroom.hv-k-outdoor rect {
   fill: rgba(90, 210, 150, 0.1);
+}
+.hv-eroom.hv-k-outdoor .hv-eedge {
   stroke: rgba(110, 230, 170, 0.5);
   stroke-dasharray: 5 5;
 }
 .hv-eroom.hv-k-pool rect {
   fill: rgba(40, 170, 255, 0.35);
+}
+.hv-eroom.hv-k-pool .hv-eedge {
   stroke: rgba(140, 230, 255, 0.9);
 }
 .hv-eroom.hv-sel rect {
   fill: rgba(60, 207, 192, 0.2);
+}
+.hv-eroom.hv-sel .hv-eedge {
   stroke: #3ccfc0;
   stroke-width: 2;
 }

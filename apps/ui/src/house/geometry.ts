@@ -7,7 +7,7 @@
  * turns the few lengths that are really metres (wall height, how high a lamp
  * hangs) into cells.
  */
-import type { HouseFloor, HouseOpening, HousePlan, HouseRoom } from '@/api'
+import type { HouseFloor, HouseOpening, HousePlan, HouseRect, HouseRoom } from '@/api'
 
 /** Screen pixels per cell before the stage scales to fit. */
 export const S = 20
@@ -49,23 +49,69 @@ export interface WallUnit {
 
 export const unitKey = (x: number, y: number, axis: 'h' | 'v') => `${x},${y},${axis}`
 
+// ─── Room shapes ────────────────────────────────────────────────────────────
+
+/** Every rectangle a room is made of, main one first. */
+export function roomRects(r: HouseRoom): HouseRect[] {
+  return [r, ...(r.parts ?? [])]
+}
+
+/** Whether a point is in a room, edges included. */
+export function roomContains(r: HouseRoom, x: number, y: number): boolean {
+  return roomRects(r).some((q) => x >= q.x && x <= q.x + q.w && y >= q.y && y <= q.y + q.h)
+}
+
+/** Whether the cell whose corner is (cx, cy) is inside a room. */
+const cellIn = (r: HouseRoom, cx: number, cy: number) =>
+  roomRects(r).some((q) => cx >= q.x && cx < q.x + q.w && cy >= q.y && cy < q.y + q.h)
+
+/** The box around a room. */
+export function roomBox(r: HouseRoom): HouseRect {
+  const rects = roomRects(r)
+  const x = Math.min(...rects.map((q) => q.x))
+  const y = Math.min(...rects.map((q) => q.y))
+  return {
+    x,
+    y,
+    w: Math.max(...rects.map((q) => q.x + q.w)) - x,
+    h: Math.max(...rects.map((q) => q.y + q.h)) - y,
+  }
+}
+
+/** Area in cells. Parts never overlap, so it is a plain sum. */
+export const roomArea = (r: HouseRoom) => roomRects(r).reduce((a, q) => a + q.w * q.h, 0)
+
 /**
- * Every wall unit on a floor. Walls are the edges of rooms that have them, and
- * an edge two rooms share is one wall, so this is a set.
+ * The outline of a room as wall units: every rectangle edge that has the room
+ * on one side only. The edge where an L's two parts meet has the room on both
+ * sides, so it is not a wall.
+ */
+export function roomOutline(r: HouseRoom): WallUnit[] {
+  const out: WallUnit[] = []
+  for (const q of roomRects(r)) {
+    for (let i = 0; i < q.w; i++) {
+      const x = q.x + i
+      if (!cellIn(r, x, q.y - 1)) out.push({ x, y: q.y, axis: 'h' })
+      if (!cellIn(r, x, q.y + q.h)) out.push({ x, y: q.y + q.h, axis: 'h' })
+    }
+    for (let j = 0; j < q.h; j++) {
+      const y = q.y + j
+      if (!cellIn(r, q.x - 1, y)) out.push({ x: q.x, y, axis: 'v' })
+      if (!cellIn(r, q.x + q.w, y)) out.push({ x: q.x + q.w, y, axis: 'v' })
+    }
+  }
+  return out
+}
+
+/**
+ * Every wall unit on a floor. Walls are the outlines of rooms that have them,
+ * and an edge two rooms share is one wall, so this is a set.
  */
 export function wallUnits(floor: HouseFloor): Map<string, WallUnit> {
   const units = new Map<string, WallUnit>()
-  const add = (x: number, y: number, axis: 'h' | 'v') => units.set(unitKey(x, y, axis), { x, y, axis })
   for (const r of floor.rooms) {
     if (r.kind !== 'room') continue
-    for (let i = 0; i < r.w; i++) {
-      add(r.x + i, r.y, 'h')
-      add(r.x + i, r.y + r.h, 'h')
-    }
-    for (let j = 0; j < r.h; j++) {
-      add(r.x, r.y + j, 'v')
-      add(r.x + r.w, r.y + j, 'v')
-    }
+    for (const u of roomOutline(r)) units.set(unitKey(u.x, u.y, u.axis), u)
   }
   return units
 }
@@ -131,9 +177,21 @@ export function wallRuns(floor: HouseFloor): WallRun[] {
 
 // ─── Rooms ──────────────────────────────────────────────────────────────────
 
-export function roomAt(floor: HouseFloor, x: number, y: number): HouseRoom | undefined {
-  return floor.rooms.find((r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h)
+/**
+ * The smallest room containing a point, ties to the room drawn first: a room
+ * drawn inside another (an en-suite in a bedroom) owns what is in it. The
+ * daemon's roomsByRef follows the same rule.
+ */
+export function innermostRoom(rooms: HouseRoom[]): HouseRoom | undefined {
+  return rooms.reduce<HouseRoom | undefined>((best, r) => (!best || roomArea(r) < roomArea(best) ? r : best), undefined)
 }
+
+export function roomAt(floor: HouseFloor, x: number, y: number): HouseRoom | undefined {
+  return innermostRoom(floor.rooms.filter((r) => roomContains(r, x, y)))
+}
+
+/** Rooms biggest first, the order to draw them in so inner rooms sit on top. */
+export const roomsOutsideIn = (rooms: HouseRoom[]) => rooms.slice().sort((a, b) => roomArea(b) - roomArea(a))
 
 /**
  * The room and floor a device is placed in, as the daemon derives it (see
@@ -151,8 +209,9 @@ export function placementRoom(
     const o = p.opening ? f.openings.find((x) => x.id === p.opening) : undefined
     const x = o ? o.x + (o.axis === 'h' ? o.len / 2 : 0) : p.x
     const y = o ? o.y + (o.axis === 'v' ? o.len / 2 : 0) : p.y
-    const inside = f.rooms.filter((r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h)
-    const room = (o ? inside.find((r) => r.kind === 'room') : undefined) ?? inside[0] ?? null
+    const inside = f.rooms.filter((r) => roomContains(r, x, y))
+    const room =
+      (o ? innermostRoom(inside.filter((r) => r.kind === 'room')) : undefined) ?? innermostRoom(inside) ?? null
     return { room, floor: f }
   }
   return null
@@ -161,10 +220,11 @@ export function placementRoom(
 /** The area a floor occupies: the whole plot for the ground, its rooms above it. */
 export function floorBounds(plan: HousePlan, floor: HouseFloor) {
   if (floor.level === 0 || !floor.rooms.length) return { x: 0, y: 0, w: plan.plot.w, h: plan.plot.h }
-  const x1 = Math.min(...floor.rooms.map((r) => r.x))
-  const y1 = Math.min(...floor.rooms.map((r) => r.y))
-  const x2 = Math.max(...floor.rooms.map((r) => r.x + r.w))
-  const y2 = Math.max(...floor.rooms.map((r) => r.y + r.h))
+  const rects = floor.rooms.flatMap(roomRects)
+  const x1 = Math.min(...rects.map((r) => r.x))
+  const y1 = Math.min(...rects.map((r) => r.y))
+  const x2 = Math.max(...rects.map((r) => r.x + r.w))
+  const y2 = Math.max(...rects.map((r) => r.y + r.h))
   return { x: x1, y: y1, w: x2 - x1, h: y2 - y1 }
 }
 
@@ -180,16 +240,18 @@ export function floorBounds(plan: HousePlan, floor: HouseFloor) {
  * these rooms" and the colour along it reads supply to return.
  */
 export function circuitPath(origin: { x: number; y: number }, rooms: HouseRoom[]): Point[] | null {
-  if (!rooms.length) return null
+  // Each part of an L-shaped room gets its own run of the serpentine.
+  const rects: HouseRect[] = rooms.flatMap(roomRects)
+  if (!rects.length) return null
   let cur = { x: origin.x, y: origin.y }
   const pts: Point[] = [[cur.x, cur.y]]
-  const left = rooms.slice()
-  const dist = (a: { x: number; y: number }, r: HouseRoom) =>
+  const left = rects.slice()
+  const dist = (a: { x: number; y: number }, r: HouseRect) =>
     Math.abs(a.x - (r.x + r.w / 2)) + Math.abs(a.y - (r.y + r.h / 2))
   const step = CELLS_PER_M
   while (left.length) {
     left.sort((a, b) => dist(cur, a) - dist(cur, b))
-    const r = left.shift() as HouseRoom
+    const r = left.shift() as HouseRect
     const xs = [r.x + step / 2, r.x + r.w - step / 2]
     if (xs[1] < xs[0]) xs[0] = xs[1] = r.x + r.w / 2
     const ys: number[] = []

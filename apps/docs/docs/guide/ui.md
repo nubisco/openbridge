@@ -16,7 +16,9 @@ A drawing of your home, floor by floor, with every device where it really is and
 
 **Drawing the plan.** Choose **Start drawing** (or **Edit plan** later). You draw rooms, not walls:
 
-- **Room:** drag on the grid to draw a rectangle. It snaps to half a metre. Walls appear on every room edge, and an edge two rooms share is one wall. A room can also be an outdoor zone or a pool, which have no walls.
+- **Room**, **Garden** and **Pool:** drag on the grid to draw a rectangle. It snaps to half a metre. A room gets walls on every edge, and an edge two rooms share is one wall. A garden (or terrace, or drive) and a pool have no walls. You can change a room's type later in its panel.
+- **Rooms within rooms:** draw a room inside another, such as an en-suite inside a bedroom or the house on its garden. A device belongs to the smallest room around it, and moving a room carries the rooms inside it along.
+- **L and U shapes:** select a room, choose **Add a wing**, and draw a rectangle along one of its edges. The wing joins the room with no wall between them. Each part has its own corner handles, and a part can be removed from the room's panel.
 - **Door** and **Window:** tap a wall. Tap one you placed to change its width or remove it.
 - **Select:** drag a room to move it (its doors, windows and devices move with it), or drag a corner to resize it.
 - **+ Floor** adds a floor above the top one, starting as one room the size of the floor below. The floor below shows as a dashed outline, so you can trace over it.
@@ -34,7 +36,7 @@ Nothing is saved until you choose **Save plan**. If the plan was saved from anot
 
 ## Dashboard
 
-The Dashboard gives you an at-a-glance view of the entire system. It is the landing page until a house plan is drawn.
+The Dashboard gives you an at-a-glance view of the entire system. It is the landing page until a house plan is drawn. Once there is a plan, a small live copy of it sits beside System information and opens the House page.
 
 ### Plugin status cards
 

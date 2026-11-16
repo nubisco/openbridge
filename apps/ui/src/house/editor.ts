@@ -7,7 +7,7 @@
  * given in place, so the view keeps one reactive draft and saves it as a
  * whole.
  */
-import type { HouseFloor, HouseOpening, HousePlan, HouseRoom } from '@/api'
+import type { HouseFloor, HouseOpening, HousePlan, HouseRect, HouseRoom } from '@/api'
 import {
   CELLS_PER_M,
   S,
@@ -16,7 +16,11 @@ import {
   openingFits,
   openingUnits,
   r1,
+  roomArea,
   roomAt,
+  roomOutline,
+  roomRects,
+  roomsOutsideIn,
   unitKey,
   wallRuns,
   wallUnits,
@@ -50,10 +54,18 @@ function uniqueId(prefix: string, taken: (id: string) => boolean): string {
 
 const roomTaken = (plan: HousePlan) => (id: string) => plan.floors.some((f) => f.rooms.some((r) => r.id === id))
 
-export function addRoom(plan: HousePlan, floor: HouseFloor, rect: Pick<HouseRoom, 'x' | 'y' | 'w' | 'h'>): HouseRoom {
+const KIND_NAME: Record<HouseRoom['kind'], string> = { room: 'Room', outdoor: 'Garden', pool: 'Pool' }
+
+export function addRoom(
+  plan: HousePlan,
+  floor: HouseFloor,
+  rect: Pick<HouseRoom, 'x' | 'y' | 'w' | 'h'>,
+  kind: HouseRoom['kind'] = 'room',
+): HouseRoom {
   const id = uniqueId('room', roomTaken(plan))
-  const n = floor.rooms.filter((r) => r.kind === 'room').length + 1
-  const room: HouseRoom = { id, name: `Room ${n}`, kind: 'room', ...rect }
+  const n = floor.rooms.filter((r) => r.kind === kind).length + 1
+  const name = kind === 'pool' && n === 1 ? 'Pool' : `${KIND_NAME[kind]} ${n}`
+  const room: HouseRoom = { id, name, kind, ...rect }
   floor.rooms.push(room)
   return room
 }
@@ -76,10 +88,11 @@ export function addFloor(plan: HousePlan): HouseFloor {
     placements: [],
   }
   if (walled.length) {
-    const x = Math.min(...walled.map((r) => r.x))
-    const y = Math.min(...walled.map((r) => r.y))
-    const w = Math.max(...walled.map((r) => r.x + r.w)) - x
-    const h = Math.max(...walled.map((r) => r.y + r.h)) - y
+    const rects = walled.flatMap(roomRects)
+    const x = Math.min(...rects.map((r) => r.x))
+    const y = Math.min(...rects.map((r) => r.y))
+    const w = Math.max(...rects.map((r) => r.x + r.w)) - x
+    const h = Math.max(...rects.map((r) => r.y + r.h)) - y
     floor.rooms.push({ id: uniqueId('room', roomTaken(plan)), name: 'Room 1', kind: 'room', x, y, w, h })
   }
   plan.floors.push(floor)
@@ -88,8 +101,8 @@ export function addFloor(plan: HousePlan): HouseFloor {
 
 /** Resize the plot, never smaller than the rooms on it. */
 export function setPlotSize(plan: HousePlan, axis: 'w' | 'h', cells: number): void {
-  const rooms = plan.floors.flatMap((f) => f.rooms)
-  const min = Math.max(2, ...rooms.map((r) => (axis === 'w' ? r.x + r.w : r.y + r.h)))
+  const rects = plan.floors.flatMap((f) => f.rooms.flatMap(roomRects))
+  const min = Math.max(2, ...rects.map((r) => (axis === 'w' ? r.x + r.w : r.y + r.h)))
   plan.plot[axis] = clamp(Math.round(cells), min, 400)
 }
 
@@ -98,29 +111,78 @@ export function removeFloor(plan: HousePlan, floorId: string): void {
   plan.floors = plan.floors.filter((f) => f.id !== floorId)
 }
 
-/** The rooms a room's edges touch, so moving a room can carry its openings along. */
+/** The wall units on a room's outline, so moving a room can carry its openings along. */
 function perimeter(r: HouseRoom): Set<string> {
-  const out = new Set<string>()
-  for (let i = 0; i < r.w; i++) {
-    out.add(unitKey(r.x + i, r.y, 'h'))
-    out.add(unitKey(r.x + i, r.y + r.h, 'h'))
+  return new Set(roomOutline(r).map((u) => unitKey(u.x, u.y, u.axis)))
+}
+
+const overlaps = (a: HouseRect, b: HouseRect) =>
+  a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
+
+const touches = (a: HouseRect, b: HouseRect) => {
+  const alongX = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)
+  const alongY = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y)
+  return (
+    ((a.y + a.h === b.y || b.y + b.h === a.y) && alongX >= 1) ||
+    ((a.x + a.w === b.x || b.x + b.w === a.x) && alongY >= 1)
+  )
+}
+
+/**
+ * Whether a room's parts make one piece: none overlap, and each shares an
+ * edge with the shape before it. The same rule the daemon checks on save,
+ * applied while dragging so the editor never shows a shape it would refuse.
+ */
+export function shapeValid(r: HouseRoom): boolean {
+  const shape: HouseRect[] = [r]
+  for (const q of r.parts ?? []) {
+    if (q.w < 1 || q.h < 1) return false
+    if (shape.some((s) => overlaps(s, q)) || !shape.some((s) => touches(s, q))) return false
+    shape.push(q)
   }
-  for (let j = 0; j < r.h; j++) {
-    out.add(unitKey(r.x, r.y + j, 'v'))
-    out.add(unitKey(r.x + r.w, r.y + j, 'v'))
-  }
-  return out
+  return true
+}
+
+/** Join a rectangle to a room as a wing. False when it would not make one piece. */
+export function addPart(r: HouseRoom, rect: HouseRect): boolean {
+  const parts = [...(r.parts ?? []), { ...rect }]
+  if (parts.length > 8 || !shapeValid({ ...r, parts })) return false
+  r.parts = parts
+  return true
+}
+
+/**
+ * Remove a wing. The parts after it may have hung off it, so any that no
+ * longer join the room go too, rather than leaving a room in two pieces.
+ */
+export function removePart(r: HouseRoom, index: number): void {
+  const rest = (r.parts ?? []).filter((_, i) => i !== index)
+  const kept: HouseRect[] = []
+  for (const q of rest) if (shapeValid({ ...r, parts: [...kept, q] })) kept.push(q)
+  if (kept.length) r.parts = kept
+  else delete r.parts
 }
 
 /** What moves with a room when it is dragged: its openings and the devices in it. */
 export function roomPayload(floor: HouseFloor, r: HouseRoom) {
-  const edge = perimeter(r)
+  // Rooms drawn inside this one move with it: an en-suite goes where its
+  // bedroom goes.
+  const within = (q: HouseRect) =>
+    roomRects(r).some((p) => q.x >= p.x && q.y >= p.y && q.x + q.w <= p.x + p.w && q.y + q.h <= p.y + p.h)
+  const inner = floor.rooms.filter((x) => x !== r && roomRects(x).every(within))
+  const group = new Set<HouseRoom>([r, ...inner])
+  const edge = new Set([...group].flatMap((x) => [...perimeter(x)]))
   return {
+    rooms: inner.map((x) => ({ room: x, o: roomRects(x).map((q) => ({ ...q })) })),
     openings: floor.openings
       .filter((o) => openingUnits(o).every((k) => edge.has(k)))
       .map((o) => ({ o, x: o.x, y: o.y })),
     placements: floor.placements
-      .filter((p) => !p.opening && roomAt(floor, p.x, p.y) === r)
+      .filter((p) => {
+        if (p.opening) return false
+        const at = roomAt(floor, p.x, p.y)
+        return !!at && group.has(at)
+      })
       .map((p) => ({ p, x: p.x, y: p.y })),
   }
 }
@@ -301,18 +363,32 @@ export function renderEditor(
     `<rect class="hv-eplot" x="0" y="0" width="${pw * S}" height="${ph * S}" fill="url(#hv-egrid)"/>`
   const below = plan.floors.filter((f) => f.level < floor.level).sort((a, b) => b.level - a.level)[0]
   if (below) {
-    for (const r of below.rooms.filter((x) => x.kind === 'room')) {
-      h += `<rect class="hv-eghost" x="${r.x * S}" y="${r.y * S}" width="${r.w * S}" height="${r.h * S}"/>`
+    for (const room of below.rooms.filter((x) => x.kind === 'room')) {
+      let d = ''
+      for (const u of roomOutline(room)) {
+        d += `M${u.x * S},${u.y * S}L${(u.axis === 'h' ? u.x + 1 : u.x) * S},${(u.axis === 'v' ? u.y + 1 : u.y) * S}`
+      }
+      h += `<path class="hv-eghost" d="${d}"/>`
     }
   }
-  for (const r of floor.rooms) {
-    const nfs = Math.min(fs, (r.w * S - 10 * U) / Math.max(1, r.name.length * 0.62))
+  for (const r of roomsOutsideIn(floor.rooms)) {
+    // The name sits in the largest part. An L is described by its area,
+    // a rectangle by its sides.
+    const rects = roomRects(r)
+    const q = rects.reduce((a, b) => (b.w * b.h > a.w * a.h ? b : a))
+    const nfs = Math.min(fs, (q.w * S - 10 * U) / Math.max(1, r.name.length * 0.62))
+    const size = rects.length > 1 ? `${metres(roomArea(r) / CELLS_PER_M)} m²` : `${metres(r.w)} × ${metres(r.h)} m`
+    let edge = ''
+    for (const u of roomOutline(r)) {
+      edge += `M${u.x * S},${u.y * S}L${(u.axis === 'h' ? u.x + 1 : u.x) * S},${(u.axis === 'v' ? u.y + 1 : u.y) * S}`
+    }
     h +=
       `<g class="hv-eroom hv-k-${r.kind}${o.selectedRoom === r.id ? ' hv-sel' : ''}" data-room="${esc(r.id)}">` +
-      `<rect x="${r.x * S}" y="${r.y * S}" width="${r.w * S}" height="${r.h * S}"/>` +
-      `<text x="${r1(r.x * S + 7 * U)}" y="${r1(r.y * S + nfs * 1.5)}" font-size="${r1(nfs)}">${esc(r.name)}</text>` +
-      (r.h * S > nfs * 3.2
-        ? `<text class="hv-dim" x="${r1(r.x * S + 7 * U)}" y="${r1(r.y * S + nfs * 2.7)}" font-size="${r1(nfs * 0.85)}">${metres(r.w)} × ${metres(r.h)} m</text>`
+      rects.map((p) => `<rect x="${p.x * S}" y="${p.y * S}" width="${p.w * S}" height="${p.h * S}"/>`).join('') +
+      `<path class="hv-eedge" d="${edge}"/>` +
+      `<text x="${r1(q.x * S + 7 * U)}" y="${r1(q.y * S + nfs * 1.5)}" font-size="${r1(nfs)}">${esc(r.name)}</text>` +
+      (q.h * S > nfs * 3.2
+        ? `<text class="hv-dim" x="${r1(q.x * S + 7 * U)}" y="${r1(q.y * S + nfs * 2.7)}" font-size="${r1(nfs * 0.85)}">${size}</text>`
         : '') +
       '</g>'
   }
@@ -352,15 +428,19 @@ export function renderEditor(
   }
   const sel = floor.rooms.find((r) => r.id === o.selectedRoom)
   if (sel && o.showHandles) {
-    const corners: Array<[string, number, number]> = [
-      ['nw', sel.x, sel.y],
-      ['ne', sel.x + sel.w, sel.y],
-      ['se', sel.x + sel.w, sel.y + sel.h],
-      ['sw', sel.x, sel.y + sel.h],
-    ]
-    for (const [c, x, y] of corners) {
-      h += `<circle class="hv-eh${c === 'ne' || c === 'sw' ? ' hv-alt' : ''}" data-handle="${c}" cx="${x * S}" cy="${y * S}" r="${r1(Math.max(7, 9 * U))}"/>`
-    }
+    // Every part has its own corners: `data-handle` is `<part>:<corner>`,
+    // part 0 being the main rectangle.
+    roomRects(sel).forEach((q, i) => {
+      const corners: Array<[string, number, number]> = [
+        ['nw', q.x, q.y],
+        ['ne', q.x + q.w, q.y],
+        ['se', q.x + q.w, q.y + q.h],
+        ['sw', q.x, q.y + q.h],
+      ]
+      for (const [c, x, y] of corners) {
+        h += `<circle class="hv-eh${c === 'ne' || c === 'sw' ? ' hv-alt' : ''}" data-handle="${i}:${c}" cx="${x * S}" cy="${y * S}" r="${r1(Math.max(7, 9 * U))}"/>`
+      }
+    })
   }
   return h
 }

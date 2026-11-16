@@ -23,6 +23,9 @@ import {
   r1,
   roomAt,
   roomTempColor,
+  roomOutline,
+  roomRects,
+  roomsOutsideIn,
   wallRuns,
   waterColor,
   type Point,
@@ -205,14 +208,18 @@ export function renderFloor(
 
   // Rooms, with the overlay tint from a sensor in the room.
   const roomOf = (p: HousePlacement) => roomAt(floor, p.x, p.y)
-  for (const r of floor.rooms) {
-    const pts = poly(o, [
-      [r.x, r.y, 0],
-      [r.x + r.w, r.y, 0],
-      [r.x + r.w, r.y + r.h, 0],
-      [r.x, r.y + r.h, 0],
-    ])
-    defs += `<clipPath id="hv-cp-${svgId(floor.id)}-${svgId(r.id)}"><polygon points="${pts}"/></clipPath>`
+  // Biggest first, so a room drawn inside another is painted on top of it.
+  for (const r of roomsOutsideIn(floor.rooms)) {
+    const rects = roomRects(r)
+    const shapes = rects.map((q) =>
+      poly(o, [
+        [q.x, q.y, 0],
+        [q.x + q.w, q.y, 0],
+        [q.x + q.w, q.y + q.h, 0],
+        [q.x, q.y + q.h, 0],
+      ]),
+    )
+    defs += `<clipPath id="hv-cp-${svgId(floor.id)}-${svgId(r.id)}">${shapes.map((pts) => `<polygon points="${pts}"/>`).join('')}</clipPath>`
     let style = ''
     let extra = ''
     if (o.overlay !== 'none' && r.kind === 'room') {
@@ -226,19 +233,32 @@ export function renderFloor(
         extra = o.overlay === 'temperature' ? ` ${reading.toFixed(1)}°` : ` ${Math.round(reading)}%`
       } else style = ' style="fill-opacity:0.04"'
     }
-    base += `<polygon class="hv-room hv-k-${r.kind}"${style} points="${pts}"/>`
+    // Each part is filled on its own, with no stroke, and the room's outline
+    // is drawn once over them, so an L reads as one room with no seam.
+    for (const pts of shapes) base += `<polygon class="hv-room-fill hv-k-${r.kind}"${style} points="${pts}"/>`
+    let outline = ''
+    for (const u of roomOutline(r)) {
+      const a = project(o.mode, u.x, u.y)
+      const b = project(o.mode, u.axis === 'h' ? u.x + 1 : u.x, u.axis === 'v' ? u.y + 1 : u.y)
+      outline += `M${r1(a[0])},${r1(a[1])}L${r1(b[0])},${r1(b[1])}`
+    }
+    base += `<path class="hv-room-edge hv-k-${r.kind}" d="${outline}"/>`
     if (r.kind === 'pool') {
       const running = placed.some(({ p, d }) => roomOf(p) === r && d.on && d.kind !== 'light')
-      for (let yy = r.y + 1.2; yy < r.y + r.h - 0.4; yy += 1.6) {
-        const a = project(o.mode, r.x + 0.6, yy)
-        const c = project(o.mode, r.x + r.w - 0.6, yy)
-        base += `<path class="hv-ripple${running ? ' hv-on' : ''}" d="M${r1(a[0])},${r1(a[1])}L${r1(c[0])},${r1(c[1])}"/>`
+      for (const q of rects) {
+        for (let yy = q.y + 1.2; yy < q.y + q.h - 0.4; yy += 1.6) {
+          const a = project(o.mode, q.x + 0.6, yy)
+          const c = project(o.mode, q.x + q.w - 0.6, yy)
+          base += `<path class="hv-ripple${running ? ' hv-on' : ''}" d="M${r1(a[0])},${r1(a[1])}L${r1(c[0])},${r1(c[1])}"/>`
+        }
       }
     }
     if (o.labels || extra) {
+      // On the largest part, which is where the eye looks for the room's name.
+      const q = rects.reduce((a, b) => (b.w * b.h > a.w * a.h ? b : a))
       const name = (o.labels ? r.name : '').concat(extra).trim()
-      const c = project(o.mode, r.x + r.w / 2, r.y + r.h / 2)
-      const fs = Math.min(11 * o.unit, (r.w * S * 0.86) / Math.max(1, name.length * 0.72), r.h * S * 0.3)
+      const c = project(o.mode, q.x + q.w / 2, q.y + q.h / 2)
+      const fs = Math.min(11 * o.unit, (q.w * S * 0.86) / Math.max(1, name.length * 0.72), q.h * S * 0.3)
       base += `<text class="hv-rlabel" transform="translate(${r1(c[0])},${r1(c[1])}) ${iso ? ISO_FLOOR_MATRIX : ''}" font-size="${r1(fs)}" dy="${r1(fs * 0.35)}">${esc(name)}</text>`
     }
   }

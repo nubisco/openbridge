@@ -243,14 +243,19 @@ export interface DeviceRoom {
 
 export type HouseRoomKind = 'room' | 'outdoor' | 'pool'
 
-export interface HouseRoom {
-  id: string
-  name: string
-  kind: HouseRoomKind
+export interface HouseRect {
   x: number
   y: number
   w: number
   h: number
+}
+
+export interface HouseRoom extends HouseRect {
+  id: string
+  name: string
+  kind: HouseRoomKind
+  /** More rectangles joined along an edge, for an L or U shaped room. */
+  parts?: HouseRect[]
 }
 
 export interface HouseOpening {

@@ -99,6 +99,53 @@ describe('validateHousePlan', () => {
   }
 })
 
+describe('L-shaped rooms', () => {
+  const withWing = (part: { x: number; y: number; w: number; h: number }) => {
+    const p = plan()
+    // The living room is x 2..12, y 2..10. The terrace below it goes, to leave room for a wing.
+    p.floors[0].rooms = p.floors[0].rooms.filter((r) => r.id !== 'terrace')
+    p.floors[0].rooms[0].parts = [part]
+    return p
+  }
+
+  it('accepts a wing that shares an edge', () => {
+    const out = validateHousePlan(withWing({ x: 2, y: 10, w: 4, h: 4 }))
+    expect(out.floors[0].rooms[0].parts).toEqual([{ x: 2, y: 10, w: 4, h: 4 }])
+  })
+
+  it('refuses a wing that only touches at a corner, or not at all', () => {
+    expect(() => validateHousePlan(withWing({ x: 12, y: 10, w: 2, h: 2 }))).toThrow(/share an edge/)
+    expect(() => validateHousePlan(withWing({ x: 20, y: 16, w: 2, h: 2 }))).toThrow(/share an edge/)
+  })
+
+  it('refuses a wing that overlaps the room', () => {
+    expect(() => validateHousePlan(withWing({ x: 4, y: 8, w: 4, h: 4 }))).toThrow(/overlaps/)
+  })
+
+  it('puts a device in the wing in the room', () => {
+    const p = withWing({ x: 2, y: 10, w: 4, h: 4 })
+    p.floors[0].placements[0] = { ref: 'device:lamp', x: 3, y: 12.5 }
+    expect(roomsByRef(p).get('device:lamp')?.id).toBe('living')
+  })
+})
+
+describe('rooms within rooms', () => {
+  it('puts a device in the smallest room around it', () => {
+    const p = plan()
+    // A pantry drawn inside the living room, and the whole plot as a garden around the house.
+    p.floors[0].rooms.push({ id: 'pantry', name: 'Pantry', kind: 'room', x: 8, y: 6, w: 4, h: 4 })
+    p.floors[0].rooms.unshift({ id: 'garden', name: 'Garden', kind: 'outdoor', x: 0, y: 0, w: 32, h: 22 })
+    p.floors[0].placements[0] = { ref: 'device:lamp', x: 10, y: 8 }
+    p.floors[0].placements.push({ ref: 'device:fridge', x: 4, y: 4 }, { ref: 'device:mower', x: 28, y: 18 })
+    const rooms = roomsByRef(validateHousePlan(p))
+    expect(rooms.get('device:lamp')?.id).toBe('pantry')
+    expect(rooms.get('device:fridge')?.id).toBe('living')
+    expect(rooms.get('device:mower')?.id).toBe('garden')
+    // A shutter stays in the walled room behind its window, not the garden.
+    expect(rooms.get('device:shutter')?.id).toBe('living')
+  })
+})
+
 describe('roomsByRef', () => {
   it('puts each device in the room its placement falls in, across floors', () => {
     const rooms = roomsByRef(plan())
@@ -276,6 +323,7 @@ describe('houseView, what an agent reads', () => {
       kind: 'room',
       width_m: 5,
       depth_m: 4,
+      area_m2: 20,
       devices: [{ id: 'lamp', name: 'Reading lamp', type: 'light' }],
     })
     expect(ground.rooms[1].devices.map((d) => d.name)).toEqual(['Heat pump'])

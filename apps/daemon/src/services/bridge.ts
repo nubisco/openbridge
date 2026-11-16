@@ -21,7 +21,7 @@ import type { DeviceEvent, DeviceEventLog } from '../device-events.js'
 import type { DeviceObservation, ObservationStore } from '../observations.js'
 import { DeviceSeries, type Point } from '../timeseries.js'
 import type { HomeKitServiceTypes } from '../homekit-service-type.js'
-import type { DeviceRoom, HouseStore } from '../house.js'
+import { roomRects, type DeviceRoom, type HouseStore } from '../house.js'
 
 export type ControlHandler = (value: unknown) => void | Promise<void>
 
@@ -320,13 +320,25 @@ export function houseView(ctx: BridgeContext) {
       return {
         name: f.name,
         level: f.level,
-        rooms: f.rooms.map((r) => ({
-          name: r.name,
-          kind: r.kind,
-          width_m: metres(r.w),
-          depth_m: metres(r.h),
-          devices: inRoom.get(r.id) ?? [],
-        })),
+        rooms: f.rooms.map((r) => {
+          // A rectangle is described by its sides. Any other shape by its
+          // area and the box around it, which is what a person would quote.
+          const rects = roomRects(r)
+          const area = rects.reduce((a, q) => a + metres(q.w) * metres(q.h), 0)
+          const x1 = Math.min(...rects.map((q) => q.x))
+          const y1 = Math.min(...rects.map((q) => q.y))
+          const x2 = Math.max(...rects.map((q) => q.x + q.w))
+          const y2 = Math.max(...rects.map((q) => q.y + q.h))
+          return {
+            name: r.name,
+            kind: r.kind,
+            ...(rects.length > 1 ? { shape: 'irregular' as const } : {}),
+            width_m: metres(x2 - x1),
+            depth_m: metres(y2 - y1),
+            area_m2: area,
+            devices: inRoom.get(r.id) ?? [],
+          }
+        }),
         ...(outside.length ? { devices_outside_rooms: outside } : {}),
       }
     })

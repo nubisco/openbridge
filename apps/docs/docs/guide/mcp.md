@@ -153,7 +153,7 @@ by the bridge itself and do not depend on the platform sign-in.
 | `device_history`      | read    | One metric over a window (`last: "7d"` or `from`/`to`), with the summary already computed: first, last, min, max, and mean or amount used             |
 | `device_events`       | read    | What happened to a device and what caused it                                                                                                          |
 | `device_observations` | read    | What people reported about a room the device controls                                                                                                 |
-| `house`               | read    | The house plan: floors, rooms with their size in metres, the devices in each, heating circuits by room, and devices not placed yet                    |
+| `house`               | read    | The house plan: floors, rooms with their size and area in metres, the devices in each, heating circuits by room, and devices not placed yet           |
 | `logs`                | read    | Recent daemon and plugin logs, filtered by plugin, level, text and time                                                                               |
 | `device_control`      | control | Up to 100 ops: plugin controls and HomeKit characteristic writes, each answered on its own                                                            |
 

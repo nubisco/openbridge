@@ -48,8 +48,34 @@
         <NbField v-slot="{ id }" label="Type" orientation="stack">
           <NbSelect :id="id" v-model="room.kind" :options="ROOM_KINDS" size="sm" />
         </NbField>
+        <p class="house-editor__muted">
+          {{
+            room.parts?.length
+              ? `${metres(roomArea(room) / CELLS_PER_M)} m², in ${room.parts.length + 1} parts`
+              : `${metres(room.w)} × ${metres(room.h)} m`
+          }}
+        </p>
+        <!-- A wing is another rectangle joined to the room along an edge: an L
+             is one wing, a U two. -->
+        <div v-for="(part, i) in room.parts ?? []" :key="i" class="house-editor__row house-editor__row--tight">
+          <span>Wing {{ i + 1 }} · {{ metres(part.w) }} × {{ metres(part.h) }} m</span>
+          <NbButton
+            size="sm"
+            variant="ghost"
+            icon="trash"
+            :aria-label="`Remove wing ${i + 1}`"
+            @click="removeWing(i)"
+          />
+        </div>
         <div class="house-editor__row">
-          <span class="house-editor__muted">{{ metres(room.w) }} × {{ metres(room.h) }} m</span>
+          <NbButton
+            size="sm"
+            :variant="wingFor === room.id ? 'primary' : 'secondary'"
+            :aria-pressed="wingFor === room.id"
+            @click="toggleWing"
+          >
+            {{ wingFor === room.id ? 'Drawing a wing' : 'Add a wing' }}
+          </NbButton>
           <NbButton size="sm" variant="danger" icon="trash" @click="deleteRoom">Delete room</NbButton>
         </div>
       </NbPanel>
@@ -204,22 +230,25 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
-import { useConfirm, usePhoneLayout } from '@nubisco/ui'
-import type { HouseFloor, HouseOpening, HousePlan, HouseRoom } from '@/api'
-import { CELLS_PER_M, S, clamp, openingUnits, wallUnits } from '@/house/geometry'
+import { useConfirm, usePhoneLayout, useToast } from '@nubisco/ui'
+import type { HouseFloor, HouseOpening, HousePlan, HouseRect, HouseRoom } from '@/api'
+import { CELLS_PER_M, S, clamp, openingUnits, roomArea, roomRects, wallUnits } from '@/house/geometry'
 import {
   addFloor,
   addOpening,
+  addPart,
   addRoom,
   nearestWall,
   openingAt,
   place,
   removeFloor,
   removeOpening,
+  removePart,
   roomPayload,
   unplace,
   renderEditor,
   setPlotSize,
+  shapeValid,
 } from '@/house/editor'
 import { KIND_LETTER, type LiveDevice } from '@/house/live'
 import { WARM_LIGHT } from '@/house/scene'
@@ -234,10 +263,15 @@ const props = defineProps<{
 
 const { phone } = usePhoneLayout()
 const confirm = useConfirm()
+const toast = useToast()
 
+// Garden and Pool draw the same rectangles as Room, without walls. The type
+// can still be changed afterwards in the room's panel.
 const TOOLS = [
   { id: 'select', label: 'Select' },
   { id: 'room', label: 'Room' },
+  { id: 'outdoor', label: 'Garden' },
+  { id: 'pool', label: 'Pool' },
   { id: 'door', label: 'Door' },
   { id: 'window', label: 'Window' },
 ]
@@ -264,7 +298,8 @@ const GLOW_COLOURS = [
   { label: 'Red', value: '#ff5a4d' },
 ]
 
-type Tool = 'select' | 'room' | 'door' | 'window'
+type Tool = 'select' | 'room' | 'outdoor' | 'pool' | 'door' | 'window'
+const isAreaTool = (t: Tool): t is 'room' | 'outdoor' | 'pool' => t === 'room' || t === 'outdoor' || t === 'pool'
 const tool = ref<Tool>('room')
 const floorId = ref(props.initialFloor ?? props.plan.floors[0].id)
 const selRoom = ref<string | null>(null)
@@ -319,10 +354,13 @@ const markup = computed(() =>
 )
 
 const help = computed(() => {
+  if (wingFor.value) return 'Drag a rectangle along an edge of the room to join it as a wing, making an L or a U.'
   if (armed.value) return `Now tap the plan where "${props.devices.get(armed.value)?.name ?? 'it'}" is.`
   return {
     select: 'Drag a room to move it, or its corners to resize it. Drag a device to move it. Tap anything to edit it.',
-    room: 'Drag on the grid to draw a room. It snaps to half a metre.',
+    room: 'Drag on the grid to draw a room. It snaps to half a metre. Draw one inside another for a room within a room.',
+    outdoor: 'Drag on the grid to draw a garden, terrace or drive. It has no walls.',
+    pool: 'Drag on the grid to draw a pool.',
     door: 'Tap a wall to put a door there. Tap a door to edit it.',
     window: 'Tap a wall to put a window there. Tap a window to edit it.',
   }[tool.value]
@@ -336,9 +374,22 @@ const metres = (cells: number) => {
 function setTool(id: string) {
   tool.value = id as Tool
   armed.value = null
+  wingFor.value = null
+}
+
+/** The room the next rectangle drawn joins as a wing, while adding one. */
+const wingFor = ref<string | null>(null)
+
+function toggleWing() {
+  wingFor.value = wingFor.value === selRoom.value ? null : selRoom.value
+}
+
+function removeWing(i: number) {
+  if (room.value) removePart(room.value, i)
 }
 
 function clearSelection() {
+  wingFor.value = null
   selRoom.value = null
   selRef.value = null
   selOpening.value = null
@@ -440,12 +491,20 @@ function setPlot(axis: 'w' | 'h', v: number | null) {
 
 type Drag =
   | { type: 'draw'; x0: number; y0: number }
-  | { type: 'resize'; r: HouseRoom; corner: string; o: { x1: number; y1: number; x2: number; y2: number } }
+  | {
+      type: 'resize'
+      room: HouseRoom
+      /** The part being resized: the room itself, or one of its wings. */
+      r: HouseRect
+      corner: string
+      o: { x1: number; y1: number; x2: number; y2: number }
+    }
   | {
       type: 'move'
       r: HouseRoom
       start: { x: number; y: number }
-      o: { x: number; y: number }
+      /** Where each part started, main rectangle first. */
+      o: HouseRect[]
       payload: ReturnType<typeof roomPayload>
     }
   | { type: 'device'; ref: string }
@@ -479,7 +538,7 @@ function onDown(e: PointerEvent) {
   const t = e.target instanceof Element ? e.target : null
   if (armed.value) return placeAt(armed.value, p)
 
-  if (tool.value === 'room') {
+  if (isAreaTool(tool.value) || wingFor.value) {
     const x0 = clamp(Math.round(p.x), 0, pw)
     const y0 = clamp(Math.round(p.y), 0, ph)
     drag = { type: 'draw', x0, y0 }
@@ -497,11 +556,14 @@ function onDown(e: PointerEvent) {
     const dev = t?.closest('[data-ref]')
     const rm = t?.closest('[data-room]')
     if (handle && room.value) {
-      const r = room.value
+      const [index, corner] = (handle.getAttribute('data-handle') as string).split(':')
+      const r = roomRects(room.value)[Number(index)]
+      if (!r) return
       drag = {
         type: 'resize',
+        room: room.value,
         r,
-        corner: handle.getAttribute('data-handle') as string,
+        corner,
         o: { x1: r.x, y1: r.y, x2: r.x + r.w, y2: r.y + r.h },
       }
     } else if (dev) {
@@ -513,7 +575,7 @@ function onDown(e: PointerEvent) {
       if (!r) return
       clearSelection()
       selRoom.value = r.id
-      drag = { type: 'move', r, start: p, o: { x: r.x, y: r.y }, payload: roomPayload(floor.value, r) }
+      drag = { type: 'move', r, start: p, o: roomRects(r).map((q) => ({ ...q })), payload: roomPayload(floor.value, r) }
     } else {
       // A tap on a wall opening in the select tool edits it.
       const u = nearestWall(floor.value, p.x, p.y, 0.6)
@@ -547,19 +609,32 @@ function onMove(e: PointerEvent) {
       h: Math.abs(y - drag.y0),
     }
   } else if (drag.type === 'resize') {
-    const { o, r, corner } = drag
+    const { o, r, corner, room: owner } = drag
     let { x1, y1, x2, y2 } = o
     if (corner.includes('w')) x1 = clamp(Math.round(p.x), 0, x2 - 1)
     if (corner.includes('e')) x2 = clamp(Math.round(p.x), x1 + 1, pw)
     if (corner.includes('n')) y1 = clamp(Math.round(p.y), 0, y2 - 1)
     if (corner.includes('s')) y2 = clamp(Math.round(p.y), y1 + 1, ph)
+    // A size that would split the room or overlap its own parts is not taken:
+    // the part stays at the last size that kept the room in one piece.
+    const before = { x: r.x, y: r.y, w: r.w, h: r.h }
     Object.assign(r, { x: x1, y: y1, w: x2 - x1, h: y2 - y1 })
+    if (!shapeValid(owner)) Object.assign(r, before)
   } else if (drag.type === 'move') {
     const { r, o, start, payload } = drag
-    const dx = clamp(o.x + Math.round(p.x - start.x), 0, pw - r.w) - o.x
-    const dy = clamp(o.y + Math.round(p.y - start.y), 0, ph - r.h) - o.y
-    r.x = o.x + dx
-    r.y = o.y + dy
+    // The whole shape moves, kept inside the plot by the box around it.
+    const box = {
+      x: Math.min(...o.map((q) => q.x)),
+      y: Math.min(...o.map((q) => q.y)),
+      x2: Math.max(...o.map((q) => q.x + q.w)),
+      y2: Math.max(...o.map((q) => q.y + q.h)),
+    }
+    const dx = clamp(Math.round(p.x - start.x), -box.x, pw - box.x2)
+    const dy = clamp(Math.round(p.y - start.y), -box.y, ph - box.y2)
+    roomRects(r).forEach((q, i) => Object.assign(q, { x: o[i].x + dx, y: o[i].y + dy }))
+    for (const q of payload.rooms) {
+      roomRects(q.room).forEach((x, i) => Object.assign(x, { x: q.o[i].x + dx, y: q.o[i].y + dy }))
+    }
     for (const q of payload.openings) Object.assign(q.o, { x: q.x + dx, y: q.y + dy })
     for (const q of payload.placements) Object.assign(q.p, { x: q.x + dx, y: q.y + dy })
   } else if (drag.type === 'device') {
@@ -573,11 +648,19 @@ function onMove(e: PointerEvent) {
 }
 
 function onUp() {
-  if (drag?.type === 'draw') {
+  if (drag?.type === 'draw' && wingFor.value) {
+    const d = draft.value
+    draft.value = null
+    const owner = floor.value.rooms.find((r) => r.id === wingFor.value)
+    if (owner && d && d.w >= 1 && d.h >= 1) {
+      if (addPart(owner, d)) wingFor.value = null
+      else toast.warning('A wing has to share an edge with the room and not overlap it. Try again.')
+    }
+  } else if (drag?.type === 'draw') {
     const d = draft.value
     draft.value = null
     if (d && d.w >= 1 && d.h >= 1) {
-      const r = addRoom(props.plan, floor.value, d)
+      const r = addRoom(props.plan, floor.value, d, isAreaTool(tool.value) ? tool.value : 'room')
       clearSelection()
       selRoom.value = r.id
     }
@@ -714,6 +797,10 @@ watch(
   justify-content: space-between;
   gap: var(--nb-spacing-8);
   margin-top: var(--nb-spacing-8);
+}
+
+.house-editor__row--tight {
+  margin-top: 0;
 }
 
 .house-editor__muted {
