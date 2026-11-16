@@ -79,7 +79,17 @@
       </NbButton>
     </div>
 
-    <div v-if="showLegend && !preview" class="house-stage__legend" aria-hidden="true">
+    <!-- What an overlay shows, and why a room has no colour: it has no sensor. -->
+    <div v-if="overlayLegend && !preview" class="house-stage__legend" role="note">
+      <div>{{ overlayLegend.title }}</div>
+      <div class="house-stage__legend-bar" :style="{ background: overlayLegend.gradient }" />
+      <div class="house-stage__legend-ends">
+        <span>{{ overlayLegend.lo }}</span>
+        <span>{{ overlayLegend.hi }}</span>
+      </div>
+      <div class="house-stage__legend-note">{{ overlayLegend.note }}</div>
+    </div>
+    <div v-else-if="showLegend && !preview" class="house-stage__legend" aria-hidden="true">
       <div>Water temperature</div>
       <div class="house-stage__legend-bar" />
       <div class="house-stage__legend-ends">
@@ -95,7 +105,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { usePhoneLayout } from '@nubisco/ui'
 import type { HouseFloor, HousePlan } from '@/api'
 import { CELLS_PER_M, clamp, drawnBounds, project, r1, rotatePlan, S, type Point } from '@/house/geometry'
-import { renderFloor, wallHeight, type SceneOptions } from '@/house/scene'
+import { overlayColor, renderFloor, roomReadings, wallHeight, type SceneOptions } from '@/house/scene'
 import type { LiveDevice } from '@/house/live'
 
 const props = defineProps<{
@@ -246,6 +256,36 @@ const all = computed(() => props.floor === 'all' || !props.plan.floors.some((f) 
 const shortName = (f: HouseFloor) => (f.level === 0 ? 'G' : f.level < 0 ? `B${-f.level}` : String(f.level))
 
 const visible = (id: string) => all.value || props.floor === id
+
+/**
+ * The overlay's scale, and how many of the rooms in view it could colour. A
+ * room is coloured only by a sensor standing in it, so the note says so
+ * plainly when there is none, instead of the overlay seeming to do nothing.
+ */
+const overlayLegend = computed(() => {
+  const ov = props.overlay
+  if (ov === 'none') return null
+  const shown = viewPlan.value.floors.filter((f) => visible(f.id))
+  let rooms = 0
+  let measured = 0
+  for (const f of shown) {
+    rooms += f.rooms.filter((r) => r.kind === 'room').length
+    measured += roomReadings(f, props.devices, ov).size
+  }
+  const [lo, hi] = ov === 'temperature' ? [16, 26] : [35, 80]
+  const stops = [0, 0.25, 0.5, 0.75, 1].map((k) => overlayColor(ov, lo + (hi - lo) * k))
+  const what = ov === 'temperature' ? 'temperature' : 'humidity'
+  return {
+    title: ov === 'temperature' ? 'Room temperature' : 'Room humidity',
+    gradient: `linear-gradient(90deg, ${stops.join(', ')})`,
+    lo: ov === 'temperature' ? `${lo}°` : `${lo}%`,
+    hi: ov === 'temperature' ? `${hi}°` : `${hi}%`,
+    note:
+      measured === 0
+        ? `No room here has a ${what} sensor. Place one in a room to colour it.`
+        : `${measured} of ${rooms} room${rooms === 1 ? '' : 's'} measured. The rest have no ${what} sensor.`,
+  }
+})
 
 /** Only when a pipe is on screen: a circuit serving a room on a floor in view. */
 const showLegend = computed(() => {
@@ -481,8 +521,10 @@ onBeforeUnmount(() => observer?.disconnect())
   flex-direction: column;
   align-items: stretch;
   gap: var(--nb-spacing-4);
-  padding: var(--nb-spacing-4);
-  border-radius: var(--nb-radius-md);
+  // Concentric with the pill buttons inside: the panel's corner is the
+  // button's (half its height) plus the inset that holds it off the edge.
+  padding: var(--nb-overlay-inset, var(--nb-spacing-4));
+  border-radius: calc(var(--nb-field-height-sm) / 2 + var(--nb-overlay-inset, var(--nb-spacing-4)));
   // A page surface floating on the stage, in the page's theme, so the
   // library's buttons read as they do everywhere else in light and dark.
   background: var(--nb-c-layer-1);
@@ -504,8 +546,10 @@ onBeforeUnmount(() => observer?.disconnect())
   display: flex;
   flex-direction: column;
   gap: var(--nb-spacing-2);
-  padding: var(--nb-spacing-4);
-  border-radius: var(--nb-radius-md);
+  // Concentric with the pill buttons inside: the panel's corner is the
+  // button's (half its height) plus the inset that holds it off the edge.
+  padding: var(--nb-overlay-inset, var(--nb-spacing-4));
+  border-radius: calc(var(--nb-field-height-sm) / 2 + var(--nb-overlay-inset, var(--nb-spacing-4)));
   background: var(--nb-c-layer-1);
   border: 1px solid var(--nb-c-border);
 
@@ -540,6 +584,12 @@ onBeforeUnmount(() => observer?.disconnect())
   .is-phone & {
     width: 90px;
   }
+}
+
+.house-stage__legend-note {
+  max-width: 200px;
+  margin-top: 4px;
+  line-height: 1.35;
 }
 
 .house-stage__legend-ends {
