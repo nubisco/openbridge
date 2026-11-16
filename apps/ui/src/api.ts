@@ -303,6 +303,20 @@ export interface HouseRadiator {
   side: 'up' | 'down' | 'left' | 'right'
 }
 
+export type HouseFurnitureKind = 'table' | 'cabinet' | 'island' | 'bed'
+
+/** A piece of furniture: a rectangle in half cells, `w` along x and `d` along y. */
+export interface HouseFurniture {
+  id: string
+  kind: HouseFurnitureKind
+  x: number
+  y: number
+  w: number
+  d: number
+  /** Height in metres, when it is not the usual one for its kind. */
+  height?: number
+}
+
 export interface HouseFloor {
   id: string
   name: string
@@ -311,6 +325,7 @@ export interface HouseFloor {
   openings: HouseOpening[]
   placements: HousePlacement[]
   radiators?: HouseRadiator[]
+  furniture?: HouseFurniture[]
 }
 
 export interface HousePlan {

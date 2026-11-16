@@ -34,8 +34,16 @@
     </svg>
 
     <div v-if="!preview" class="house-stage__view" role="group" aria-label="View" data-nb-appearance="rounded">
-      <NbButton size="sm" variant="ghost" icon="magnifying-glass-plus" aria-label="Zoom in" @click="zoomBy(1.4)" />
       <NbButton
+        v-nb-tooltip="{ body: 'Zoom in', position: 'left', aria: 'none' }"
+        size="sm"
+        variant="ghost"
+        icon="magnifying-glass-plus"
+        aria-label="Zoom in"
+        @click="zoomBy(1.4)"
+      />
+      <NbButton
+        v-nb-tooltip="{ body: 'Zoom out', position: 'left', aria: 'none' }"
         size="sm"
         variant="ghost"
         icon="magnifying-glass-minus"
@@ -43,6 +51,7 @@
         @click="zoomBy(1 / 1.4)"
       />
       <NbButton
+        v-nb-tooltip="{ body: 'Fit the house, at normal zoom', position: 'left', aria: 'none' }"
         size="sm"
         variant="ghost"
         icon="frame-corners"
@@ -50,8 +59,22 @@
         :disabled="zoom === 1 && pan[0] === 0 && pan[1] === 0"
         @click="resetView"
       />
-      <NbButton size="sm" variant="ghost" icon="arrow-counter-clockwise" aria-label="Turn left" @click="turn(-1)" />
-      <NbButton size="sm" variant="ghost" icon="arrow-clockwise" aria-label="Turn right" @click="turn(1)" />
+      <NbButton
+        v-nb-tooltip="{ body: 'Turn left', position: 'left', aria: 'none' }"
+        size="sm"
+        variant="ghost"
+        icon="arrow-counter-clockwise"
+        aria-label="Turn left"
+        @click="turn(-1)"
+      />
+      <NbButton
+        v-nb-tooltip="{ body: 'Turn right', position: 'left', aria: 'none' }"
+        size="sm"
+        variant="ghost"
+        icon="arrow-clockwise"
+        aria-label="Turn right"
+        @click="turn(1)"
+      />
     </div>
 
     <div v-if="!preview" class="house-stage__rail" role="group" aria-label="Floors" data-nb-appearance="rounded">

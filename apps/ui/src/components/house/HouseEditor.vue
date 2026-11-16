@@ -12,13 +12,26 @@
           @update:model-value="selectFloor"
         />
         <NbButton size="sm" variant="secondary" icon="plus" @click="newFloor">Floor</NbButton>
-        <NbTabs
-          :model-value="tool"
-          :items="TOOLS"
-          variant="contained"
+        <!-- One icon per tool, named by its tooltip (which is also its accessible name). -->
+        <div class="house-editor__tools" role="toolbar" aria-label="Drawing tool">
+          <NbButton
+            v-for="t in TOOLS"
+            :key="t.id"
+            v-nb-tooltip="{ body: t.label, position: 'bottom' }"
+            size="sm"
+            :variant="tool === t.id ? 'primary' : 'ghost'"
+            :icon="t.icon"
+            :aria-pressed="tool === t.id"
+            @click="setTool(t.id)"
+          />
+        </div>
+        <NbSelect
+          v-if="tool === 'furniture'"
+          v-model="furnitureKind"
+          :options="FURNITURE_KINDS"
           size="sm"
-          aria-label="Drawing tool"
-          @update:model-value="setTool"
+          aria-label="Furniture to add"
+          class="house-editor__kind"
         />
         <NbButton
           v-if="!phone && !(inspector.visible && inspector.mode === 'house-editor')"
@@ -151,6 +164,52 @@
           <div class="house-editor__row">
             <span />
             <NbButton size="sm" variant="danger" icon="trash" @click="deleteRadiator">Remove</NbButton>
+          </div>
+        </NbPanel>
+
+        <NbPanel v-else-if="piece" :title="FURNITURE_NAME[piece.kind]" :flat="true">
+          <NbField v-slot="{ id }" label="Type" orientation="stack">
+            <NbSelect :id="id" v-model="piece.kind" :options="FURNITURE_KINDS" size="sm" />
+          </NbField>
+          <NbField v-slot="{ id }" label="Width (m)" orientation="stack">
+            <NbNumberInput
+              :id="id"
+              :model-value="piece.w / CELLS_PER_M"
+              :min="0.25"
+              :max="20"
+              :step="0.25"
+              size="sm"
+              @update:model-value="(v: number | null) => setPieceSize('w', v)"
+            />
+          </NbField>
+          <NbField v-slot="{ id }" label="Depth (m)" orientation="stack">
+            <NbNumberInput
+              :id="id"
+              :model-value="piece.d / CELLS_PER_M"
+              :min="0.25"
+              :max="20"
+              :step="0.25"
+              size="sm"
+              @update:model-value="(v: number | null) => setPieceSize('d', v)"
+            />
+          </NbField>
+          <NbField v-slot="{ id }" label="Height (m)" orientation="stack">
+            <NbNumberInput
+              :id="id"
+              :model-value="furnitureHeight(piece)"
+              :min="0.1"
+              :max="3"
+              :step="0.05"
+              size="sm"
+              @update:model-value="setPieceHeight"
+            />
+          </NbField>
+          <p class="house-editor__muted">
+            A lamp put on it stands on it. Drag it to move it, or drag a corner to resize it.
+          </p>
+          <div class="house-editor__row">
+            <NbButton size="sm" variant="secondary" icon="arrow-clockwise" @click="turnPiece">Turn</NbButton>
+            <NbButton size="sm" variant="danger" icon="trash" @click="deletePiece">Remove</NbButton>
           </div>
         </NbPanel>
 
@@ -327,6 +386,8 @@ import { useConfirm, usePhoneLayout, useToast } from '@nubisco/ui'
 import { useInspectorStore } from '@/stores/inspector'
 import type {
   HouseFloor,
+  HouseFurniture,
+  HouseFurnitureKind,
   HouseLightMount,
   HouseLook,
   HouseOpening,
@@ -335,10 +396,27 @@ import type {
   HouseRect,
   HouseRoom,
 } from '@/api'
-import { CELLS_PER_M, S, clamp, flippedSide, lightMount, radiatorRoom, roomArea, roomRects } from '@/house/geometry'
 import {
+  CELLS_PER_M,
+  FURNITURE_HEIGHT,
+  S,
+  clamp,
+  flippedSide,
+  furnitureHeight,
+  lightMount,
+  radiatorRoom,
+  roomArea,
+  roomRects,
+} from '@/house/geometry'
+import {
+  FURNITURE_NAME,
   addFloor,
+  addFurniture,
   addOpenWall,
+  moveFurniture,
+  removeFurniture,
+  resizeFurniture,
+  turnFurniture,
   addRadiator,
   moveRadiator,
   radiatorFits,
@@ -388,16 +466,21 @@ const toast = useToast()
 // Garden and Pool draw the same rectangles as Room, without walls. The type
 // can still be changed afterwards in the room's panel.
 const TOOLS = [
-  { id: 'select', label: 'Select' },
-  { id: 'room', label: 'Room' },
-  { id: 'outdoor', label: 'Garden' },
-  { id: 'paved', label: 'Paving' },
-  { id: 'pool', label: 'Pool' },
-  { id: 'door', label: 'Door' },
-  { id: 'window', label: 'Window' },
-  { id: 'open', label: 'Open wall' },
-  { id: 'radiator', label: 'Radiator' },
+  { id: 'select', label: 'Select', icon: 'cursor' },
+  { id: 'room', label: 'Room', icon: 'bounding-box' },
+  { id: 'outdoor', label: 'Garden', icon: 'tree' },
+  { id: 'paved', label: 'Paving', icon: 'squares-four' },
+  { id: 'pool', label: 'Pool', icon: 'swimming-pool' },
+  { id: 'door', label: 'Door', icon: 'door-open' },
+  { id: 'window', label: 'Window', icon: 'app-window' },
+  { id: 'open', label: 'Open wall', icon: 'arrows-out-line-horizontal' },
+  { id: 'radiator', label: 'Radiator', icon: 'thermometer-hot' },
+  { id: 'furniture', label: 'Furniture', icon: 'armchair' },
 ]
+const FURNITURE_KINDS = (Object.keys(FURNITURE_NAME) as HouseFurnitureKind[]).map((k) => ({
+  label: FURNITURE_NAME[k],
+  value: k,
+}))
 const ROOM_KINDS = [
   { label: 'Room (has walls)', value: 'room' },
   { label: 'Outdoor zone', value: 'outdoor' },
@@ -431,7 +514,7 @@ const GLOW_COLOURS = [
   { label: 'Red', value: '#ff5a4d' },
 ]
 
-type Tool = 'select' | 'room' | 'outdoor' | 'paved' | 'pool' | 'door' | 'window' | 'open' | 'radiator'
+type Tool = 'select' | 'room' | 'outdoor' | 'paved' | 'pool' | 'door' | 'window' | 'open' | 'radiator' | 'furniture'
 const isAreaTool = (t: Tool): t is 'room' | 'outdoor' | 'paved' | 'pool' =>
   t === 'room' || t === 'outdoor' || t === 'paved' || t === 'pool'
 const tool = ref<Tool>('room')
@@ -440,6 +523,9 @@ const selRoom = ref<string | null>(null)
 const selRef = ref<string | null>(null)
 const selOpening = ref<string | null>(null)
 const selRadiator = ref<string | null>(null)
+const selFurniture = ref<string | null>(null)
+/** What the Furniture tool puts down next. */
+const furnitureKind = ref<HouseFurnitureKind>('table')
 const armed = ref<string | null>(null)
 const draft = ref<Pick<HouseRoom, 'x' | 'y' | 'w' | 'h'> | null>(null)
 const svgEl = ref<SVGSVGElement | null>(null)
@@ -454,6 +540,7 @@ const floorTabs = computed(() =>
 )
 const room = computed(() => floor.value.rooms.find((r) => r.id === selRoom.value) ?? null)
 const opening = computed(() => floor.value.openings.find((o) => o.id === selOpening.value) ?? null)
+const piece = computed(() => (floor.value.furniture ?? []).find((f) => f.id === selFurniture.value) ?? null)
 const radiator = computed(() => (floor.value.radiators ?? []).find((r) => r.id === selRadiator.value) ?? null)
 /** "Heats the Kitchen, from Heat pump", or why it does not. */
 const radiatorText = computed(() => {
@@ -496,6 +583,7 @@ const markup = computed(() =>
     selectedRef: selRef.value,
     selectedOpening: selOpening.value,
     selectedRadiator: selRadiator.value,
+    selectedFurniture: selFurniture.value,
     draft: draft.value,
     unit: unit.value,
     showHandles: tool.value === 'select',
@@ -516,6 +604,8 @@ const help = computed(() => {
     window: 'Tap a wall to put a window there. Drag a window to move it, or its ends to resize it.',
     radiator:
       'Tap a wall, on the side the radiator hangs, to put one there. Drag it to move it, or its ends to resize it. A heating circuit serving the room runs through it.',
+    furniture:
+      'Pick what to add, then drag on the plan to draw it to size, or tap to put one of the usual size there. Drag a piece to move it, or a corner to resize it.',
     open: 'Tap a wall that is not really there, such as between a kitchen and the living room, and it is left out.',
   }[tool.value]
 })
@@ -545,6 +635,7 @@ function clearSelection() {
   selRef.value = null
   selOpening.value = null
   selRadiator.value = null
+  selFurniture.value = null
 }
 
 function selectFloor(id: string) {
@@ -606,6 +697,34 @@ function flipRadiator() {
 function deleteRadiator() {
   if (radiator.value) removeRadiator(floor.value, radiator.value.id)
   selRadiator.value = null
+}
+
+function setPieceSize(side: 'w' | 'd', v: number | null) {
+  const f = piece.value
+  if (!f || v === null) return
+  const cells = clamp(Math.round(v * CELLS_PER_M * 2) / 2, 0.5, side === 'w' ? props.plan.plot.w : props.plan.plot.h)
+  f[side] = cells
+  // Grown past the plot's edge, it moves back onto it.
+  if (side === 'w') f.x = clamp(f.x, 0, props.plan.plot.w - f.w)
+  else f.y = clamp(f.y, 0, props.plan.plot.h - f.d)
+}
+
+function setPieceHeight(v: number | null) {
+  const f = piece.value
+  if (!f || v === null) return
+  const m = clamp(Math.round(v * 100) / 100, 0.1, 3)
+  // The usual height for its kind is left unset, so changing the kind keeps it right.
+  if (m === FURNITURE_HEIGHT[f.kind]) delete f.height
+  else f.height = m
+}
+
+function turnPiece() {
+  if (piece.value) turnFurniture(props.plan, piece.value)
+}
+
+function deletePiece() {
+  if (piece.value) removeFurniture(floor.value, piece.value.id)
+  selFurniture.value = null
 }
 
 function deleteOpening() {
@@ -730,6 +849,9 @@ type Drag =
   | { type: 'oresize'; o: HouseOpening; end: 'start' | 'end' }
   | { type: 'rmove'; r: HouseRadiator; grab: number }
   | { type: 'rresize'; r: HouseRadiator; end: 'start' | 'end' }
+  | { type: 'fdraw'; x0: number; y0: number }
+  | { type: 'fmove'; f: HouseFurniture; grab: { x: number; y: number } }
+  | { type: 'fresize'; f: HouseFurniture; corner: string; o: { x1: number; y1: number; x2: number; y2: number } }
 let drag: Drag | null = null
 
 /** Start dragging the opening under the pointer, or one of the selected opening's ends. */
@@ -759,6 +881,23 @@ function grabOpening(t: Element | null, p: { x: number; y: number }): boolean {
   clearSelection()
   selOpening.value = o.id
   drag = { type: 'omove', o, grab: (o.axis === 'h' ? p.x : p.y) - (o.axis === 'h' ? o.x : o.y) }
+  return true
+}
+
+/** Start dragging the piece of furniture under the pointer, or a corner of the selected one. */
+function grabFurniture(t: Element | null, p: { x: number; y: number }): boolean {
+  const corner = t?.closest('[data-fhandle]')?.getAttribute('data-fhandle')
+  const f = piece.value
+  if (corner && f) {
+    drag = { type: 'fresize', f, corner, o: { x1: f.x, y1: f.y, x2: f.x + f.w, y2: f.y + f.d } }
+    return true
+  }
+  const id = t?.closest('[data-furniture]')?.getAttribute('data-furniture')
+  const hit = id ? (floor.value.furniture ?? []).find((x) => x.id === id) : undefined
+  if (!hit) return false
+  clearSelection()
+  selFurniture.value = hit.id
+  drag = { type: 'fmove', f: hit, grab: { x: p.x - hit.x, y: p.y - hit.y } }
   return true
 }
 
@@ -811,6 +950,14 @@ function onDown(e: PointerEvent) {
           grab: (u.axis === 'h' ? p.x : p.y) - (u.axis === 'h' ? existing.x : existing.y),
         }
     }
+  } else if (tool.value === 'furniture') {
+    if (!grabFurniture(t, p)) {
+      clearSelection()
+      const x0 = clamp(Math.round(p.x * 2) / 2, 0, pw)
+      const y0 = clamp(Math.round(p.y * 2) / 2, 0, ph)
+      drag = { type: 'fdraw', x0, y0 }
+      draft.value = { x: x0, y: y0, w: 0, h: 0 }
+    }
   } else if (tool.value === 'radiator') {
     if (!grabOpening(t, p)) {
       const u = nearestWall(floor.value, p.x, p.y)
@@ -841,6 +988,8 @@ function onDown(e: PointerEvent) {
       clearSelection()
       selRef.value = dev.getAttribute('data-ref')
       drag = { type: 'device', ref: selRef.value as string }
+    } else if (grabFurniture(t, p)) {
+      /* a piece of furniture, or one of its corners, is being dragged */
     } else if (rm) {
       const r = floor.value.rooms.find((x) => x.id === rm.getAttribute('data-room'))
       if (!r) return
@@ -879,6 +1028,19 @@ function onMove(e: PointerEvent) {
       w: Math.abs(x - drag.x0),
       h: Math.abs(y - drag.y0),
     }
+  } else if (drag.type === 'fdraw') {
+    const x = clamp(Math.round(p.x * 2) / 2, 0, pw)
+    const y = clamp(Math.round(p.y * 2) / 2, 0, ph)
+    draft.value = {
+      x: Math.min(x, drag.x0),
+      y: Math.min(y, drag.y0),
+      w: Math.abs(x - drag.x0),
+      h: Math.abs(y - drag.y0),
+    }
+  } else if (drag.type === 'fmove') {
+    moveFurniture(props.plan, drag.f, p.x, p.y, drag.grab)
+  } else if (drag.type === 'fresize') {
+    resizeFurniture(props.plan, drag.f, drag.corner, drag.o, p.x, p.y)
   } else if (drag.type === 'resize') {
     const { o, r, corner, room: owner } = drag
     let { x1, y1, x2, y2 } = o
@@ -908,6 +1070,7 @@ function onMove(e: PointerEvent) {
     }
     for (const q of payload.openings) Object.assign(q.o, { x: q.x + dx, y: q.y + dy })
     for (const q of payload.radiators) Object.assign(q.o, { x: q.x + dx, y: q.y + dy })
+    for (const q of payload.furniture) Object.assign(q.o, { x: q.x + dx, y: q.y + dy })
     for (const q of payload.placements) Object.assign(q.p, { x: q.x + dx, y: q.y + dy })
   } else if (drag.type === 'omove') {
     moveOpening(floor.value, drag.o, p.x, p.y, drag.grab)
@@ -928,7 +1091,20 @@ function onMove(e: PointerEvent) {
 }
 
 function onUp() {
-  if (drag?.type === 'draw' && wingFor.value) {
+  if (drag?.type === 'fdraw') {
+    const d = draft.value
+    draft.value = null
+    // A drag draws it to size. A tap, or a drag too small to mean anything, puts down the usual size.
+    const drawn = d && d.w >= 0.5 && d.h >= 0.5
+    const f = addFurniture(
+      props.plan,
+      floor.value,
+      furnitureKind.value,
+      drawn ? { x: d.x, y: d.y, w: d.w, d: d.h } : { x: drag.x0, y: drag.y0 },
+    )
+    clearSelection()
+    selFurniture.value = f.id
+  } else if (drag?.type === 'draw' && wingFor.value) {
     const d = draft.value
     draft.value = null
     const owner = floor.value.rooms.find((r) => r.id === wingFor.value)
@@ -1039,6 +1215,18 @@ watch(
   }
 }
 
+.house-editor__tools {
+  display: flex;
+  gap: var(--nb-spacing-2);
+  // Concentric with the pill buttons inside, as the view's own panels are.
+  padding: var(--nb-overlay-inset, var(--nb-spacing-4));
+  border-radius: calc(var(--nb-field-height-sm) / 2 + var(--nb-overlay-inset, var(--nb-spacing-4)));
+  background: var(--nb-c-layer-1);
+  border: 1px solid var(--nb-c-border);
+}
+.house-editor__kind {
+  width: 10rem;
+}
 .house-editor__toolbar {
   position: absolute;
   z-index: 1;
