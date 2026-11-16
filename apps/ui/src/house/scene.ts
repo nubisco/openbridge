@@ -22,6 +22,8 @@ import {
   lerp,
   project,
   r1,
+  radiatorEnds,
+  radiatorRoom,
   roomAt,
   roomBox,
   roomTempColor,
@@ -668,6 +670,71 @@ export function renderFloor(
         }
       }
     }
+  }
+
+  // Radiators, against their walls. One is hot while a heating circuit that
+  // serves its room is running, and takes the colour of that water.
+  for (const rad of floor.radiators ?? []) {
+    const room = radiatorRoom(floor, rad)
+    let feed: LiveDevice | undefined
+    for (const f of plan.floors) {
+      for (const p of f.placements) {
+        if (room && p.circuitRooms?.includes(room.id)) feed = devices.get(p.ref) ?? feed
+      }
+    }
+    const hot = !!feed?.on && !!feed.reachable
+    const water = waterColor(feed?.supply ?? feed?.temperature ?? 20)
+    const [a, b] = radiatorEnds(rad, 0)
+    const [a2, b2] = radiatorEnds(rad)
+    // Radiators stay white. Heat shows as a glow and an edge in the water's colour.
+    const style = hot ? ` style="--hv-water:${water};stroke:${water}"` : ''
+    const fins: string[] = []
+    for (let t = 0.25; t < rad.len - 0.01; t += 0.25) {
+      fins.push(rad.axis === 'h' ? `${a2[0] + t},${a2[1]}` : `${a2[0]},${a2[1] + t}`)
+    }
+    let svg = ''
+    if (iso) {
+      const z0 = zm(o, 0.15)
+      const z1 = zm(o, 0.75)
+      svg =
+        `<polygon class="hv-rad hv-radtop${hot ? ' hv-hot' : ''}" points="${poly(o, [
+          [a[0], a[1], z1],
+          [b[0], b[1], z1],
+          [b2[0], b2[1], z1],
+          [a2[0], a2[1], z1],
+        ])}"/>` +
+        `<polygon class="hv-rad${hot ? ' hv-hot' : ''}"${style} points="${poly(o, [
+          [a2[0], a2[1], z0],
+          [b2[0], b2[1], z0],
+          [b2[0], b2[1], z1],
+          [a2[0], a2[1], z1],
+        ])}"/>` +
+        fins
+          .map((f) => {
+            const [fx, fy] = f.split(',').map(Number)
+            const p = project(o.mode, fx, fy, z0 + 0.04)
+            const q = project(o.mode, fx, fy, z1 - 0.04)
+            return `<line class="hv-radfin" x1="${r1(p[0])}" y1="${r1(p[1])}" x2="${r1(q[0])}" y2="${r1(q[1])}"/>`
+          })
+          .join('')
+    } else {
+      svg =
+        `<polygon class="hv-rad${hot ? ' hv-hot' : ''}"${style} points="${poly(o, [
+          [a[0], a[1], 0],
+          [b[0], b[1], 0],
+          [b2[0], b2[1], 0],
+          [a2[0], a2[1], 0],
+        ])}"/>` +
+        fins
+          .map((f) => {
+            const [fx, fy] = f.split(',').map(Number)
+            const p = project(o.mode, fx, fy)
+            const q = project(o.mode, fx - (a2[0] - a[0]), fy - (a2[1] - a[1]))
+            return `<line class="hv-radfin" x1="${r1(p[0])}" y1="${r1(p[1])}" x2="${r1(q[0])}" y2="${r1(q[1])}"/>`
+          })
+          .join('')
+    }
+    items.push({ depth: (a2[0] + b2[0] + a2[1] + b2[1]) / 2 + 0.02, svg: `<g pointer-events="none">${svg}</g>` })
   }
 
   // Walls, doors, windows, and the shutters that sit on windows.

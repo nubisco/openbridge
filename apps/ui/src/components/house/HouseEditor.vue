@@ -129,6 +129,31 @@
           </div>
         </NbPanel>
 
+        <NbPanel v-else-if="radiator" title="Radiator" :flat="true">
+          <NbField v-slot="{ id }" label="Width (m)" orientation="stack">
+            <NbNumberInput
+              :id="id"
+              :model-value="radiator.len / CELLS_PER_M"
+              :min="0.5"
+              :max="5"
+              :step="0.25"
+              size="sm"
+              @update:model-value="setRadiatorLength"
+            />
+          </NbField>
+          <p class="house-editor__muted">{{ radiatorText }}</p>
+          <div class="house-editor__row house-editor__row--tight">
+            <NbButton size="sm" variant="secondary" icon="arrows-down-up" @click="flipRadiator">
+              Other side of the wall
+            </NbButton>
+          </div>
+          <p class="house-editor__muted">Drag it along the wall to move it, or drag an end to resize it.</p>
+          <div class="house-editor__row">
+            <span />
+            <NbButton size="sm" variant="danger" icon="trash" @click="deleteRadiator">Remove</NbButton>
+          </div>
+        </NbPanel>
+
         <NbPanel v-else-if="placed" :title="placedDevice?.name ?? 'Device'" :flat="true">
           <p v-if="!placedDevice" class="house-editor__muted">
             This device is no longer on the bridge. Remove it from the plan, or leave it in case its plugin comes back.
@@ -300,11 +325,25 @@
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useConfirm, usePhoneLayout, useToast } from '@nubisco/ui'
 import { useInspectorStore } from '@/stores/inspector'
-import type { HouseFloor, HouseLightMount, HouseLook, HouseOpening, HousePlan, HouseRect, HouseRoom } from '@/api'
-import { CELLS_PER_M, S, clamp, flippedSide, lightMount, roomArea, roomRects } from '@/house/geometry'
+import type {
+  HouseFloor,
+  HouseLightMount,
+  HouseLook,
+  HouseOpening,
+  HousePlan,
+  HouseRadiator,
+  HouseRect,
+  HouseRoom,
+} from '@/api'
+import { CELLS_PER_M, S, clamp, flippedSide, lightMount, radiatorRoom, roomArea, roomRects } from '@/house/geometry'
 import {
   addFloor,
   addOpenWall,
+  addRadiator,
+  moveRadiator,
+  radiatorFits,
+  removeRadiator,
+  resizeRadiator,
   addOpening,
   addPart,
   addRoom,
@@ -357,6 +396,7 @@ const TOOLS = [
   { id: 'door', label: 'Door' },
   { id: 'window', label: 'Window' },
   { id: 'open', label: 'Open wall' },
+  { id: 'radiator', label: 'Radiator' },
 ]
 const ROOM_KINDS = [
   { label: 'Room (has walls)', value: 'room' },
@@ -391,7 +431,7 @@ const GLOW_COLOURS = [
   { label: 'Red', value: '#ff5a4d' },
 ]
 
-type Tool = 'select' | 'room' | 'outdoor' | 'paved' | 'pool' | 'door' | 'window' | 'open'
+type Tool = 'select' | 'room' | 'outdoor' | 'paved' | 'pool' | 'door' | 'window' | 'open' | 'radiator'
 const isAreaTool = (t: Tool): t is 'room' | 'outdoor' | 'paved' | 'pool' =>
   t === 'room' || t === 'outdoor' || t === 'paved' || t === 'pool'
 const tool = ref<Tool>('room')
@@ -399,6 +439,7 @@ const floorId = ref(props.initialFloor ?? props.plan.floors[0].id)
 const selRoom = ref<string | null>(null)
 const selRef = ref<string | null>(null)
 const selOpening = ref<string | null>(null)
+const selRadiator = ref<string | null>(null)
 const armed = ref<string | null>(null)
 const draft = ref<Pick<HouseRoom, 'x' | 'y' | 'w' | 'h'> | null>(null)
 const svgEl = ref<SVGSVGElement | null>(null)
@@ -413,6 +454,19 @@ const floorTabs = computed(() =>
 )
 const room = computed(() => floor.value.rooms.find((r) => r.id === selRoom.value) ?? null)
 const opening = computed(() => floor.value.openings.find((o) => o.id === selOpening.value) ?? null)
+const radiator = computed(() => (floor.value.radiators ?? []).find((r) => r.id === selRadiator.value) ?? null)
+/** "Heats the Kitchen, from Heat pump", or why it does not. */
+const radiatorText = computed(() => {
+  const r = radiator.value
+  if (!r) return ''
+  const room = radiatorRoom(floor.value, r)
+  if (!room) return 'It is not in a room.'
+  const feed = props.plan.floors.flatMap((f) => f.placements).find((p) => p.circuitRooms?.includes(room.id))
+  const name = feed ? (props.devices.get(feed.ref)?.name ?? 'a heating device') : null
+  return name
+    ? `Heats ${room.name}, on the circuit from ${name}.`
+    : `Heats ${room.name}. No heating circuit serves this room yet: tick it on a heating device.`
+})
 const placed = computed(() => floor.value.placements.find((p) => p.ref === selRef.value) ?? null)
 const placedDevice = computed(() => (placed.value ? props.devices.get(placed.value.ref) : undefined))
 const unplaced = computed(() => {
@@ -441,6 +495,7 @@ const markup = computed(() =>
     selectedRoom: selRoom.value,
     selectedRef: selRef.value,
     selectedOpening: selOpening.value,
+    selectedRadiator: selRadiator.value,
     draft: draft.value,
     unit: unit.value,
     showHandles: tool.value === 'select',
@@ -459,6 +514,8 @@ const help = computed(() => {
     pool: 'Drag on the grid to draw a pool.',
     door: 'Tap a wall to put a door there. Drag a door to move it, or its ends to resize it.',
     window: 'Tap a wall to put a window there. Drag a window to move it, or its ends to resize it.',
+    radiator:
+      'Tap a wall, on the side the radiator hangs, to put one there. Drag it to move it, or its ends to resize it. A heating circuit serving the room runs through it.',
     open: 'Tap a wall that is not really there, such as between a kitchen and the living room, and it is left out.',
   }[tool.value]
 })
@@ -487,6 +544,7 @@ function clearSelection() {
   selRoom.value = null
   selRef.value = null
   selOpening.value = null
+  selRadiator.value = null
 }
 
 function selectFloor(id: string) {
@@ -525,6 +583,29 @@ async function deleteFloor() {
 function deleteRoom() {
   floor.value.rooms = floor.value.rooms.filter((r) => r.id !== selRoom.value)
   selRoom.value = null
+}
+
+function setRadiatorLength(v: number | null) {
+  const r = radiator.value
+  if (!r || v === null) return
+  const want = clamp(Math.round(v * CELLS_PER_M * 2) / 2, 1, 10)
+  let len = r.len
+  const step = want > len ? 0.5 : -0.5
+  while (len !== want && radiatorFits(floor.value, { ...r, len: len + step })) len += step
+  r.len = len
+}
+
+function flipRadiator() {
+  const r = radiator.value
+  if (!r) return
+  const side = ({ up: 'down', down: 'up', left: 'right', right: 'left' } as const)[r.side]
+  if (radiatorFits(floor.value, { ...r, side })) r.side = side
+  else toast.warning('The other side of this wall already has a radiator there.')
+}
+
+function deleteRadiator() {
+  if (radiator.value) removeRadiator(floor.value, radiator.value.id)
+  selRadiator.value = null
 }
 
 function deleteOpening() {
@@ -647,10 +728,26 @@ type Drag =
   | { type: 'device'; ref: string }
   | { type: 'omove'; o: HouseOpening; grab: number }
   | { type: 'oresize'; o: HouseOpening; end: 'start' | 'end' }
+  | { type: 'rmove'; r: HouseRadiator; grab: number }
+  | { type: 'rresize'; r: HouseRadiator; end: 'start' | 'end' }
 let drag: Drag | null = null
 
 /** Start dragging the opening under the pointer, or one of the selected opening's ends. */
 function grabOpening(t: Element | null, p: { x: number; y: number }): boolean {
+  // Radiators are grabbed the same way: by their line, or the selected one's ends.
+  const rend = t?.closest('[data-rhandle]')?.getAttribute('data-rhandle')
+  if (rend && radiator.value) {
+    drag = { type: 'rresize', r: radiator.value, end: rend === 'end' ? 'end' : 'start' }
+    return true
+  }
+  const rid = t?.closest('[data-radiator]')?.getAttribute('data-radiator')
+  const rad = rid ? (floor.value.radiators ?? []).find((x) => x.id === rid) : undefined
+  if (rad) {
+    clearSelection()
+    selRadiator.value = rad.id
+    drag = { type: 'rmove', r: rad, grab: (rad.axis === 'h' ? p.x : p.y) - (rad.axis === 'h' ? rad.x : rad.y) }
+    return true
+  }
   const end = t?.closest('[data-ohandle]')?.getAttribute('data-ohandle')
   if (end && opening.value) {
     drag = { type: 'oresize', o: opening.value, end: end === 'end' ? 'end' : 'start' }
@@ -714,8 +811,17 @@ function onDown(e: PointerEvent) {
           grab: (u.axis === 'h' ? p.x : p.y) - (u.axis === 'h' ? existing.x : existing.y),
         }
     }
+  } else if (tool.value === 'radiator') {
+    if (!grabOpening(t, p)) {
+      const u = nearestWall(floor.value, p.x, p.y)
+      clearSelection()
+      if (!u) return
+      const r = addRadiator(floor.value, u, p.x, p.y)
+      if (r) selRadiator.value = r.id
+      else toast.warning('There is no room for a radiator there. It needs wall, not a doorway, on the side of a room.')
+    }
   } else if (grabOpening(t, p)) {
-    /* a door or window, or one of its ends, is being dragged */
+    /* a door, window or radiator, or one of its ends, is being dragged */
   } else {
     const handle = t?.closest('[data-handle]')
     const dev = t?.closest('[data-ref]')
@@ -801,11 +907,16 @@ function onMove(e: PointerEvent) {
       roomRects(q.room).forEach((x, i) => Object.assign(x, { x: q.o[i].x + dx, y: q.o[i].y + dy }))
     }
     for (const q of payload.openings) Object.assign(q.o, { x: q.x + dx, y: q.y + dy })
+    for (const q of payload.radiators) Object.assign(q.o, { x: q.x + dx, y: q.y + dy })
     for (const q of payload.placements) Object.assign(q.p, { x: q.x + dx, y: q.y + dy })
   } else if (drag.type === 'omove') {
     moveOpening(floor.value, drag.o, p.x, p.y, drag.grab)
   } else if (drag.type === 'oresize') {
     resizeOpening(floor.value, drag.o, drag.end, p.x, p.y)
+  } else if (drag.type === 'rmove') {
+    moveRadiator(floor.value, drag.r, p.x, p.y, drag.grab)
+  } else if (drag.type === 'rresize') {
+    resizeRadiator(floor.value, drag.r, drag.end, p.x, p.y)
   } else if (drag.type === 'device') {
     const ref = drag.ref
     const d = props.devices.get(ref)

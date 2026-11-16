@@ -7,7 +7,7 @@
  * turns the few lengths that are really metres (wall height, how high a lamp
  * hangs) into cells.
  */
-import type { HouseFloor, HouseLightMount, HouseOpening, HousePlan, HouseRect, HouseRoom } from '@/api'
+import type { HouseFloor, HouseLightMount, HouseOpening, HousePlan, HouseRadiator, HouseRect, HouseRoom } from '@/api'
 
 /** Screen pixels per cell before the stage scales to fit. */
 export const S = 20
@@ -320,6 +320,32 @@ export function flippedSide(o: HouseOpening): HouseOpening['opens'] {
 
 // ─── Heating circuits ───────────────────────────────────────────────────────
 
+// ─── Radiators ──────────────────────────────────────────────────────────────
+
+/** How far a radiator stands off its wall, in cells. */
+export const RADIATOR_DEPTH = 0.25
+
+/** The direction a radiator faces, as a unit step across its wall. */
+export function radiatorNormal(r: Pick<HouseRadiator, 'side'>): Point {
+  return r.side === 'up' ? [0, -1] : r.side === 'down' ? [0, 1] : r.side === 'left' ? [-1, 0] : [1, 0]
+}
+
+/** A radiator's two ends, on the room side, where its pipes connect. */
+export function radiatorEnds(r: HouseRadiator, off = RADIATOR_DEPTH): [Point, Point] {
+  const [nx, ny] = radiatorNormal(r)
+  const a: Point = [r.x + nx * off, r.y + ny * off]
+  const b: Point = r.axis === 'h' ? [r.x + r.len + nx * off, r.y + ny * off] : [r.x + nx * off, r.y + r.len + ny * off]
+  return [a, b]
+}
+
+/** The room a radiator warms: the one on the side it hangs on. */
+export function radiatorRoom(floor: HouseFloor, r: HouseRadiator): HouseRoom | undefined {
+  const [nx, ny] = radiatorNormal(r)
+  const mx = r.x + (r.axis === 'h' ? r.len / 2 : 0) + nx * 0.5
+  const my = r.y + (r.axis === 'v' ? r.len / 2 : 0) + ny * 0.5
+  return roomAt(floor, mx, my)
+}
+
 /**
  * A pipe route between two points on a floor, along the grid, that keeps to
  * the house: water pipes run inside walled rooms (through the walls between
@@ -454,9 +480,22 @@ export function routeInside(floor: HouseFloor, from: Point, to: Point): Point[] 
  * the garden in the middle of a U-shaped house.
  */
 export function circuitPath(origin: { x: number; y: number }, rooms: HouseRoom[], floor?: HouseFloor): Point[] | null {
-  // Each part of an L-shaped room gets its own run of the serpentine.
-  const rects: HouseRect[] = rooms.flatMap(roomRects)
-  if (!rects.length) return null
+  // A room with radiators is heated by them: the circuit runs through each
+  // radiator, in at one end and out at the other. A room without is heated
+  // underfloor, and each part of an L gets its own run of the serpentine.
+  const rads = floor
+    ? (floor.radiators ?? []).filter((r) => {
+        const room = radiatorRoom(floor, r)
+        return !!room && rooms.includes(room)
+      })
+    : []
+  const withRads = new Set(floor ? rads.map((r) => radiatorRoom(floor, r)) : [])
+  type Stop = { kind: 'rect'; r: HouseRect } | { kind: 'rad'; r: HouseRadiator }
+  const stops: Stop[] = [
+    ...rooms.filter((r) => !withRads.has(r)).flatMap((r) => roomRects(r).map((q) => ({ kind: 'rect' as const, r: q }))),
+    ...rads.map((r) => ({ kind: 'rad' as const, r })),
+  ]
+  if (!stops.length) return null
   let cur = { x: origin.x, y: origin.y }
   const pts: Point[] = [[cur.x, cur.y]]
   const go = (to: Point) => {
@@ -464,13 +503,29 @@ export function circuitPath(origin: { x: number; y: number }, rooms: HouseRoom[]
     if (floor) pts.push(...routeInside(floor, from, to).slice(1))
     else pts.push([to[0], from[1]], to)
   }
-  const left = rects.slice()
-  const dist = (a: { x: number; y: number }, r: HouseRect) =>
-    Math.abs(a.x - (r.x + r.w / 2)) + Math.abs(a.y - (r.y + r.h / 2))
+  const left = stops.slice()
+  const centre = (s: Stop): Point =>
+    s.kind === 'rect'
+      ? [s.r.x + s.r.w / 2, s.r.y + s.r.h / 2]
+      : [s.r.x + (s.r.axis === 'h' ? s.r.len / 2 : 0), s.r.y + (s.r.axis === 'v' ? s.r.len / 2 : 0)]
+  const dist = (a: { x: number; y: number }, s: Stop) => {
+    const c = centre(s)
+    return Math.abs(a.x - c[0]) + Math.abs(a.y - c[1])
+  }
   const step = CELLS_PER_M
   while (left.length) {
     left.sort((a, b) => dist(cur, a) - dist(cur, b))
-    const r = left.shift() as HouseRect
+    const stop = left.shift() as Stop
+    if (stop.kind === 'rad') {
+      // In at the nearer end, along the radiator, out at the other.
+      let [a, b] = radiatorEnds(stop.r, RADIATOR_DEPTH + 0.15)
+      if (Math.hypot(cur.x - b[0], cur.y - b[1]) < Math.hypot(cur.x - a[0], cur.y - a[1])) [a, b] = [b, a]
+      go(a)
+      pts.push(b)
+      cur = { x: b[0], y: b[1] }
+      continue
+    }
+    const r = stop.r
     const xs = [r.x + step / 2, r.x + r.w - step / 2]
     if (xs[1] < xs[0]) xs[0] = xs[1] = r.x + r.w / 2
     const ys: number[] = []
@@ -536,6 +591,23 @@ function quarterTurn(plan: HousePlan): HousePlan {
       ...f,
       rooms: f.rooms.map((r) => ({ ...rect(r), parts: r.parts?.map(rect) })),
       openings: f.openings.map(opening),
+      radiators: f.radiators?.map((r) => {
+        if (r.axis === 'h')
+          return {
+            ...r,
+            axis: 'v' as const,
+            x: H - r.y,
+            y: r.x,
+            side: r.side === 'up' ? ('right' as const) : ('left' as const),
+          }
+        return {
+          ...r,
+          axis: 'h' as const,
+          x: H - r.y - r.len,
+          y: r.x,
+          side: r.side === 'left' ? ('up' as const) : ('down' as const),
+        }
+      }),
       placements: f.placements.map((p) => ({
         ...p,
         x: H - p.y,
