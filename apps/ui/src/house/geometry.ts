@@ -135,6 +135,29 @@ export function roomAt(floor: HouseFloor, x: number, y: number): HouseRoom | und
   return floor.rooms.find((r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h)
 }
 
+/**
+ * The room and floor a device is placed in, as the daemon derives it (see
+ * roomsByRef in the daemon's house.ts): a shutter is in the walled room
+ * behind its window, anything else in the first room containing it.
+ */
+export function placementRoom(
+  plan: HousePlan | null,
+  ref: string,
+): { room: HouseRoom | null; floor: HouseFloor } | null {
+  if (!plan) return null
+  for (const f of plan.floors) {
+    const p = f.placements.find((x) => x.ref === ref)
+    if (!p) continue
+    const o = p.opening ? f.openings.find((x) => x.id === p.opening) : undefined
+    const x = o ? o.x + (o.axis === 'h' ? o.len / 2 : 0) : p.x
+    const y = o ? o.y + (o.axis === 'v' ? o.len / 2 : 0) : p.y
+    const inside = f.rooms.filter((r) => x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h)
+    const room = (o ? inside.find((r) => r.kind === 'room') : undefined) ?? inside[0] ?? null
+    return { room, floor: f }
+  }
+  return null
+}
+
 /** The area a floor occupies: the whole plot for the ground, its rooms above it. */
 export function floorBounds(plan: HousePlan, floor: HouseFloor) {
   if (floor.level === 0 || !floor.rooms.length) return { x: 0, y: 0, w: plan.plot.w, h: plan.plot.h }

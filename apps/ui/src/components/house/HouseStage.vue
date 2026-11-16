@@ -300,13 +300,10 @@ onBeforeUnmount(() => observer?.disconnect())
   gap: var(--nb-spacing-4);
   padding: var(--nb-spacing-4);
   border-radius: var(--nb-radius-md);
-  background: rgba(6, 14, 32, 0.72);
-  border: 1px solid rgba(120, 180, 255, 0.16);
-  backdrop-filter: blur(6px);
-  // The rail sits on the night stage in both themes, so its ghost buttons
-  // take the stage's light text rather than the page's.
-  color-scheme: dark;
-  --nb-c-text: #dcebff;
+  // A page surface floating on the stage, in the page's theme, so the
+  // library's buttons read as they do everywhere else in light and dark.
+  background: var(--nb-c-layer-1);
+  border: 1px solid var(--nb-c-border);
 
   .is-phone & {
     top: var(--nb-spacing-8);
