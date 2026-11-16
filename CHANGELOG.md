@@ -1,3 +1,10 @@
+## [1.15.1](https://github.com/nubisco/openbridge/compare/v1.15.0...v1.15.1) (2026-11-16)
+
+
+### Bug Fixes
+
+* **updater:** offer an update only once npm can serve all of it, and keep the terminal ([#21](https://github.com/nubisco/openbridge/issues/21)) ([b5b8e27](https://github.com/nubisco/openbridge/commit/b5b8e2766e5f9c4acc3123d4eaafc700f8273e63))
+
 # [1.15.0](https://github.com/nubisco/openbridge/compare/v1.14.0...v1.15.0) (2026-11-16)
 
 
