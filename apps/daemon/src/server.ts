@@ -50,6 +50,8 @@ import {
   STAGING_DIR,
   detectInstall,
   fetchLatestVersion,
+  fetchReadyVersion,
+  waitForTarballs,
   fetchReleaseNotes,
   globalPrefix,
   installedVersionAt,
@@ -243,7 +245,9 @@ export async function createServer(
 
   app.get('/api/updates/check', async () => {
     try {
-      const version = await fetchLatestVersion()
+      // Only a version npm can serve in full: one listed but still spreading
+      // to the download servers would be offered, then fail with a 404.
+      const version = await fetchReadyVersion()
       if (version && (version !== lastKnownLatest?.version || lastKnownLatest.notes === null)) {
         lastKnownLatest = { version, notes: await fetchReleaseNotes(version) }
       }
@@ -278,7 +282,7 @@ export async function createServer(
   if (notifications) {
     const checkOwnUpdate = async () => {
       try {
-        openBridgeUpdate(notifications, OPENBRIDGE_VERSION, await fetchLatestVersion())
+        openBridgeUpdate(notifications, OPENBRIDGE_VERSION, await fetchReadyVersion())
       } catch {
         /* offline: the next check will try again */
       }
@@ -343,6 +347,10 @@ export async function createServer(
             broadcast({ stage: 'idle', message: `Already on v${version}` })
             return
           }
+          broadcast({ stage: 'downloading', message: `Waiting for npm to finish publishing v${version}...`, version })
+          if (!(await waitForTarballs(version))) {
+            throw new Error(`v${version} is not fully on npm yet. Try again in a few minutes.`)
+          }
 
           log.info(`Self-update: installing ${PACKAGE_NAME}@${version} into ${prefix}...`)
           broadcast({ stage: 'downloading', message: `Installing v${version} from npm...`, version })
@@ -393,6 +401,10 @@ export async function createServer(
         if (version === OPENBRIDGE_VERSION) {
           broadcast({ stage: 'idle', message: `Already on v${version}` })
           return
+        }
+        broadcast({ stage: 'downloading', message: `Waiting for npm to finish publishing v${version}...`, version })
+        if (!(await waitForTarballs(version))) {
+          throw new Error(`v${version} is not fully on npm yet. Try again in a few minutes.`)
         }
 
         // 2. Install into staging. npm reports no usable progress, so the bar

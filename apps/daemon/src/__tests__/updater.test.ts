@@ -1,5 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { detectInstall, detectRestartStrategy, globalPrefix, isHomebrewPath, PACKAGE_ROOT } from '../updater.js'
+import {
+  detectInstall,
+  detectRestartStrategy,
+  globalPrefix,
+  isHomebrewPath,
+  PACKAGE_ROOT,
+  tarballUrls,
+} from '../updater.js'
 
 const saved = { ...process.env }
 
@@ -125,5 +132,21 @@ describe('globalPrefix', () => {
     // detectInstall refuses it.
     expect(PACKAGE_ROOT).not.toContain('/node_modules/')
     expect(globalPrefix()).toBeNull()
+  })
+})
+
+describe('what an update fetches', () => {
+  it('waits on every companion package pinned to the release, and nothing else', () => {
+    const urls = tarballUrls('@nubisco/openbridge', '1.14.0', {
+      '@nubisco/openbridge-core': '1.14.0',
+      '@nubisco/openbridge-config': '1.14.0',
+      '@nubisco/other': '^2.0.0',
+      fastify: '1.14.0',
+    })
+    expect(urls).toEqual([
+      'https://registry.npmjs.org/@nubisco/openbridge/-/openbridge-1.14.0.tgz',
+      'https://registry.npmjs.org/@nubisco/openbridge-core/-/openbridge-core-1.14.0.tgz',
+      'https://registry.npmjs.org/@nubisco/openbridge-config/-/openbridge-config-1.14.0.tgz',
+    ])
   })
 })
