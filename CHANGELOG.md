@@ -1,3 +1,10 @@
+# [1.9.0](https://github.com/nubisco/openbridge/compare/v1.8.2...v1.9.0) (2026-11-16)
+
+
+### Features
+
+* **house:** draw your home and see every device where it really is ([#11](https://github.com/nubisco/openbridge/issues/11)) ([8741e62](https://github.com/nubisco/openbridge/commit/8741e62317ab16c9d7c731642885a383a590ddda))
+
 ## [1.8.2](https://github.com/nubisco/openbridge/compare/v1.8.1...v1.8.2) (2026-11-07)
 
 
