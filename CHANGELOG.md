@@ -1,3 +1,10 @@
+# [1.10.0](https://github.com/nubisco/openbridge/compare/v1.9.0...v1.10.0) (2026-11-16)
+
+
+### Features
+
+* **house:** rooms on the Devices page, the plan for agents, real gates and pipe shading ([#12](https://github.com/nubisco/openbridge/issues/12)) ([85c91f6](https://github.com/nubisco/openbridge/commit/85c91f6441b2bad25d82301ebaa35aa1c862ab6f))
+
 # [1.9.0](https://github.com/nubisco/openbridge/compare/v1.8.2...v1.9.0) (2026-11-16)
 
 
