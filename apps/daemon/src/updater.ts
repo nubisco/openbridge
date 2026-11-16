@@ -241,6 +241,66 @@ export async function fetchLatestVersion(): Promise<string | null> {
   return body.version ?? null
 }
 
+/**
+ * The tarballs an install of `version` fetches from npm: the package itself and
+ * every companion @nubisco package pinned to the same version.
+ */
+export function tarballUrls(name: string, version: string, dependencies: Record<string, string> = {}): string[] {
+  const names = [
+    name,
+    ...Object.keys(dependencies).filter((d) => d.startsWith('@nubisco/') && dependencies[d] === version),
+  ]
+  return names.map((n) => `https://registry.npmjs.org/${n}/-/${n.split('/').pop()}-${version}.tgz`)
+}
+
+/**
+ * Whether every tarball an install of `version` needs can be downloaded yet.
+ *
+ * npm lists a version in its metadata minutes before every tarball reaches the
+ * download servers. A release publishes several packages, so for those minutes
+ * an install of it fails with a 404 for a companion package. Seen for real on
+ * 1.14.0: offered at 20:04, its config package downloadable only at 20:07.
+ */
+export async function tarballsReady(version: string): Promise<boolean> {
+  const res = await fetch(`https://registry.npmjs.org/${PACKAGE_NAME}/${version}`, {
+    signal: AbortSignal.timeout(8000),
+    headers: { Accept: 'application/json', 'User-Agent': 'openbridge-daemon' },
+  })
+  if (!res.ok) return false
+  const meta = (await res.json()) as { dependencies?: Record<string, string> }
+  const checks = await Promise.all(
+    tarballUrls(PACKAGE_NAME, version, meta.dependencies).map((url) =>
+      fetch(url, { method: 'HEAD', signal: AbortSignal.timeout(8000), headers: { 'User-Agent': 'openbridge-daemon' } })
+        .then((r) => r.ok)
+        .catch(() => false),
+    ),
+  )
+  return checks.every(Boolean)
+}
+
+/**
+ * The latest version, once it can actually be installed. Null while npm is
+ * still spreading it, so nothing offers an update that would fail.
+ */
+export async function fetchReadyVersion(): Promise<string | null> {
+  const latest = await fetchLatestVersion()
+  if (!latest) return null
+  return (await tarballsReady(latest)) ? latest : null
+}
+
+/**
+ * Wait, up to `ms`, for a version's tarballs to be downloadable, for an
+ * update the person has already asked for.
+ */
+export async function waitForTarballs(version: string, ms = 6 * 60_000, every = 15_000): Promise<boolean> {
+  const until = Date.now() + ms
+  for (;;) {
+    if (await tarballsReady(version).catch(() => false)) return true
+    if (Date.now() + every > until) return false
+    await new Promise((r) => setTimeout(r, every))
+  }
+}
+
 /** Release notes, from GitHub. Cosmetic: every caller treats failure as absence. */
 export async function fetchReleaseNotes(version: string): Promise<string | null> {
   try {
@@ -334,7 +394,11 @@ export function npmInstallGlobal(prefix: string, version: string, onLine?: (line
       '--global',
       '--prefix',
       prefix,
-      '--omit=optional',
+      // Optional dependencies are installed, unlike the Docker bootstrap's
+      // --omit=optional. A global npm install is set up like any other, with
+      // node-pty for the terminal, and an update must not take it away: that
+      // is how 1.13.2, updated from the UI, lost its shell. node-pty is
+      // optional, so a machine that cannot build it still updates.
       '--no-audit',
       '--no-fund',
       // A version published minutes ago is exactly what an update reaches for,
