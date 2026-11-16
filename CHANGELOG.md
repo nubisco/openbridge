@@ -1,3 +1,10 @@
+# [1.11.0](https://github.com/nubisco/openbridge/compare/v1.10.0...v1.11.0) (2026-11-16)
+
+
+### Features
+
+* **house:** L and U shaped rooms, rooms within rooms, gardens and pools, a dashboard card ([#14](https://github.com/nubisco/openbridge/issues/14)) ([309458c](https://github.com/nubisco/openbridge/commit/309458c1429f195cd1458e7f60aa4a7e722846fe))
+
 # [1.10.0](https://github.com/nubisco/openbridge/compare/v1.9.0...v1.10.0) (2026-11-16)
 
 
