@@ -293,6 +293,16 @@ export interface HousePlacement {
   look?: HouseLook
 }
 
+/** A radiator on a wall: placed like a door or window, hanging on one side of it. */
+export interface HouseRadiator {
+  id: string
+  x: number
+  y: number
+  axis: 'h' | 'v'
+  len: number
+  side: 'up' | 'down' | 'left' | 'right'
+}
+
 export interface HouseFloor {
   id: string
   name: string
@@ -300,6 +310,7 @@ export interface HouseFloor {
   rooms: HouseRoom[]
   openings: HouseOpening[]
   placements: HousePlacement[]
+  radiators?: HouseRadiator[]
 }
 
 export interface HousePlan {

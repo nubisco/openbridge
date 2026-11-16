@@ -99,6 +99,20 @@ describe('validateHousePlan', () => {
     expect(() => validateHousePlan(p)).toThrow(/must be room, outdoor, paved or pool/)
   })
 
+  it('keeps radiators on their wall, and refuses a side the wall does not have', () => {
+    const p = plan()
+    p.floors[0].radiators = [{ id: 'r1', x: 2, y: 3.5, axis: 'v', len: 2.5, side: 'right' }]
+    expect(validateHousePlan(p).floors[0].radiators).toEqual([
+      { id: 'r1', x: 2, y: 3.5, axis: 'v', len: 2.5, side: 'right' },
+    ])
+    p.floors[0].radiators[0].side = 'up'
+    expect(() => validateHousePlan(p)).toThrow(/radiators\[0\]\.side: must be left or right/)
+    p.floors[0].radiators[0] = { id: 'w1', x: 2, y: 3, axis: 'v', len: 2, side: 'left' }
+    expect(() => validateHousePlan(p)).toThrow(/used twice/)
+    delete p.floors[0].radiators
+    expect('radiators' in validateHousePlan(p).floors[0]).toBe(false)
+  })
+
   it('keeps how a lamp is mounted and what a device is drawn as', () => {
     const p = plan()
     Object.assign(p.floors[0].placements[0], { mount: 'floor' })

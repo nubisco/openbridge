@@ -127,6 +127,23 @@ export interface HousePlacement {
   look?: (typeof DEVICE_LOOKS)[number]
 }
 
+/**
+ * A radiator on a wall. It sits on a wall line like a door or window (whole
+ * cells across the wall, half cells along it), and hangs on one side of it,
+ * named the way a door's swing is. It is plumbing, not a device: a heating
+ * circuit serving its room runs through it.
+ */
+export interface HouseRadiator {
+  id: string
+  x: number
+  y: number
+  axis: 'h' | 'v'
+  /** Width in cells, in half cells. */
+  len: number
+  /** The side of the wall it hangs on: `up` or `down` along x, `left` or `right` along y. */
+  side: 'up' | 'down' | 'left' | 'right'
+}
+
 export interface HouseFloor {
   id: string
   name: string
@@ -135,6 +152,8 @@ export interface HouseFloor {
   rooms: HouseRoom[]
   openings: HouseOpening[]
   placements: HousePlacement[]
+  /** Absent on a plan saved before radiators existed. */
+  radiators?: HouseRadiator[]
 }
 
 export interface HousePlan {
@@ -162,7 +181,7 @@ export class HouseValidationError extends Error {}
 
 // ─── Validation ─────────────────────────────────────────────────────────────
 
-const LIMITS = { floors: 12, rooms: 300, openings: 600, placements: 500, plot: 400, name: 80 }
+const LIMITS = { floors: 12, rooms: 300, openings: 600, placements: 500, radiators: 300, plot: 400, name: 80 }
 const ID = /^[A-Za-z0-9_-]{1,64}$/
 const REF = /^(device|accessory):[^\s]{1,200}$/
 const COLOR = /^#[0-9a-fA-F]{6}$/
@@ -300,6 +319,25 @@ export function validateHousePlan(raw: unknown): HousePlan {
       return out
     })
 
+    const radiators =
+      f.radiators === undefined
+        ? []
+        : arr(f.radiators, `${fp}.radiators`, LIMITS.radiators).map((rRaw, ri): HouseRadiator => {
+            const rp = `${fp}.radiators[${ri}]`
+            const r = obj(rRaw, rp)
+            const rid = id(r.id, `${rp}.id`)
+            if (openingIds.has(rid)) fail(`${rp}.id`, `'${rid}' is used twice`)
+            openingIds.add(rid)
+            if (r.axis !== 'h' && r.axis !== 'v') fail(`${rp}.axis`, 'must be h or v')
+            const x = (r.axis === 'h' ? half : int)(r.x, `${rp}.x`, 0, plot.w)
+            const y = (r.axis === 'v' ? half : int)(r.y, `${rp}.y`, 0, plot.h)
+            const len = half(r.len, `${rp}.len`, 1, r.axis === 'h' ? plot.w - x : plot.h - y)
+            const sides = r.axis === 'h' ? ['up', 'down'] : ['left', 'right']
+            if (typeof r.side !== 'string' || !sides.includes(r.side))
+              fail(`${rp}.side`, `must be ${sides.join(' or ')}`)
+            return { id: rid, x, y, axis: r.axis, len, side: r.side as HouseRadiator['side'] }
+          })
+
     const placements = arr(f.placements, `${fp}.placements`, LIMITS.placements).map((plRaw, pi): HousePlacement => {
       const pp = `${fp}.placements[${pi}]`
       const pl = obj(plRaw, pp)
@@ -344,7 +382,9 @@ export function validateHousePlan(raw: unknown): HousePlan {
       return out
     })
 
-    return { id: fid, name: name(f.name, `${fp}.name`), level, rooms, openings, placements }
+    const floor: HouseFloor = { id: fid, name: name(f.name, `${fp}.name`), level, rooms, openings, placements }
+    if (radiators.length) floor.radiators = radiators
+    return floor
   })
 
   // Checked once every floor is read, because a circuit can serve rooms on

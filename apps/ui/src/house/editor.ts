@@ -7,7 +7,7 @@
  * given in place, so the view keeps one reactive draft and saves it as a
  * whole.
  */
-import type { HouseFloor, HouseOpening, HousePlan, HouseRect, HouseRoom } from '@/api'
+import type { HouseFloor, HouseOpening, HousePlan, HouseRadiator, HouseRect, HouseRoom } from '@/api'
 import {
   CELLS_PER_M,
   S,
@@ -179,6 +179,9 @@ export function roomPayload(floor: HouseFloor, r: HouseRoom) {
     openings: floor.openings
       .filter((o) => openingUnits(o).every((k) => edge.has(k)))
       .map((o) => ({ o, x: o.x, y: o.y })),
+    radiators: (floor.radiators ?? [])
+      .filter((r) => spanUnits(r).every((k) => edge.has(k)))
+      .map((r) => ({ o: r, x: r.x, y: r.y })),
     placements: floor.placements
       .filter((p) => {
         if (p.opening) return false
@@ -353,6 +356,136 @@ export function resizeOpening(floor: HouseFloor, o: HouseOpening, end: 'start' |
   return true
 }
 
+// ─── Radiators ──────────────────────────────────────────────────────────────
+
+/** The wall units a radiator covers, even partly. */
+function spanUnits(r: Pick<HouseRadiator, 'x' | 'y' | 'axis' | 'len'>): string[] {
+  const s = r.axis === 'h' ? r.x : r.y
+  const out: string[] = []
+  for (let i = Math.floor(s); i < Math.ceil(s + r.len); i++) {
+    out.push(r.axis === 'h' ? unitKey(i, r.y, 'h') : unitKey(r.x, i, 'v'))
+  }
+  return out
+}
+
+const sameLine = (a: { axis: string; x: number; y: number }, b: { axis: string; x: number; y: number }) =>
+  a.axis === b.axis && (a.axis === 'h' ? a.y === b.y : a.x === b.x)
+const spanOf = (r: { axis: string; x: number; y: number; len: number }): [number, number] => {
+  const s = r.axis === 'h' ? r.x : r.y
+  return [s, s + r.len]
+}
+const crosses = (a: [number, number], b: [number, number]) => a[0] < b[1] && b[0] < a[1]
+
+/**
+ * Whether a radiator sits wholly on wall: not across a doorway or an open
+ * wall, and not over another radiator on the same side. Under a window is
+ * where radiators usually are, so a window is fine.
+ */
+export function radiatorFits(floor: HouseFloor, r: HouseRadiator): boolean {
+  if (r.len < 1) return false
+  const units = wallUnits(floor)
+  if (!spanUnits(r).every((k) => units.has(k))) return false
+  const span = spanOf(r)
+  if (floor.openings.some((o) => o.type !== 'window' && sameLine(o, r) && crosses(spanOf(o), span))) return false
+  return !(floor.radiators ?? []).some(
+    (x) => x.id !== r.id && x.side === r.side && sameLine(x, r) && crosses(spanOf(x), span),
+  )
+}
+
+/** The side of the wall at `u` that a point is on, as a radiator names it. */
+function sideOf(u: WallUnit, x: number, y: number): HouseRadiator['side'] {
+  return u.axis === 'h' ? (y < u.y ? 'up' : 'down') : x < u.x ? 'left' : 'right'
+}
+const flip = (s: HouseRadiator['side']): HouseRadiator['side'] =>
+  ({ up: 'down', down: 'up', left: 'right', right: 'left' })[s] as HouseRadiator['side']
+
+/**
+ * Put a radiator on the wall at `u`, a metre wide, centred on the tap, on the
+ * side the tap is on. A tap outside the house still puts it inside: a
+ * radiator always hangs in a room.
+ */
+export function addRadiator(floor: HouseFloor, u: WallUnit, x: number, y: number): HouseRadiator | null {
+  let side = sideOf(u, x, y)
+  const probe = (s: HouseRadiator['side']): HouseRadiator => ({ id: '', x: u.x, y: u.y, axis: u.axis, len: 1, side: s })
+  const inRoom = (s: HouseRadiator['side']) => {
+    const r = probe(s)
+    const [nx, ny] = s === 'up' ? [0, -1] : s === 'down' ? [0, 1] : s === 'left' ? [-1, 0] : [1, 0]
+    return (
+      roomAt(floor, r.x + (r.axis === 'h' ? 0.5 : 0) + nx * 0.5, r.y + (r.axis === 'v' ? 0.5 : 0) + ny * 0.5)?.kind ===
+      'room'
+    )
+  }
+  if (!inRoom(side)) side = flip(side)
+  if (!inRoom(side)) return null
+  const id = uniqueId(
+    'radiator',
+    (v) => (floor.radiators ?? []).some((r) => r.id === v) || floor.openings.some((o) => o.id === v),
+  )
+  const centre = u.axis === 'h' ? x : y
+  for (const len of [CELLS_PER_M, 1.5, 1]) {
+    const start = Math.round((centre - len / 2) * 2) / 2
+    const r: HouseRadiator = {
+      id,
+      axis: u.axis,
+      x: u.axis === 'h' ? start : u.x,
+      y: u.axis === 'v' ? start : u.y,
+      len,
+      side,
+    }
+    if (radiatorFits(floor, r)) {
+      ;(floor.radiators ??= []).push(r)
+      return r
+    }
+  }
+  return null
+}
+
+/** Slide a radiator along its wall, or onto another, the way a door moves. */
+export function moveRadiator(floor: HouseFloor, r: HouseRadiator, x: number, y: number, grab: number): boolean {
+  const u = nearestWall(floor, x, y)
+  if (!u) return false
+  const start = Math.round(((u.axis === 'h' ? x : y) - grab) * 2) / 2
+  const next: HouseRadiator = {
+    ...r,
+    axis: u.axis,
+    x: u.axis === 'h' ? start : u.x,
+    y: u.axis === 'v' ? start : u.y,
+    // Along the same wall it keeps its side. Onto another, it takes the side the pointer is on.
+    side: u.axis === r.axis && sameLine(u, r) ? r.side : sideOf(u, x, y),
+  }
+  if (!radiatorFits(floor, next)) return false
+  Object.assign(r, next)
+  return true
+}
+
+/** Drag one end of a radiator, in quarter metres, never under half a metre. */
+export function resizeRadiator(
+  floor: HouseFloor,
+  r: HouseRadiator,
+  end: 'start' | 'end',
+  x: number,
+  y: number,
+): boolean {
+  const at = Math.round((r.axis === 'h' ? x : y) * 2) / 2
+  const [s0, s1] = spanOf(r)
+  const start = end === 'start' ? Math.min(at, s1 - 1) : s0
+  const stop = end === 'end' ? Math.max(at, s0 + 1) : s1
+  const next: HouseRadiator = {
+    ...r,
+    x: r.axis === 'h' ? start : r.x,
+    y: r.axis === 'v' ? start : r.y,
+    len: stop - start,
+  }
+  if (!radiatorFits(floor, next)) return false
+  Object.assign(r, next)
+  return true
+}
+
+export function removeRadiator(floor: HouseFloor, id: string): void {
+  floor.radiators = (floor.radiators ?? []).filter((r) => r.id !== id)
+  if (!floor.radiators.length) delete floor.radiators
+}
+
 export function removeOpening(floor: HouseFloor, id: string): void {
   floor.openings = floor.openings.filter((o) => o.id !== id)
   for (const p of floor.placements) if (p.opening === id) delete p.opening
@@ -406,6 +539,10 @@ export function tidy(plan: HousePlan): HousePlan {
       if (ok && o.type === 'window') kept.add(o.id)
       return ok
     })
+    if (f.radiators) {
+      f.radiators = f.radiators.filter((r) => radiatorFits(f, r))
+      if (!f.radiators.length) delete f.radiators
+    }
     for (const p of f.placements) {
       if (p.opening && !kept.has(p.opening)) delete p.opening
       if (p.circuitRooms) {
@@ -425,6 +562,7 @@ export interface EditorDrawOptions {
   selectedRoom: string | null
   selectedRef: string | null
   selectedOpening: string | null
+  selectedRadiator?: string | null
   draft: Pick<HouseRoom, 'x' | 'y' | 'w' | 'h'> | null
   /** Screen pixels per editor unit, so labels and handles keep their size. */
   unit: number
@@ -502,6 +640,20 @@ export function renderEditor(
     // A wide invisible line over every opening, so a finger can grab it.
     if (w.opening) h += `<line class="hv-ehit" data-opening="${esc(w.opening.id)}" ${c}/>`
   }
+  // Radiators: a slim panel on the side of the wall they hang on.
+  for (const r of floor.radiators ?? []) {
+    const n = r.side === 'up' ? [0, -1] : r.side === 'down' ? [0, 1] : r.side === 'left' ? [-1, 0] : [1, 0]
+    const d = 0.3
+    const x0 = Math.min(r.x, r.x + n[0] * d)
+    const y0 = Math.min(r.y, r.y + n[1] * d)
+    const rw = r.axis === 'h' ? r.len : d
+    const rh = r.axis === 'v' ? r.len : d
+    const sel = o.selectedRadiator === r.id ? ' hv-sel' : ''
+    const c = `x1="${r.x * S}" y1="${r.y * S}" x2="${(r.axis === 'h' ? r.x + r.len : r.x) * S}" y2="${(r.axis === 'v' ? r.y + r.len : r.y) * S}"`
+    h +=
+      `<rect class="hv-erad${sel}" x="${r1(x0 * S)}" y="${r1(y0 * S)}" width="${r1(rw * S)}" height="${r1(rh * S)}"/>` +
+      `<line class="hv-ehit" data-radiator="${esc(r.id)}" ${c}/>`
+  }
   const rr = Math.max(11, 11 * U)
   for (const p of floor.placements) {
     const d = devices.get(p.ref)
@@ -528,6 +680,16 @@ export function renderEditor(
     ]
     for (const [end, x, y] of ends) {
       h += `<circle class="hv-eh hv-eoh-${so.axis}" data-ohandle="${end}" cx="${x * S}" cy="${y * S}" r="${r1(Math.max(6, 8 * U))}"/>`
+    }
+  }
+  const sr = (floor.radiators ?? []).find((x) => x.id === o.selectedRadiator)
+  if (sr) {
+    const ends: Array<['start' | 'end', number, number]> = [
+      ['start', sr.x, sr.y],
+      ['end', sr.axis === 'h' ? sr.x + sr.len : sr.x, sr.axis === 'v' ? sr.y + sr.len : sr.y],
+    ]
+    for (const [end, x, y] of ends) {
+      h += `<circle class="hv-eh hv-eoh-${sr.axis}" data-rhandle="${end}" cx="${x * S}" cy="${y * S}" r="${r1(Math.max(6, 8 * U))}"/>`
     }
   }
   const sel = floor.rooms.find((r) => r.id === o.selectedRoom)

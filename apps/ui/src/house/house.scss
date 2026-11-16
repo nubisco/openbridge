@@ -86,6 +86,24 @@
 }
 // Light on floors and walls, and an overlay's tint, never take a tap meant
 // for the room under them.
+// Radiators: white enamel, warm with the circuit's water while it runs.
+.hv-rad {
+  fill: #f4f1ec;
+  stroke: #b9b2a6;
+  stroke-width: 0.8;
+}
+.hv-radtop {
+  fill: #ffffff;
+}
+.hv-rad.hv-hot {
+  fill: #fff6ef;
+  stroke-width: 1.2;
+  filter: drop-shadow(0 0 5px var(--hv-water, rgba(255, 140, 80, 0.6)));
+}
+.hv-radfin {
+  stroke: rgba(120, 110, 95, 0.45);
+  stroke-width: 0.7;
+}
 .hv-tint,
 .hv-wash,
 .hv-walllit {
@@ -491,6 +509,16 @@
   stroke-width: 1.6;
   fill: none;
   pointer-events: none;
+}
+.hv-erad {
+  fill: rgba(255, 170, 120, 0.25);
+  stroke: #ffb38a;
+  stroke-width: 1.5;
+  pointer-events: none;
+}
+.hv-erad.hv-sel {
+  stroke: #fff;
+  stroke-width: 2.5;
 }
 .hv-eopen {
   stroke: #bfe2ff;
