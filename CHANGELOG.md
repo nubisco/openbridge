@@ -1,3 +1,10 @@
+## [1.17.1](https://github.com/nubisco/openbridge/compare/v1.17.0...v1.17.1) (2026-11-16)
+
+
+### Bug Fixes
+
+* **house:** temperature and humidity views that show something, and concentric panel corners ([#24](https://github.com/nubisco/openbridge/issues/24)) ([791d46a](https://github.com/nubisco/openbridge/commit/791d46a8a2eac310a115f0fecb36a330399a13ac))
+
 # [1.17.0](https://github.com/nubisco/openbridge/compare/v1.16.0...v1.17.0) (2026-11-16)
 
 
