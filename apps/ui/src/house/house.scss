@@ -1,0 +1,339 @@
+// Styles for the House view's drawn plan. Unscoped on purpose: the scene is
+// SVG markup built in scene.ts and editor.ts, which a scoped style cannot
+// reach. Every class carries the `hv-` prefix so nothing else can collide.
+//
+// The stage is a night scene in both themes, like a blueprint, so these
+// colours are fixed rather than taken from the theme. The panels around the
+// stage use the theme as every other page does.
+
+.hv-stage-bg {
+  background: radial-gradient(120% 90% at 50% 35%, #0c2148, #050d1d 72%);
+}
+
+.hv-floor {
+  transition:
+    transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 0.45s ease;
+}
+
+.hv-plate {
+  fill: rgba(9, 22, 50, 0.78);
+  stroke: rgba(120, 190, 255, 0.5);
+  stroke-width: 1.2;
+}
+.hv-plate.hv-pick {
+  cursor: pointer;
+}
+.hv-plate-side {
+  fill: rgba(40, 90, 170, 0.45);
+  stroke: rgba(120, 190, 255, 0.35);
+  stroke-width: 1;
+}
+.hv-grid {
+  stroke: rgba(120, 180, 255, 0.16);
+  stroke-width: 1;
+  fill: none;
+}
+.hv-room {
+  fill: rgba(110, 165, 255, 0.09);
+  stroke: rgba(140, 195, 255, 0.28);
+  stroke-width: 1;
+  pointer-events: none;
+}
+.hv-room.hv-k-outdoor {
+  fill: rgba(90, 210, 150, 0.07);
+  stroke: rgba(110, 230, 170, 0.35);
+  stroke-dasharray: 5 5;
+}
+.hv-room.hv-k-pool {
+  fill: rgba(40, 170, 255, 0.4);
+  stroke: rgba(140, 230, 255, 0.9);
+  stroke-width: 1.5;
+}
+.hv-ripple {
+  stroke: rgba(210, 245, 255, 0.55);
+  stroke-width: 1.5;
+  fill: none;
+  stroke-dasharray: 10 16;
+  stroke-linecap: round;
+}
+.hv-ripple.hv-on {
+  animation: hv-flow 2.4s linear infinite;
+}
+.hv-rlabel {
+  fill: rgba(205, 225, 255, 0.6);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-anchor: middle;
+  pointer-events: none;
+  text-transform: uppercase;
+}
+.hv-wall {
+  fill: rgba(120, 185, 255, 0.13);
+  pointer-events: none;
+}
+.hv-walledge {
+  stroke: rgba(150, 210, 255, 0.75);
+  stroke-width: 1.4;
+  fill: none;
+  pointer-events: none;
+  stroke-linejoin: round;
+}
+.hv-wall2d {
+  stroke: rgba(150, 210, 255, 0.75);
+  stroke-width: 5;
+  stroke-linecap: square;
+  pointer-events: none;
+}
+.hv-glass2d {
+  stroke: rgba(150, 225, 255, 0.35);
+}
+.hv-pane2d {
+  stroke: #8fe6ff;
+  stroke-width: 2;
+}
+.hv-slats2d {
+  stroke: #e6edf7;
+  stroke-width: 7;
+}
+.hv-pane {
+  fill: rgba(150, 225, 255, 0.3);
+  stroke: rgba(190, 240, 255, 0.95);
+  stroke-width: 1.2;
+}
+.hv-slats {
+  fill: rgba(226, 234, 246, 0.92);
+  stroke: rgba(40, 60, 90, 0.8);
+  stroke-width: 0.6;
+}
+.hv-slatl {
+  stroke: rgba(40, 60, 90, 0.75);
+  stroke-width: 0.8;
+}
+.hv-door {
+  stroke: #3ccfc0;
+  stroke-width: 1.6;
+  fill: none;
+  opacity: 0.9;
+  pointer-events: none;
+}
+.hv-leaf {
+  fill: rgba(255, 190, 90, 0.35);
+  stroke: #ffc76b;
+  stroke-width: 1.4;
+}
+.hv-box {
+  fill: #16294d;
+  stroke: rgba(170, 220, 255, 0.9);
+  stroke-width: 1.2;
+}
+.hv-box.hv-t {
+  fill: #213a69;
+}
+.hv-box.hv-r {
+  fill: #101f3c;
+}
+.hv-pipe {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+.hv-flow {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.75);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 3 15;
+  animation: hv-flow 1.1s linear infinite;
+  pointer-events: none;
+}
+.hv-dev {
+  cursor: pointer;
+  outline: none;
+}
+.hv-dev .hv-hit {
+  fill: transparent;
+}
+.hv-dev:focus-visible .hv-hit {
+  stroke: #fff;
+  stroke-width: 2;
+  stroke-dasharray: 3 3;
+}
+.hv-dev.hv-off {
+  opacity: 0.45;
+}
+.hv-drop {
+  stroke: rgba(190, 220, 255, 0.4);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+}
+.hv-foot {
+  fill: rgba(190, 220, 255, 0.3);
+}
+.hv-pill {
+  fill: rgba(5, 13, 30, 0.86);
+  stroke: rgba(150, 205, 255, 0.45);
+  stroke-width: 1;
+}
+.hv-pill.hv-on {
+  stroke: #57d98a;
+}
+.hv-pill.hv-warn {
+  stroke: #ffb347;
+}
+.hv-pilltxt {
+  fill: #e6f1ff;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--nb-font-family, system-ui, sans-serif);
+}
+.hv-selring {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 1.5;
+  stroke-dasharray: 4 4;
+}
+.hv-pulse {
+  animation: hv-pulse 1.4s ease-in-out infinite;
+}
+
+// Editor
+.hv-egl {
+  fill: none;
+  stroke: rgba(120, 180, 255, 0.16);
+  stroke-width: 1;
+}
+.hv-eplot {
+  stroke: rgba(120, 180, 255, 0.4);
+  stroke-width: 1.5;
+}
+.hv-eroom rect {
+  fill: rgba(110, 165, 255, 0.14);
+  stroke: rgba(140, 195, 255, 0.35);
+  stroke-width: 1;
+}
+.hv-tool-select .hv-eroom rect {
+  cursor: move;
+}
+.hv-eroom.hv-k-outdoor rect {
+  fill: rgba(90, 210, 150, 0.1);
+  stroke: rgba(110, 230, 170, 0.5);
+  stroke-dasharray: 5 5;
+}
+.hv-eroom.hv-k-pool rect {
+  fill: rgba(40, 170, 255, 0.35);
+  stroke: rgba(140, 230, 255, 0.9);
+}
+.hv-eroom.hv-sel rect {
+  fill: rgba(60, 207, 192, 0.2);
+  stroke: #3ccfc0;
+  stroke-width: 2;
+}
+.hv-eroom text {
+  fill: #dcebff;
+  pointer-events: none;
+  font-weight: 600;
+}
+.hv-eroom text.hv-dim {
+  fill: rgba(220, 235, 255, 0.55);
+  font-weight: 400;
+}
+.hv-eghost {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.22);
+  stroke-dasharray: 3 5;
+  pointer-events: none;
+}
+.hv-edraft {
+  fill: rgba(60, 207, 192, 0.2);
+  stroke: #3ccfc0;
+  stroke-dasharray: 5 4;
+  pointer-events: none;
+}
+.hv-edraft-label {
+  fill: #e6fffb;
+  font-weight: 600;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  pointer-events: none;
+}
+.hv-ewall {
+  stroke: #bfe2ff;
+  stroke-width: 5;
+  stroke-linecap: square;
+  pointer-events: none;
+}
+.hv-ewin {
+  stroke: #5fe0ff;
+  stroke-width: 3;
+  pointer-events: none;
+}
+.hv-ewinb {
+  stroke: #0b1c3a;
+  stroke-width: 7;
+  pointer-events: none;
+}
+.hv-edoor {
+  stroke: #3ccfc0;
+  stroke-width: 1.6;
+  fill: none;
+  pointer-events: none;
+}
+.hv-ewin.hv-sel,
+.hv-edoor.hv-sel {
+  stroke: #fff;
+  stroke-width: 3.5;
+}
+.hv-eh {
+  fill: #fff;
+  stroke: #3ccfc0;
+  stroke-width: 2;
+  cursor: nwse-resize;
+}
+.hv-eh.hv-alt {
+  cursor: nesw-resize;
+}
+.hv-edev circle {
+  fill: #0a1830;
+  stroke: #9fd0ff;
+  stroke-width: 1.5;
+  cursor: grab;
+}
+.hv-edev.hv-sel circle {
+  stroke: #3ccfc0;
+  stroke-width: 2.5;
+  fill: #0f3a3a;
+}
+.hv-edev.hv-missing circle {
+  stroke: #ff6b5e;
+  stroke-dasharray: 3 3;
+}
+.hv-edev text {
+  fill: #e6f1ff;
+  text-anchor: middle;
+  font-weight: 700;
+  pointer-events: none;
+}
+
+@keyframes hv-flow {
+  to {
+    stroke-dashoffset: -18;
+  }
+}
+@keyframes hv-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hv-floor {
+    transition: none;
+  }
+  .hv-flow,
+  .hv-ripple.hv-on,
+  .hv-pulse {
+    animation: none;
+  }
+}

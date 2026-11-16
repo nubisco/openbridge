@@ -29,6 +29,8 @@ import {
   type BridgeContext,
 } from './services/bridge.js'
 import { AccessStore } from './access.js'
+import { registerHouseRoutes } from './house-routes.js'
+import type { HouseStore } from './house.js'
 import { registerNotificationRoutes } from './notification-routes.js'
 import { openBridgeUpdate, pluginUpdate, type NotificationStore } from './notifications.js'
 import { isMcpEnabled, registerMcpRoutes } from './mcp/index.js'
@@ -140,6 +142,8 @@ export async function createServer(
   observationContext: ((deviceId: string) => Record<string, unknown> | undefined) | null = null,
   /** The bell. Absent in tests that do not exercise it, and then no routes are added. */
   notifications: NotificationStore | null = null,
+  /** The house plan, and through it each device's room. Absent in tests that do not exercise it. */
+  house: HouseStore | null = null,
 ) {
   const app = Fastify({ logger: false })
 
@@ -154,6 +158,7 @@ export async function createServer(
     observations,
     homekitServiceTypes,
     nativeAccessoryUuid,
+    house,
   }
 
   // @fastify/cors 11 narrowed its default to the CORS-safelisted methods. Keep the
@@ -178,6 +183,9 @@ export async function createServer(
 
   // ─── Notifications (the bell) ─────────────────────────────────────────────
   if (notifications) registerNotificationRoutes(app, notifications, authConfig)
+
+  // ─── House plan ───────────────────────────────────────────────────────────
+  if (house) registerHouseRoutes(app, house)
 
   // ─── MCP ──────────────────────────────────────────────────────────────────
   // A second door onto the same functions, for AI agents. Off unless

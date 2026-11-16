@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import AppLayout from '@/views/AppLayout.vue'
 import DashboardView from '@/views/DashboardView.vue'
+import HouseView from '@/views/HouseView.vue'
 import PluginsView from '@/views/PluginsView.vue'
 import DevicesView from '@/views/DevicesView.vue'
 import DeviceDetailView from '@/views/DeviceDetailView.vue'
@@ -11,6 +12,7 @@ import LoginView from '@/views/LoginView.vue'
 import AuthCallbackView from '@/views/AuthCallbackView.vue'
 import OAuthConsentView from '@/views/OAuthConsentView.vue'
 import { useAuth } from '@/composables/useAuth'
+import { useHouseStore } from '@/stores/house'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -24,6 +26,7 @@ export const router = createRouter({
       component: AppLayout,
       redirect: '/dashboard',
       children: [
+        { path: 'house', name: 'house', component: HouseView },
         { path: 'dashboard', name: 'dashboard', component: DashboardView },
         { path: 'plugins', name: 'plugins', component: PluginsView },
         { path: 'devices', name: 'devices', component: DevicesView },
@@ -71,4 +74,15 @@ router.beforeEach(async (to) => {
     return { path: to.path, query }
   }
   return true
+})
+
+// The app opens on the House view once a plan is drawn, and on the dashboard
+// until then. Only the bare address does this: a link to /dashboard still
+// lands on the dashboard. Registered after the auth gate, so the plan is only
+// read once the person is let in.
+router.beforeEach(async (to) => {
+  if (to.name !== 'dashboard' || to.redirectedFrom?.path !== '/') return true
+  const house = useHouseStore()
+  await house.ensure()
+  return house.hasPlan ? { name: 'house', replace: true } : true
 })

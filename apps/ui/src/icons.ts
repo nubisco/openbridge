@@ -9,12 +9,14 @@
 // than importing the whole ~1,500-icon catalogue.
 //
 // Keep in sync with WIDGET_ICON / CATEGORY_INFO (DeviceInspector.vue,
-// PluginInspector.vue, DevicesView.vue), navItems (AppLayout.vue) and the
+// PluginInspector.vue, DevicesView.vue), navItems (AppLayout.vue), the House
+// view's empty state (HouseView.vue) and the
 // bell's two states (NotificationBell.vue).
 import { registerIcons } from '@nubisco/ui'
 
 import * as appWindow from '@nubisco/ui/icons/app-window'
 import * as bell from '@nubisco/ui/icons/bell'
+import * as blueprint from '@nubisco/ui/icons/blueprint'
 import * as bellRinging from '@nubisco/ui/icons/bell-ringing'
 import * as bracketsCurly from '@nubisco/ui/icons/brackets-curly'
 import * as broadcast from '@nubisco/ui/icons/broadcast'
@@ -54,6 +56,7 @@ export function registerRuntimeIcons(): void {
     'app-window': appWindow,
     bell: bell,
     'bell-ringing': bellRinging,
+    blueprint: blueprint,
     'brackets-curly': bracketsCurly,
     broadcast: broadcast,
     camera: camera,
