@@ -121,8 +121,12 @@ describe('validateHousePlan', () => {
     expect(validateHousePlan(p).floors[0].furniture).toEqual([
       { id: 'f1', kind: 'table', x: 2.5, y: 3, w: 3.5, d: 1.5, height: 0.72 },
     ])
-    raw.furniture[0].kind = 'sofa'
-    expect(() => validateHousePlan(p)).toThrow(/furniture\[0\]\.kind: must be one of table, cabinet, island, bed/)
+    raw.furniture[0].kind = 'piano'
+    expect(() => validateHousePlan(p)).toThrow(/furniture\[0\]\.kind: must be one of table, cabinet, island, bed, sofa/)
+    raw.furniture[0] = { id: 'f1', kind: 'sofa', x: 2, y: 3, w: 4, d: 2, back: 'up' }
+    expect(validateHousePlan(p).floors[0].furniture?.[0].back).toBe('up')
+    raw.furniture[0].back = 'north'
+    expect(() => validateHousePlan(p)).toThrow(/furniture\[0\]\.back: must be up, down, left or right/)
     raw.furniture[0] = { id: 'f1', kind: 'bed', x: 2.25, y: 3, w: 4, d: 4 }
     expect(() => validateHousePlan(p)).toThrow(/furniture\[0\]\.x: must be a multiple of 0.5/)
     raw.furniture[0] = { id: 'f1', kind: 'bed', x: 2, y: 3, w: 400, d: 4 }

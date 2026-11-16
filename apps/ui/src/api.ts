@@ -273,7 +273,7 @@ export interface HouseOpening {
 }
 
 export type HouseLightMount = 'ceiling' | 'wall' | 'floor' | 'table' | 'pool'
-export type HouseLook = 'outlet' | 'tv' | 'fridge' | 'washer' | 'dehumidifier' | 'vacuum' | 'mower'
+export type HouseLook = 'outlet' | 'tv' | 'fridge' | 'washer' | 'dehumidifier' | 'vacuum' | 'mower' | 'tap'
 
 export interface HousePlacement {
   /** `device:<id>` for a native device, `accessory:<uuid>` for a HomeKit accessory. */
@@ -303,7 +303,22 @@ export interface HouseRadiator {
   side: 'up' | 'down' | 'left' | 'right'
 }
 
-export type HouseFurnitureKind = 'table' | 'cabinet' | 'island' | 'bed'
+export type HouseFurnitureKind =
+  | 'table'
+  | 'cabinet'
+  | 'island'
+  | 'bed'
+  | 'sofa'
+  | 'shelves'
+  | 'rug'
+  | 'bath'
+  | 'shower'
+  | 'toilet'
+  | 'basin'
+  | 'lounger'
+  | 'parasol'
+  | 'planter'
+  | 'pergola'
 
 /** A piece of furniture: a rectangle in half cells, `w` along x and `d` along y. */
 export interface HouseFurniture {
@@ -315,6 +330,8 @@ export interface HouseFurniture {
   d: number
   /** Height in metres, when it is not the usual one for its kind. */
   height?: number
+  /** The side its back is on (a bed's head, a sofa's back), when set. Unset, the side nearest a wall. */
+  back?: 'up' | 'down' | 'left' | 'right'
 }
 
 export interface HouseFloor {

@@ -26,7 +26,9 @@ import {
   doorSwing,
   esc,
   humidityColor,
-  bedHead,
+  furnitureBack,
+  oppositeSide,
+  type Side,
   furnitureAt,
   furnitureHeight,
   lightMount,
@@ -435,55 +437,86 @@ function uprightCircle(o: SceneOptions, x: number, y: number, z: number, r: numb
   return poly(o, pts)
 }
 
+/** A strip of a rectangle along one of its sides, `t` cells thick. */
+function strip(f: { x: number; y: number; w: number; d: number }, side: Side, t: number) {
+  t = Math.min(t, side === 'up' || side === 'down' ? f.d : f.w)
+  if (side === 'up') return { x: f.x, y: f.y, w: f.w, d: t }
+  if (side === 'down') return { x: f.x, y: f.y + f.d - t, w: f.w, d: t }
+  if (side === 'left') return { x: f.x, y: f.y, w: t, d: f.d }
+  return { x: f.x + f.w - t, y: f.y, w: t, d: f.d }
+}
+
+/** A rectangle shrunk by `m` cells on every side, never to nothing. */
+function inset(f: { x: number; y: number; w: number; d: number }, m: number) {
+  const mx = Math.min(m, f.w / 4)
+  const my = Math.min(m, f.d / 4)
+  return { x: f.x + mx, y: f.y + my, w: f.w - mx * 2, d: f.d - my * 2 }
+}
+
+type Block = { r: { x: number; y: number; w: number; d: number }; z0: number; z1: number; cls: string }
+
+/** Blocks drawn back to front, so the nearer one covers the further. */
+function blocks(o: SceneOptions, list: Block[]): string {
+  return list
+    .slice()
+    .sort((a, b) => a.r.x + a.r.w / 2 + a.r.y + a.r.d / 2 - (b.r.x + b.r.w / 2 + b.r.y + b.r.d / 2))
+    .map(({ r, z0, z1, cls }) => box(o, r.x + r.w / 2, r.y + r.d / 2, r.w, r.d, z0, z1, cls))
+    .join('')
+}
+
+/** A flat rectangle at height z. */
+function flat(o: SceneOptions, r: { x: number; y: number; w: number; d: number }, z: number, cls: string): string {
+  return `<polygon class="${cls}" points="${poly(o, [
+    [r.x, r.y, z],
+    [r.x + r.w, r.y, z],
+    [r.x + r.w, r.y + r.d, z],
+    [r.x, r.y + r.d, z],
+  ])}"/>`
+}
+
+function seg(o: SceneOptions, a: [number, number, number], b: [number, number, number], cls: string): string {
+  const p = project(o.mode, ...a)
+  const q = project(o.mode, ...b)
+  return `<line class="${cls}" x1="${r1(p[0])}" y1="${r1(p[1])}" x2="${r1(q[0])}" y2="${r1(q[1])}"/>`
+}
+
 /**
  * A piece of furniture, as plain volumes in one quiet tone, so the plan reads
- * as the home without saying what style it is in. A table is a top on legs,
- * a cabinet and an island are blocks, a bed is a frame with a mattress and a
- * pillow at the head.
+ * as the home without saying what style it is in. Pieces with a back (a bed's
+ * head, a sofa's back) put it on the side `furnitureBack` names.
  */
 function furniturePiece(o: SceneOptions, floor: HouseFloor, f: HouseFurniture): string {
   const iso = o.mode === 'iso'
   const top = zm(o, furnitureHeight(f))
-  const cx = f.x + f.w / 2
-  const cy = f.y + f.d / 2
+  const cm = (metres: number) => metres * CELLS_PER_M
+  const back = furnitureBack(floor, f)
+  const ends: Side[] = back === 'up' || back === 'down' ? ['left', 'right'] : ['up', 'down']
   switch (f.kind) {
     case 'table': {
       const t = zm(o, 0.04)
       let svg = ''
       if (iso) {
-        // Legs a little in from each corner, the back ones first.
-        const inset = 0.15
-        const legs: Point[] = [
-          [f.x + inset, f.y + inset],
-          [f.x + f.w - inset, f.y + inset],
-          [f.x + inset, f.y + f.d - inset],
-          [f.x + f.w - inset, f.y + f.d - inset],
-        ]
-        for (const [lx, ly] of legs) {
-          const a = project(o.mode, lx, ly, 0)
-          const b = project(o.mode, lx, ly, top - t)
-          svg += `<line class="hv-furnleg" x1="${r1(a[0])}" y1="${r1(a[1])}" x2="${r1(b[0])}" y2="${r1(b[1])}"/>`
-        }
+        // Legs a little in from each corner.
+        const g = inset(f, 0.15)
+        for (const [lx, ly] of [
+          [g.x, g.y],
+          [g.x + g.w, g.y],
+          [g.x, g.y + g.d],
+          [g.x + g.w, g.y + g.d],
+        ])
+          svg += seg(o, [lx, ly, 0], [lx, ly, top - t], 'hv-furnleg')
       }
-      return svg + box(o, cx, cy, f.w, f.d, top - t, top, 'hv-furn')
+      return svg + box(o, f.x + f.w / 2, f.y + f.d / 2, f.w, f.d, top - t, top, 'hv-furn')
     }
     case 'bed': {
       const frame = zm(o, 0.3)
-      const head = bedHead(floor, f)
-      const m = 0.08
-      // The mattress, a little in from the frame, and the pillow across the head end.
-      const p = 0.55
-      const pillow =
-        head === 'up'
-          ? { x: f.x + m * 2, y: f.y + m * 2, w: f.w - m * 4, d: p }
-          : head === 'down'
-            ? { x: f.x + m * 2, y: f.y + f.d - m * 2 - p, w: f.w - m * 4, d: p }
-            : head === 'left'
-              ? { x: f.x + m * 2, y: f.y + m * 2, w: p, d: f.d - m * 4 }
-              : { x: f.x + f.w - m * 2 - p, y: f.y + m * 2, w: p, d: f.d - m * 4 }
-      return (
-        box(o, cx, cy, f.w, f.d, 0, frame, 'hv-furn') +
-        box(o, cx, cy, f.w - m * 2, f.d - m * 2, frame, top, 'hv-bed') +
+      const mattress = inset(f, 0.08)
+      // The pillow lies across the head end of the mattress.
+      const pillow = inset(strip(mattress, back, cm(0.3)), 0.08)
+      return blocks(o, [
+        { r: f, z0: 0, z1: frame, cls: 'hv-furn' },
+        { r: mattress, z0: frame, z1: top, cls: 'hv-bed' },
+      ]).concat(
         box(
           o,
           pillow.x + pillow.w / 2,
@@ -493,17 +526,129 @@ function furniturePiece(o: SceneOptions, floor: HouseFloor, f: HouseFurniture): 
           top,
           top + zm(o, 0.08),
           'hv-pillow',
-        )
+        ),
       )
+    }
+    case 'sofa': {
+      const seat = zm(o, 0.42)
+      const arms = zm(o, 0.6)
+      return blocks(o, [
+        { r: f, z0: 0, z1: seat, cls: 'hv-furn' },
+        { r: strip(f, back, cm(0.2)), z0: seat, z1: top, cls: 'hv-furn' },
+        { r: strip(f, ends[0], cm(0.18)), z0: seat, z1: arms, cls: 'hv-furn' },
+        { r: strip(f, ends[1], cm(0.18)), z0: seat, z1: arms, cls: 'hv-furn' },
+      ])
+    }
+    case 'lounger': {
+      // A low frame, and a backrest raised at the head.
+      return blocks(o, [
+        { r: f, z0: zm(o, 0.08), z1: top, cls: 'hv-bed' },
+        { r: strip(f, back, cm(0.6)), z0: top, z1: top + zm(o, 0.3), cls: 'hv-bed' },
+      ])
     }
     case 'island':
       // The worktop overhangs the block a little, as an island's does.
       return (
-        box(o, cx, cy, Math.max(0.2, f.w - 0.12), Math.max(0.2, f.d - 0.12), 0, top - zm(o, 0.04), 'hv-furn') +
-        box(o, cx, cy, f.w, f.d, top - zm(o, 0.04), top, 'hv-worktop')
+        box(
+          o,
+          f.x + f.w / 2,
+          f.y + f.d / 2,
+          Math.max(0.2, f.w - 0.12),
+          Math.max(0.2, f.d - 0.12),
+          0,
+          top - zm(o, 0.04),
+          'hv-furn',
+        ) + box(o, f.x + f.w / 2, f.y + f.d / 2, f.w, f.d, top - zm(o, 0.04), top, 'hv-worktop')
       )
+    case 'shelves': {
+      let svg = box(o, f.x + f.w / 2, f.y + f.d / 2, f.w, f.d, 0, top, 'hv-furn')
+      // Shelves show on the open front, when the view looks at it.
+      const front = oppositeSide(back)
+      if (iso && (front === 'down' || front === 'right')) {
+        for (let k = 1; k < 5; k++) {
+          const z = (top * k) / 5
+          svg +=
+            front === 'down'
+              ? seg(o, [f.x + 0.05, f.y + f.d, z], [f.x + f.w - 0.05, f.y + f.d, z], 'hv-shelf')
+              : seg(o, [f.x + f.w, f.y + 0.05, z], [f.x + f.w, f.y + f.d - 0.05, z], 'hv-shelf')
+        }
+      }
+      return svg
+    }
+    case 'rug':
+      return flat(o, f, 0, 'hv-rug') + flat(o, inset(f, 0.15), 0, 'hv-rugin')
+    case 'bath':
+      return (
+        box(o, f.x + f.w / 2, f.y + f.d / 2, f.w, f.d, 0, top, 'hv-ap') + flat(o, inset(f, cm(0.08)), top, 'hv-bathin')
+      )
+    case 'shower':
+      // A tray, and glass to head height that the room shows through.
+      return (
+        box(o, f.x + f.w / 2, f.y + f.d / 2, f.w, f.d, 0, zm(o, 0.05), 'hv-ap') +
+        (iso ? box(o, f.x + f.w / 2, f.y + f.d / 2, f.w, f.d, zm(o, 0.05), top, 'hv-glass') : '')
+      )
+    case 'toilet': {
+      const cistern = strip(f, back, cm(0.18))
+      const bowl = inset(f, 0.05)
+      return blocks(o, [
+        { r: bowl, z0: 0, z1: zm(o, 0.4), cls: 'hv-ap' },
+        { r: cistern, z0: 0, z1: top, cls: 'hv-ap' },
+      ])
+    }
+    case 'basin': {
+      const counter = top - zm(o, 0.04)
+      return (
+        box(o, f.x + f.w / 2, f.y + f.d / 2, f.w, f.d, 0, counter, 'hv-furn') +
+        box(o, f.x + f.w / 2, f.y + f.d / 2, f.w, f.d, counter, top, 'hv-ap') +
+        disc(o, f.x + f.w / 2, f.y + f.d / 2, top, Math.min(f.w, f.d) * 0.3, 'hv-sink')
+      )
+    }
+    case 'parasol': {
+      const cx = f.x + f.w / 2
+      const cy = f.y + f.d / 2
+      const r = Math.min(f.w, f.d) / 2
+      return (
+        disc(o, cx, cy, 0, Math.min(0.35, r * 0.3), 'hv-furn') +
+        seg(o, [cx, cy, 0], [cx, cy, top], 'hv-pole') +
+        disc(o, cx, cy, top, r, 'hv-canopy')
+      )
+    }
+    case 'planter': {
+      const plant = Math.min(f.w, f.d) / 2
+      return (
+        box(o, f.x + f.w / 2, f.y + f.d / 2, f.w, f.d, 0, top, 'hv-furn') +
+        disc(o, f.x + f.w / 2, f.y + f.d / 2, top + zm(o, 0.12), plant * 0.95, 'hv-plant') +
+        disc(o, f.x + f.w / 2, f.y + f.d / 2, top + zm(o, 0.3), plant * 0.6, 'hv-plant hv-t')
+      )
+    }
+    case 'pergola': {
+      // Four posts, two beams along its length and slats across them.
+      const g = inset(f, 0.1)
+      const corners: Array<[number, number]> = [
+        [g.x, g.y],
+        [g.x + g.w, g.y],
+        [g.x, g.y + g.d],
+        [g.x + g.w, g.y + g.d],
+      ]
+      let svg = ''
+      const alongX = f.w >= f.d
+      if (iso) for (const [px, py] of corners.slice(0, 3)) svg += seg(o, [px, py, 0], [px, py, top], 'hv-post')
+      svg += alongX
+        ? seg(o, [f.x, g.y, top], [f.x + f.w, g.y, top], 'hv-beam') +
+          seg(o, [f.x, g.y + g.d, top], [f.x + f.w, g.y + g.d, top], 'hv-beam')
+        : seg(o, [g.x, f.y, top], [g.x, f.y + f.d, top], 'hv-beam') +
+          seg(o, [g.x + g.w, f.y, top], [g.x + g.w, f.y + f.d, top], 'hv-beam')
+      for (let t = 0.5; t < (alongX ? f.w : f.d); t += 0.5) {
+        svg += alongX
+          ? seg(o, [f.x + t, f.y, top + 0.01], [f.x + t, f.y + f.d, top + 0.01], 'hv-slat')
+          : seg(o, [f.x, f.y + t, top + 0.01], [f.x + f.w, f.y + t, top + 0.01], 'hv-slat')
+      }
+      // The post nearest the viewer goes in front of the slats.
+      if (iso) svg += seg(o, [corners[3][0], corners[3][1], 0], [corners[3][0], corners[3][1], top], 'hv-post')
+      return svg
+    }
     default:
-      return box(o, cx, cy, f.w, f.d, 0, top, 'hv-furn')
+      return box(o, f.x + f.w / 2, f.y + f.d / 2, f.w, f.d, 0, top, 'hv-furn')
   }
 }
 
@@ -582,6 +727,22 @@ function appliance(o: SceneOptions, d: LiveDevice, p: HousePlacement, look: Hous
       svg += box(o, p.x - m(0.05), p.y, m(0.28), m(0.3), h, h + zm(o, 0.03), 'hv-mowerlid')
       return { svg, top: h }
     }
+    case 'tap': {
+      // A standpipe with its spout, and water falling from it while it runs.
+      const h = zm(o, 0.65)
+      const spout: [number, number, number] = [p.x + m(0.12), p.y + m(0.12), h * 0.8]
+      let svg = disc(o, p.x, p.y, 0, m(0.12), 'hv-drain')
+      svg += seg(o, [p.x, p.y, 0], [p.x, p.y, h], 'hv-standpipe')
+      svg += seg(o, [p.x, p.y, h * 0.85], spout, 'hv-spout')
+      svg += disc(o, p.x, p.y, h, m(0.05), 'hv-handle')
+      if (on) {
+        const a = project(o.mode, ...spout)
+        const b = project(o.mode, spout[0], spout[1], 0)
+        svg += `<line class="hv-tapwater" x1="${r1(a[0])}" y1="${r1(a[1])}" x2="${r1(b[0])}" y2="${r1(b[1])}"/>`
+        svg += disc(o, spout[0], spout[1], 0, m(0.14), 'hv-splash')
+      }
+      return { svg, top: h }
+    }
     case 'outlet':
       return { svg: '', top: zm(o, 0.3) }
   }
@@ -633,6 +794,7 @@ export function renderFloor(
   let base = ''
   let glow = ''
   let pipes = ''
+  let rugs = ''
   const items: Array<{ depth: number; svg: string }> = []
 
   // No plot and no grid: the floor is what was drawn on it, standing on a
@@ -809,6 +971,12 @@ export function renderFloor(
 
   // Furniture, depth-sorted with the walls and appliances by its centre.
   for (const f of floor.furniture ?? []) {
+    // A rug lies on the floor, over the pipes under it and under everything
+    // standing on it, and lets the room's light through.
+    if (f.kind === 'rug') {
+      rugs += furniturePiece(o, floor, f)
+      continue
+    }
     items.push({
       depth: f.x + f.w / 2 + f.y + f.d / 2,
       svg: `<g pointer-events="none">${furniturePiece(o, floor, f)}</g>`,
@@ -1230,5 +1398,5 @@ export function renderFloor(
   // With an overlay on, the devices step back and the rooms' readings lead.
   const markup = marks.map((i) => i.svg).join('')
   const top = o.overlay === 'none' ? markup : `<g class="hv-dimmed">${markup}</g>${badges}`
-  return `<defs>${defs}</defs>${base}${water}${glow}${pipes}${items.map((i) => i.svg).join('')}${top}`
+  return `<defs>${defs}</defs>${base}${water}${glow}${pipes}${rugs ? `<g class="hv-rugs" pointer-events="none">${rugs}</g>` : ''}${items.map((i) => i.svg).join('')}${top}`
 }

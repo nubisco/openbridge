@@ -21,8 +21,12 @@ import {
   CELLS_PER_M,
   S,
   clamp,
+  clockwiseSide,
   doorSwing,
   esc,
+  FURNITURE_BACK,
+  furnitureBack,
+  oppositeSide,
   openingFits,
   openingsOverlap,
   openingUnits,
@@ -504,19 +508,43 @@ export function removeRadiator(floor: HouseFloor, id: string): void {
 // ─── Furniture ──────────────────────────────────────────────────────────────
 
 export const FURNITURE_NAME: Record<HouseFurnitureKind, string> = {
+  sofa: 'Sofa',
   table: 'Table',
   cabinet: 'Cabinet',
+  shelves: 'Shelves',
+  rug: 'Rug',
   island: 'Kitchen island',
   bed: 'Bed',
+  bath: 'Bath',
+  shower: 'Shower',
+  toilet: 'Toilet',
+  basin: 'Washbasin',
+  lounger: 'Sun lounger',
+  parasol: 'Parasol',
+  planter: 'Planter',
+  pergola: 'Pergola',
 }
 
-/** The size a new piece starts at, in cells: a dining table, a sideboard, an island, a double bed. */
+/** The size a new piece starts at, in cells (half a metre each). */
 const FURNITURE_SIZE: Record<HouseFurnitureKind, [number, number]> = {
+  sofa: [4, 2],
   table: [3, 1.5],
   cabinet: [2, 1],
+  shelves: [2, 1],
+  rug: [4, 3],
   island: [4, 2],
   bed: [3, 4],
+  bath: [3.5, 1.5],
+  shower: [2, 2],
+  toilet: [1, 1.5],
+  basin: [1.5, 1],
+  lounger: [1.5, 4],
+  parasol: [5, 5],
+  planter: [1, 1],
+  pergola: [8, 6],
 }
+
+const AREA_PIECES = new Set<HouseFurnitureKind>(['pergola', 'rug', 'parasol'])
 
 const halfCell = (v: number) => Math.round(v * 2) / 2
 
@@ -586,12 +614,18 @@ export function resizeFurniture(
   Object.assign(f, { x: x1, y: y1, w: x2 - x1, d: y2 - y1 })
 }
 
-/** A quarter turn about its centre: width and depth swap. */
-export function turnFurniture(plan: HousePlan, f: HouseFurniture) {
+/** A quarter turn clockwise about its centre: width and depth swap, and its back turns with it. */
+export function turnFurniture(plan: HousePlan, floor: HouseFloor, f: HouseFurniture) {
+  if (FURNITURE_BACK[f.kind]) f.back = clockwiseSide(furnitureBack(floor, f))
   const cx = f.x + f.w / 2
   const cy = f.y + f.d / 2
   Object.assign(f, { w: f.d, d: f.w, x: halfCell(cx - f.d / 2), y: halfCell(cy - f.w / 2) })
   keepInPlot(plan, f)
+}
+
+/** Put a piece's back (a bed's head) on the opposite side. */
+export function flipFurniture(floor: HouseFloor, f: HouseFurniture) {
+  f.back = oppositeSide(furnitureBack(floor, f))
 }
 
 export function removeFurniture(floor: HouseFloor, id: string): void {
@@ -685,6 +719,39 @@ export interface EditorDrawOptions {
   showHandles: boolean
 }
 
+/**
+ * Where a piece's back is, on the blueprint: a heavy line along that edge,
+ * and for a bed its pillow, so the head end is plain to see.
+ */
+function furnitureBackMark(floor: HouseFloor, f: HouseFurniture): string {
+  if (!FURNITURE_BACK[f.kind]) return ''
+  const side = furnitureBack(floor, f)
+  const m = 0.12
+  const [x1, y1, x2, y2] =
+    side === 'up'
+      ? [f.x + m, f.y + m, f.x + f.w - m, f.y + m]
+      : side === 'down'
+        ? [f.x + m, f.y + f.d - m, f.x + f.w - m, f.y + f.d - m]
+        : side === 'left'
+          ? [f.x + m, f.y + m, f.x + m, f.y + f.d - m]
+          : [f.x + f.w - m, f.y + m, f.x + f.w - m, f.y + f.d - m]
+  let out = `<line class="hv-efback" x1="${r1(x1 * S)}" y1="${r1(y1 * S)}" x2="${r1(x2 * S)}" y2="${r1(y2 * S)}"/>`
+  if (f.kind === 'bed') {
+    const t = 0.6
+    const p =
+      side === 'up'
+        ? { x: f.x + 0.3, y: f.y + 0.3, w: f.w - 0.6, h: t }
+        : side === 'down'
+          ? { x: f.x + 0.3, y: f.y + f.d - 0.3 - t, w: f.w - 0.6, h: t }
+          : side === 'left'
+            ? { x: f.x + 0.3, y: f.y + 0.3, w: t, h: f.d - 0.6 }
+            : { x: f.x + f.w - 0.3 - t, y: f.y + 0.3, w: t, h: f.d - 0.6 }
+    if (p.w > 0 && p.h > 0)
+      out += `<rect class="hv-efpillow" x="${r1(p.x * S)}" y="${r1(p.y * S)}" width="${r1(p.w * S)}" height="${r1(p.h * S)}" rx="3"/>`
+  }
+  return out
+}
+
 const metres = (cells: number) => String(Math.round((cells / CELLS_PER_M) * 100) / 100)
 
 export function renderEditor(
@@ -739,8 +806,13 @@ export function renderEditor(
     h +=
       `<g class="hv-efurn${o.selectedFurniture === f.id ? ' hv-sel' : ''}" data-furniture="${esc(f.id)}">` +
       `<rect x="${f.x * S}" y="${f.y * S}" width="${f.w * S}" height="${f.d * S}" rx="${r1(Math.min(4, 3 * U))}"/>` +
+      furnitureBackMark(floor, f) +
       (ffs >= 6
-        ? `<text x="${r1((f.x + f.w / 2) * S)}" y="${r1((f.y + f.d / 2) * S + ffs * 0.35)}" font-size="${r1(ffs)}">${esc(name)}</text>`
+        ? // Pieces other things stand in (a pergola over a table, a rug under a
+          // sofa) name themselves in a corner, out of the way of what is inside.
+          AREA_PIECES.has(f.kind)
+          ? `<text x="${r1(f.x * S + 5 * U)}" y="${r1(f.y * S + ffs * 1.3)}" font-size="${r1(ffs)}" style="text-anchor:start">${esc(name)}</text>`
+          : `<text x="${r1((f.x + f.w / 2) * S)}" y="${r1((f.y + f.d / 2) * S + ffs * 0.35)}" font-size="${r1(ffs)}">${esc(name)}</text>`
         : '') +
       '</g>'
   }
