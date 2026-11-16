@@ -265,7 +265,14 @@ export interface HouseOpening {
   y: number
   axis: 'h' | 'v'
   len: number
+  /** A door's hinge end: lower x or y (`start`, the default) or the other. */
+  hinge?: 'start' | 'end'
+  /** The side a door swings into, on the plan. Default `down` or `right`. */
+  opens?: 'up' | 'down' | 'left' | 'right'
 }
+
+export type HouseLightMount = 'ceiling' | 'wall' | 'floor' | 'table'
+export type HouseLook = 'outlet' | 'tv' | 'fridge' | 'washer' | 'dehumidifier' | 'vacuum' | 'mower'
 
 export interface HousePlacement {
   /** `device:<id>` for a native device, `accessory:<uuid>` for a HomeKit accessory. */
@@ -277,8 +284,12 @@ export interface HousePlacement {
   circuitRooms?: string[]
   /** A gate's width in cells, centred on (x, y). */
   length?: number
-  /** Which way a gate runs. */
+  /** Which way a gate or a TV runs. */
   axis?: 'h' | 'v'
+  /** Where a light is mounted. */
+  mount?: HouseLightMount
+  /** What the device is drawn as, when its type alone does not say. */
+  look?: HouseLook
 }
 
 export interface HouseFloor {

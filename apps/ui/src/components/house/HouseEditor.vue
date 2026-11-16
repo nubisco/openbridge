@@ -95,6 +95,14 @@
             @update:model-value="setOpeningLength"
           />
         </NbField>
+        <template v-if="opening.type === 'door'">
+          <p class="house-editor__muted">{{ doorText }}</p>
+          <div class="house-editor__row house-editor__row--tight">
+            <NbButton size="sm" variant="secondary" icon="arrows-left-right" @click="flipHinge">Flip hinge</NbButton>
+            <NbButton size="sm" variant="secondary" icon="arrows-down-up" @click="flipSide">Open other way</NbButton>
+          </div>
+        </template>
+        <p class="house-editor__muted">Drag it along the wall to move it, or drag an end to resize it.</p>
         <div class="house-editor__row">
           <span />
           <NbButton size="sm" variant="danger" icon="trash" @click="deleteOpening">Remove</NbButton>
@@ -110,6 +118,45 @@
             placed.opening ? 'Attached to its window, and drawn on it.' : 'Drag it onto a window to attach it there.'
           }}
         </p>
+        <NbField v-if="placedDevice?.kind === 'light'" v-slot="{ id }" label="Mounted" orientation="stack">
+          <NbSelect
+            :id="id"
+            :model-value="placed.mount ?? 'ceiling'"
+            :options="LIGHT_MOUNTS"
+            size="sm"
+            @update:model-value="(v: unknown) => setMount(v as HouseLightMount)"
+          />
+        </NbField>
+        <template v-if="placedDevice && takesLook(placedDevice)">
+          <NbField
+            v-slot="{ id }"
+            label="Drawn as"
+            hint="The bridge sees a plug or a relay. Say what it powers, and the plan draws that."
+            orientation="stack"
+          >
+            <NbSelect
+              :id="id"
+              :model-value="placed.look ?? ''"
+              :options="lookOptions"
+              size="sm"
+              @update:model-value="(v: unknown) => setLook(v ? (v as HouseLook) : null)"
+            />
+          </NbField>
+          <NbField
+            v-if="(placed.look ?? placedDevice.defaultLook) === 'tv'"
+            v-slot="{ id }"
+            label="Screen runs"
+            orientation="stack"
+          >
+            <NbSelect
+              :id="id"
+              :model-value="placed.axis ?? 'h'"
+              :options="GATE_AXES"
+              size="sm"
+              @update:model-value="(v: unknown) => setGateAxis(v === 'v' ? 'v' : 'h')"
+            />
+          </NbField>
+        </template>
         <NbField
           v-if="placedDevice?.kind === 'light' && !placedDevice.color"
           v-slot="{ id }"
@@ -231,26 +278,28 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useConfirm, usePhoneLayout, useToast } from '@nubisco/ui'
-import type { HouseFloor, HouseOpening, HousePlan, HouseRect, HouseRoom } from '@/api'
-import { CELLS_PER_M, S, clamp, openingUnits, roomArea, roomRects, wallUnits } from '@/house/geometry'
+import type { HouseFloor, HouseLightMount, HouseLook, HouseOpening, HousePlan, HouseRect, HouseRoom } from '@/api'
+import { CELLS_PER_M, S, clamp, flippedSide, openingUnits, roomArea, roomRects, wallUnits } from '@/house/geometry'
 import {
   addFloor,
   addOpening,
   addPart,
   addRoom,
+  moveOpening,
   nearestWall,
   openingAt,
   place,
   removeFloor,
   removeOpening,
   removePart,
+  resizeOpening,
   roomPayload,
   unplace,
   renderEditor,
   setPlotSize,
   shapeValid,
 } from '@/house/editor'
-import { KIND_LETTER, type LiveDevice } from '@/house/live'
+import { KIND_LABEL, KIND_LETTER, LOOK_LABEL, type LiveDevice } from '@/house/live'
 import { WARM_LIGHT } from '@/house/scene'
 
 const props = defineProps<{
@@ -287,6 +336,12 @@ const OPENING_KINDS = [
 const GATE_AXES = [
   { label: 'Left to right', value: 'h' },
   { label: 'Front to back', value: 'v' },
+]
+const LIGHT_MOUNTS = [
+  { label: 'Ceiling', value: 'ceiling' },
+  { label: 'Wall', value: 'wall' },
+  { label: 'Floor lamp', value: 'floor' },
+  { label: 'Table lamp', value: 'table' },
 ]
 const GLOW_COLOURS = [
   { label: 'Warm white', value: WARM_LIGHT },
@@ -361,8 +416,8 @@ const help = computed(() => {
     room: 'Drag on the grid to draw a room. It snaps to half a metre. Draw one inside another for a room within a room.',
     outdoor: 'Drag on the grid to draw a garden, terrace or drive. It has no walls.',
     pool: 'Drag on the grid to draw a pool.',
-    door: 'Tap a wall to put a door there. Tap a door to edit it.',
-    window: 'Tap a wall to put a window there. Tap a window to edit it.',
+    door: 'Tap a wall to put a door there. Drag a door to move it, or its ends to resize it.',
+    window: 'Tap a wall to put a window there. Drag a window to move it, or its ends to resize it.',
   }[tool.value]
 })
 
@@ -455,6 +510,53 @@ function setOpeningLength(v: number | null) {
   o.len = len
 }
 
+/** Lights, shutters and gates are drawn from what they report. Everything else can say what it is. */
+const takesLook = (d: LiveDevice) => d.kind !== 'light' && d.kind !== 'shutter' && d.kind !== 'gate'
+
+const lookOptions = computed(() => {
+  const d = placedDevice.value
+  const fallback = d?.defaultLook ? LOOK_LABEL[d.defaultLook] : d ? KIND_LABEL[d.kind] : 'Device'
+  return [
+    { label: `As its type (${fallback.toLowerCase()})`, value: '' },
+    ...Object.entries(LOOK_LABEL).map(([value, label]) => ({ label, value })),
+  ]
+})
+
+function setLook(look: HouseLook | null) {
+  const p = placed.value
+  if (!p) return
+  if (look) p.look = look
+  else delete p.look
+}
+
+function setMount(mount: HouseLightMount) {
+  const p = placed.value
+  if (!p) return
+  if (mount === 'ceiling') delete p.mount
+  else p.mount = mount
+}
+
+/** "Hinged on the left, opens down", in the plan's own terms. */
+const doorText = computed(() => {
+  const o = opening.value
+  if (!o) return ''
+  const hinge = o.axis === 'h' ? (o.hinge === 'end' ? 'right' : 'left') : o.hinge === 'end' ? 'bottom' : 'top'
+  const side = o.opens ?? (o.axis === 'h' ? 'down' : 'right')
+  return `Hinged at the ${hinge}, opens ${side === 'up' || side === 'down' ? side + 'wards' : 'to the ' + side} on the plan.`
+})
+
+function flipHinge() {
+  const o = opening.value
+  if (!o) return
+  if (o.hinge === 'end') delete o.hinge
+  else o.hinge = 'end'
+}
+
+function flipSide() {
+  const o = opening.value
+  if (o) o.opens = flippedSide(o)
+}
+
 function setColor(c: string) {
   if (placed.value) placed.value.color = c
 }
@@ -508,7 +610,25 @@ type Drag =
       payload: ReturnType<typeof roomPayload>
     }
   | { type: 'device'; ref: string }
+  | { type: 'omove'; o: HouseOpening; grab: number }
+  | { type: 'oresize'; o: HouseOpening; end: 'start' | 'end' }
 let drag: Drag | null = null
+
+/** Start dragging the opening under the pointer, or one of the selected opening's ends. */
+function grabOpening(t: Element | null, p: { x: number; y: number }): boolean {
+  const end = t?.closest('[data-ohandle]')?.getAttribute('data-ohandle')
+  if (end && opening.value) {
+    drag = { type: 'oresize', o: opening.value, end: end === 'end' ? 'end' : 'start' }
+    return true
+  }
+  const id = t?.closest('[data-opening]')?.getAttribute('data-opening')
+  const o = id ? floor.value.openings.find((x) => x.id === id) : undefined
+  if (!o) return false
+  clearSelection()
+  selOpening.value = o.id
+  drag = { type: 'omove', o, grab: (o.axis === 'h' ? p.x : p.y) - (o.axis === 'h' ? o.x : o.y) }
+  return true
+}
 
 function toGrid(e: { clientX: number; clientY: number }) {
   const m = svgEl.value?.getScreenCTM()
@@ -544,13 +664,22 @@ function onDown(e: PointerEvent) {
     drag = { type: 'draw', x0, y0 }
     draft.value = { x: x0, y: y0, w: 0, h: 0 }
   } else if (tool.value === 'door' || tool.value === 'window') {
-    const u = nearestWall(floor.value, p.x, p.y)
-    clearSelection()
-    if (!u) return
-    const existing = openingAt(floor.value, u)
-    const o = existing ?? addOpening(floor.value, u, tool.value)
-    if (o) selOpening.value = o.id
-    return
+    if (!grabOpening(t, p)) {
+      const u = nearestWall(floor.value, p.x, p.y)
+      clearSelection()
+      if (!u) return
+      const existing = openingAt(floor.value, u)
+      const o = existing ?? addOpening(floor.value, u, tool.value)
+      if (o) selOpening.value = o.id
+      if (existing)
+        drag = {
+          type: 'omove',
+          o: existing,
+          grab: (u.axis === 'h' ? p.x : p.y) - (u.axis === 'h' ? existing.x : existing.y),
+        }
+    }
+  } else if (grabOpening(t, p)) {
+    /* a door or window, or one of its ends, is being dragged */
   } else {
     const handle = t?.closest('[data-handle]')
     const dev = t?.closest('[data-ref]')
@@ -637,6 +766,10 @@ function onMove(e: PointerEvent) {
     }
     for (const q of payload.openings) Object.assign(q.o, { x: q.x + dx, y: q.y + dy })
     for (const q of payload.placements) Object.assign(q.p, { x: q.x + dx, y: q.y + dy })
+  } else if (drag.type === 'omove') {
+    moveOpening(floor.value, drag.o, p.x, p.y, drag.grab)
+  } else if (drag.type === 'oresize') {
+    resizeOpening(floor.value, drag.o, drag.end, p.x, p.y)
   } else if (drag.type === 'device') {
     const ref = drag.ref
     const d = props.devices.get(ref)

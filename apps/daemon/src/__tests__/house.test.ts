@@ -63,6 +63,30 @@ describe('validateHousePlan', () => {
     })
   })
 
+  it('keeps which way a door opens, and refuses a side its wall does not have', () => {
+    const p = plan()
+    Object.assign(p.floors[0].openings[1], { hinge: 'end', opens: 'up' })
+    expect(validateHousePlan(p).floors[0].openings[1]).toMatchObject({ hinge: 'end', opens: 'up' })
+    Object.assign(p.floors[0].openings[1], { opens: 'left' })
+    expect(() => validateHousePlan(p)).toThrow(/opens: must be up or down/)
+    Object.assign(p.floors[0].openings[1], { opens: 'down', hinge: 'middle' })
+    expect(() => validateHousePlan(p)).toThrow(/hinge/)
+  })
+
+  it('keeps how a lamp is mounted and what a device is drawn as', () => {
+    const p = plan()
+    Object.assign(p.floors[0].placements[0], { mount: 'floor' })
+    p.floors[0].placements.push({ ref: 'device:plug', x: 8, y: 4, look: 'fridge' })
+    const out = validateHousePlan(p).floors[0].placements
+    expect(out[0].mount).toBe('floor')
+    expect(out[3].look).toBe('fridge')
+    p.floors[0].placements[3].look = 'toaster' as never
+    expect(() => validateHousePlan(p)).toThrow(/look: must be one of/)
+    p.floors[0].placements[3].look = 'tv'
+    p.floors[0].placements[0].mount = 'roof' as never
+    expect(() => validateHousePlan(p)).toThrow(/mount: must be one of/)
+  })
+
   it('accepts a sound plan and normalises it', () => {
     const out = validateHousePlan({ ...plan(), extra: 'dropped' })
     expect(out.floors).toHaveLength(2)

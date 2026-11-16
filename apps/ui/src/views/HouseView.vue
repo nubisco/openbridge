@@ -1,5 +1,5 @@
 <template>
-  <div class="house" :class="{ 'is-phone': phone }">
+  <div class="house">
     <component :is="topbarRight.Outlet">
       <div class="house__topbar">
         <template v-if="mode === 'edit'">
@@ -16,8 +16,8 @@
     <HouseEditor
       v-if="mode === 'edit' && draft"
       :plan="draft"
-      :devices="byRef"
-      :all-devices="devices"
+      :devices="house.byRef"
+      :all-devices="house.devices"
       :initial-floor="floor === 'all' ? null : floor"
     />
 
@@ -35,67 +35,42 @@
     </NbEmptyState>
 
     <!-- ═══ Live ═══ -->
+    <!-- The house is the page: the plan fills the content area with the view
+         controls floating over it, and a device's controls open in the
+         shell's inspector only once something is picked. -->
     <div v-else-if="house.plan" class="house__live">
-      <div class="house__main">
-        <div class="house__toolbar">
-          <NbTabs v-model="view" :items="VIEW_ITEMS" variant="contained" size="sm" aria-label="View" />
-          <NbTabs
-            v-if="view === 'iso'"
-            v-model="walls"
-            :items="WALL_ITEMS"
-            variant="contained"
-            size="sm"
-            aria-label="Walls"
-          />
-          <NbTabs v-model="overlay" :items="OVERLAY_ITEMS" variant="contained" size="sm" aria-label="Overlay" />
-          <NbSwitch
-            name="house-labels"
-            label="Room names"
-            :model-value="labels"
-            @update:model-value="(v?: boolean) => (labels = !!v)"
-          />
-        </div>
-        <HouseStage
-          v-model:floor="floor"
-          :plan="house.plan"
-          :devices="byRef"
-          :mode="view"
-          :walls="walls"
-          :overlay="overlay"
-          :labels="labels"
-          :selected="selected"
-          @activate="activate"
+      <HouseStage
+        v-model:floor="floor"
+        fill
+        :inset-top="48"
+        :plan="house.plan"
+        :devices="house.byRef"
+        :mode="view"
+        :walls="walls"
+        :overlay="overlay"
+        :labels="labels"
+        :selected="selected"
+        @activate="activate"
+        @clear="deselect"
+      />
+      <div class="house__toolbar">
+        <NbTabs v-model="view" :items="VIEW_ITEMS" variant="contained" size="sm" aria-label="View" />
+        <NbTabs
+          v-if="view === 'iso'"
+          v-model="walls"
+          :items="WALL_ITEMS"
+          variant="contained"
+          size="sm"
+          aria-label="Walls"
+        />
+        <NbTabs v-model="overlay" :items="OVERLAY_ITEMS" variant="contained" size="sm" aria-label="Overlay" />
+        <NbSwitch
+          name="house-labels"
+          label="Room names"
+          :model-value="labels"
+          @update:model-value="(v?: boolean) => (labels = !!v)"
         />
       </div>
-
-      <aside class="house__side">
-        <HouseDevicePanel :device="selectedDevice" :where="whereOf(selected)" @changed="poll" />
-        <NbContainedList :title="listTitle" size="sm">
-          <template v-for="group in listGroups" :key="group.id">
-            <NbContainedListItem
-              v-for="d in group.devices"
-              :key="d.ref"
-              :title="d.name"
-              :line="group.label"
-              :clickable="true"
-              :current="selected === d.ref"
-              @click="selected = d.ref"
-            >
-              <template #trailing>
-                <NbBadge :variant="!d.reachable ? 'warning' : isActive(d) ? 'success' : 'neutral'" dot>
-                  {{ stateText(d) || KIND_LABEL[d.kind] }}
-                </NbBadge>
-              </template>
-            </NbContainedListItem>
-          </template>
-          <NbEmptyState
-            v-if="!listGroups.length"
-            size="sm"
-            title="No devices on this floor"
-            description="Edit the plan to place some."
-          />
-        </NbContainedList>
-      </aside>
     </div>
   </div>
 </template>
@@ -103,29 +78,23 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
-import { useConfirm, usePhoneLayout, useShellSlot, useToast } from '@nubisco/ui'
-import { api, type HousePlan } from '@/api'
-import { useDaemonStore } from '@/stores/daemon'
+import { useConfirm, useShellSlot, useToast } from '@nubisco/ui'
+import type { HousePlan } from '@/api'
 import { useHouseStore } from '@/stores/house'
+import { useInspectorStore } from '@/stores/inspector'
 import { useLayoutStore } from '@/stores/layout'
 import { emptyPlan, tidy } from '@/house/editor'
-import { placementRoom } from '@/house/geometry'
-import { KIND_LABEL, isActive, liveDevices, stateText, type LiveDevice, type NativeDevice } from '@/house/live'
 import { setPower, tapToggles } from '@/house/control'
 import HouseStage from '@/components/house/HouseStage.vue'
 import HouseEditor from '@/components/house/HouseEditor.vue'
-import HouseDevicePanel from '@/components/house/HouseDevicePanel.vue'
 import '@/house/house.scss'
 
 const topbarRight = useShellSlot('topbar-right')
 const layout = useLayoutStore()
-const daemon = useDaemonStore()
 const house = useHouseStore()
+const inspector = useInspectorStore()
 const toast = useToast()
 const confirm = useConfirm()
-const { phone } = usePhoneLayout()
-
-layout.setPage('House')
 
 const VIEW_ITEMS = [
   { id: 'iso', label: '3D' },
@@ -170,60 +139,35 @@ const labels = computed({
 })
 
 const floor = ref<string>('all')
-const selected = ref<string | null>(null)
 const mode = ref<'live' | 'edit'>('live')
 const draft = ref<HousePlan | null>(null)
 const saving = ref(false)
-const native = ref<NativeDevice[]>([])
 
-const devices = computed<LiveDevice[]>(() => liveDevices(native.value, daemon.accessories))
-const byRef = computed(() => new Map(devices.value.map((d) => [d.ref, d])))
-const selectedDevice = computed(() => (selected.value ? (byRef.value.get(selected.value) ?? null) : null))
+// The live house runs edge to edge. The empty state and the editor keep the
+// page's padding, as every other page does.
+watch(
+  () => mode.value === 'live' && house.hasPlan,
+  (bleed) => layout.setPage('House', { fullBleed: bleed }),
+  { immediate: true },
+)
 
-/** "Kitchen, Ground floor", read from the plan as it is now. */
-function whereOf(ref: string | null): string {
-  if (!ref || !house.plan) return ''
-  const at = placementRoom(house.plan, ref)
-  if (!at) return 'Not on the plan'
-  return at.room ? `${at.room.name}, ${at.floor.name}` : at.floor.name
+/** What is picked on the plan is what the inspector shows, and only while it shows it. */
+const selected = computed(() => (inspector.visible && inspector.mode === 'house' ? inspector.houseRef : null))
+
+function deselect() {
+  if (inspector.mode === 'house') inspector.close()
 }
 
-const listTitle = computed(() => {
-  const f = house.plan?.floors.find((x) => x.id === floor.value)
-  return f ? `Devices, ${f.name.toLowerCase()}` : 'Devices'
-})
-
-/** Devices on the plan, grouped by room, on the floor in view. */
-const listGroups = computed(() => {
-  const plan = house.plan
-  if (!plan) return []
-  const floors = plan.floors
-    .filter((f) => floor.value === 'all' || f.id === floor.value)
-    .sort((a, b) => b.level - a.level)
-  const groups: Array<{ id: string; label: string; devices: LiveDevice[] }> = []
-  for (const f of floors) {
-    const byRoom = new Map<string, { id: string; label: string; devices: LiveDevice[] }>()
-    for (const p of f.placements) {
-      const d = byRef.value.get(p.ref)
-      if (!d) continue
-      const where = whereOf(p.ref)
-      const key = `${f.id}:${where}`
-      if (!byRoom.has(key)) byRoom.set(key, { id: key, label: where, devices: [] })
-      byRoom.get(key)!.devices.push(d)
-    }
-    groups.push(...[...byRoom.values()].sort((a, b) => a.label.localeCompare(b.label)))
-  }
-  return groups
-})
-
-/** A tap on the plan: lights and plain switches toggle, everything else opens its controls. */
+/** A tap on the plan: it picks the device, and lights and plain switches also toggle. */
 async function activate(ref: string) {
-  selected.value = ref
-  const d = byRef.value.get(ref)
-  if (!d || !tapToggles(d)) return
+  inspector.openHouse(ref)
+  const d = house.byRef.get(ref)
+  if (!d) return
+  const placed = house.plan?.floors.flatMap((f) => f.placements).find((p) => p.ref === ref)
+  if (!tapToggles(d, placed?.look ?? d.defaultLook)) return
   try {
     await setPower(d, !d.on)
-    await poll()
+    await house.poll()
   } catch (e) {
     toast.error((e as Error).message, { title: `Could not switch ${d.name}` })
   }
@@ -232,6 +176,7 @@ async function activate(ref: string) {
 // ─── Editing ────────────────────────────────────────────────────────────────
 
 function startEditing() {
+  deselect()
   draft.value = JSON.parse(JSON.stringify(house.plan ?? emptyPlan()))
   mode.value = 'edit'
 }
@@ -297,23 +242,12 @@ watch(
 )
 
 // ─── Live data ──────────────────────────────────────────────────────────────
-// Polled like the Devices page: both lists are served from memory in the
-// daemon, so this costs no device traffic.
-
-async function poll() {
-  try {
-    const [res] = await Promise.all([api.devices(), daemon.fetchAccessories()])
-    native.value = res.devices as NativeDevice[]
-  } catch {
-    /* a missed poll is retried in three seconds */
-  }
-}
 
 let timer: ReturnType<typeof setInterval> | null = null
 onMounted(async () => {
-  await Promise.all([house.load().catch(() => undefined), poll()])
+  await Promise.all([house.load().catch(() => undefined), house.poll()])
   if ((house.plan?.floors.length ?? 0) === 1) floor.value = house.plan!.floors[0].id
-  timer = setInterval(poll, 3000)
+  timer = setInterval(() => house.poll(), 3000)
 })
 onUnmounted(() => {
   if (timer) clearInterval(timer)
@@ -321,44 +255,45 @@ onUnmounted(() => {
 </script>
 
 <style lang="scss" scoped>
+.house {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .house__topbar {
   display: flex;
   gap: var(--nb-spacing-8);
 }
 
 .house__live {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
-  gap: var(--nb-spacing-16);
-  align-items: start;
-
-  .is-phone & {
-    grid-template-columns: minmax(0, 1fr);
-  }
+  position: relative;
+  flex: 1;
+  min-height: 0;
 }
 
+// The view controls float over the house, top left.
 .house__toolbar {
+  position: absolute;
+  top: var(--nb-spacing-12);
+  left: var(--nb-spacing-12);
+  right: var(--nb-spacing-12);
   display: flex;
   align-items: center;
   gap: var(--nb-spacing-8);
-  margin-bottom: var(--nb-spacing-8);
   overflow-x: auto;
   padding-bottom: 2px;
+  pointer-events: none;
 
   > * {
     flex: none;
+    pointer-events: auto;
   }
 
   // A tab bar fills its row by default. Here several sit side by side.
   > :deep(.nb-tabs) {
     width: auto;
   }
-}
-
-.house__side {
-  display: flex;
-  flex-direction: column;
-  gap: var(--nb-spacing-12);
-  min-width: 0;
 }
 </style>

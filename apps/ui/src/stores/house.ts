@@ -1,10 +1,14 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { api, type HousePlan } from '@/api'
+import { liveDevices, type LiveDevice, type NativeDevice } from '@/house/live'
+import { useDaemonStore } from './daemon'
 
 /**
  * The house plan as the server has it, shared by the House view and the
- * router, which opens the app on the House view once there is a plan.
+ * router, which opens the app on the House view once there is a plan. It
+ * also holds the live devices the plan draws, so the shell's inspector shows
+ * the same reading as the plan beside it.
  */
 export const useHouseStore = defineStore('house', () => {
   const plan = ref<HousePlan | null>(null)
@@ -44,5 +48,24 @@ export const useHouseStore = defineStore('house', () => {
     return res.ok ? 'saved' : 'conflict'
   }
 
-  return { plan, rev, loaded, hasPlan, load, ensure, save }
+  const daemon = useDaemonStore()
+  const native = ref<NativeDevice[]>([])
+  const devices = computed<LiveDevice[]>(() => liveDevices(native.value, daemon.accessories))
+  const byRef = computed(() => new Map(devices.value.map((d) => [d.ref, d])))
+
+  /**
+   * Fetch every device's current state. Both lists are served from memory in
+   * the daemon, so polling this costs no device traffic. A failed poll keeps
+   * the last state, and the next poll tries again.
+   */
+  async function poll(): Promise<void> {
+    try {
+      const [res] = await Promise.all([api.devices(), daemon.fetchAccessories()])
+      native.value = res.devices as NativeDevice[]
+    } catch {
+      /* retried on the next tick */
+    }
+  }
+
+  return { plan, rev, loaded, hasPlan, load, ensure, save, devices, byRef, poll }
 })

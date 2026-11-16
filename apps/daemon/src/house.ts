@@ -80,7 +80,23 @@ export interface HouseOpening {
   axis: 'h' | 'v'
   /** Length in cells. */
   len: number
+  /** A door's hinge: the end at the lower x or y (`start`), or the other one. Default `start`. */
+  hinge?: 'start' | 'end'
+  /**
+   * The side a door swings into, as seen on the plan: `up` or `down` for a
+   * door in a wall running along x, `left` or `right` along y. Default
+   * `down` or `right`.
+   */
+  opens?: 'up' | 'down' | 'left' | 'right'
 }
+
+/** How a light hangs: from the ceiling, on a wall, or as a floor or table lamp. */
+export const LIGHT_MOUNTS = ['ceiling', 'wall', 'floor', 'table'] as const
+/**
+ * What a device is drawn as. The bridge sees a smart plug or a relay, and the
+ * person knows it is the fridge, so they say so on the plan.
+ */
+export const DEVICE_LOOKS = ['outlet', 'tv', 'fridge', 'washer', 'dehumidifier', 'vacuum', 'mower'] as const
 
 export interface HousePlacement {
   /** `device:<id>` for a native device, `accessory:<uuid>` for a HomeKit accessory. */
@@ -95,8 +111,12 @@ export interface HousePlacement {
   circuitRooms?: string[]
   /** A gate's width in cells. Drawn centred on (x, y). */
   length?: number
-  /** Which way a gate runs: `h` along x, `v` along y. */
+  /** Which way a gate or a TV runs: `h` along x, `v` along y. */
   axis?: 'h' | 'v'
+  /** Where a light is mounted. */
+  mount?: (typeof LIGHT_MOUNTS)[number]
+  /** What the device is drawn as, when its type alone does not say. */
+  look?: (typeof DEVICE_LOOKS)[number]
 }
 
 export interface HouseFloor {
@@ -255,7 +275,18 @@ export function validateHousePlan(raw: unknown): HousePlan {
       const x = int(o.x, `${op}.x`, 0, plot.w)
       const y = int(o.y, `${op}.y`, 0, plot.h)
       const len = int(o.len, `${op}.len`, 1, o.axis === 'h' ? plot.w - x : plot.h - y)
-      return { id: oid, type: o.type, axis: o.axis, x, y, len }
+      const out: HouseOpening = { id: oid, type: o.type, axis: o.axis, x, y, len }
+      if (o.hinge !== undefined) {
+        if (o.hinge !== 'start' && o.hinge !== 'end') fail(`${op}.hinge`, 'must be start or end')
+        out.hinge = o.hinge
+      }
+      if (o.opens !== undefined) {
+        const sides = o.axis === 'h' ? ['up', 'down'] : ['left', 'right']
+        if (typeof o.opens !== 'string' || !sides.includes(o.opens))
+          fail(`${op}.opens`, `must be ${sides.join(' or ')}`)
+        out.opens = o.opens as HouseOpening['opens']
+      }
+      return out
     })
 
     const placements = arr(f.placements, `${fp}.placements`, LIMITS.placements).map((plRaw, pi): HousePlacement => {
@@ -283,6 +314,16 @@ export function validateHousePlan(raw: unknown): HousePlan {
       if (pl.axis !== undefined) {
         if (pl.axis !== 'h' && pl.axis !== 'v') fail(`${pp}.axis`, 'must be h or v')
         out.axis = pl.axis
+      }
+      if (pl.mount !== undefined) {
+        if (!(LIGHT_MOUNTS as readonly unknown[]).includes(pl.mount))
+          fail(`${pp}.mount`, `must be one of ${LIGHT_MOUNTS.join(', ')}`)
+        out.mount = pl.mount as HousePlacement['mount']
+      }
+      if (pl.look !== undefined) {
+        if (!(DEVICE_LOOKS as readonly unknown[]).includes(pl.look))
+          fail(`${pp}.look`, `must be one of ${DEVICE_LOOKS.join(', ')}`)
+        out.look = pl.look as HousePlacement['look']
       }
       if (pl.circuitRooms !== undefined) {
         out.circuitRooms = arr(pl.circuitRooms, `${pp}.circuitRooms`, 50).map((c, ci) =>
