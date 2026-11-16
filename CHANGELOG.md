@@ -1,3 +1,10 @@
+# [1.20.0](https://github.com/nubisco/openbridge/compare/v1.19.0...v1.20.0) (2026-11-16)
+
+
+### Features
+
+* **house:** more furniture, a back for beds and sofas, and garden taps ([#27](https://github.com/nubisco/openbridge/issues/27)) ([020be3c](https://github.com/nubisco/openbridge/commit/020be3cb6dbb02f57b86a347e21689aa69006cd3))
+
 # [1.19.0](https://github.com/nubisco/openbridge/compare/v1.18.0...v1.19.0) (2026-11-16)
 
 
