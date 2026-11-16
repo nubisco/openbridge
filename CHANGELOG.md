@@ -1,3 +1,10 @@
+# [1.14.0](https://github.com/nubisco/openbridge/compare/v1.13.2...v1.14.0) (2026-11-16)
+
+
+### Features
+
+* **house:** zoom, pan and turn the house, pool lights in the water, markers that never cover each other ([#19](https://github.com/nubisco/openbridge/issues/19)) ([9c124d5](https://github.com/nubisco/openbridge/commit/9c124d517f1f4c2f8dc6a1df23f0691ed516cdd1))
+
 ## [1.13.2](https://github.com/nubisco/openbridge/compare/v1.13.1...v1.13.2) (2026-11-16)
 
 
