@@ -621,7 +621,7 @@ Marks rows read for the person asking. Send `{ "ids": ["3f6b2c1e-8a4d-4f0e-9c1a-
 
 The house plan, its revision, and when it was last saved. `plan` is `null` until one is drawn.
 
-Geometry is in grid cells of `grid` metres (0.5). Rooms sit on cell lines. A device sits on a half cell at most. A placement's `ref` is `device:<id>` for a native device or `accessory:<uuid>` for a HomeKit accessory. `opening` attaches a shutter to a window, `color` is the glow of a light that cannot report one, and `circuitRooms` lists the rooms a heating device's water circuit serves.
+Geometry is in grid cells of `grid` metres (0.5). Rooms sit on cell lines. A device sits on a half cell at most. A placement's `ref` is `device:<id>` for a native device or `accessory:<uuid>` for a HomeKit accessory. `opening` attaches a shutter to a window, `color` is the glow of a light that cannot report one, `circuitRooms` lists the rooms a heating device's water circuit serves, and a gate's `length` (cells) and `axis` (`h` or `v`) give its width and the way it runs.
 
 ```json
 {

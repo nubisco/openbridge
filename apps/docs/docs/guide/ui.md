@@ -20,15 +20,15 @@ A drawing of your home, floor by floor, with every device where it really is and
 - **Door** and **Window:** tap a wall. Tap one you placed to change its width or remove it.
 - **Select:** drag a room to move it (its doors, windows and devices move with it), or drag a corner to resize it.
 - **+ Floor** adds a floor above the top one, starting as one room the size of the floor below. The floor below shows as a dashed outline, so you can trace over it.
-- **Devices:** drag a device from _Not on the plan yet_ onto the plan, or tap it and then tap where it is. A shutter dropped near a window attaches to that window. For a heating device, tick the rooms its water circuit serves.
+- **Devices:** drag a device from _Not on the plan yet_ onto the plan, or tap it and then tap where it is. A shutter dropped near a window attaches to that window. For a heating device, tick the rooms its water circuit serves. For a gate, set its width and which way it runs.
 
 Nothing is saved until you choose **Save plan**. If the plan was saved from another tab in the meantime, OpenBridge loads that version and asks you to redo your change on top of it.
 
-**What the plan shows.** Lights glow in their colour and brightness (a relay driving a lamp glows in a colour you pick). Shutters show how far they are open, on their window. Heating circuits run through the rooms they serve, coloured from blue to red by water temperature, with moving flow while the pump runs. A pool's water moves while a pump placed in it runs. Sensors, dehumidifiers, energy meters, cameras and gates show their reading or state. A device that stopped answering is drawn dimmed, never as off.
+**What the plan shows.** Lights glow in their colour and brightness (a relay driving a lamp glows in a colour you pick). Shutters show how far they are open, on their window. Heating circuits run through the rooms they serve, coloured from blue to red by water temperature, with moving flow while the pump runs. When the plugin reports the water going out and coming back (`supplyTemperature` and `returnTemperature`), the pipe shades from one to the other along its length. A pool's water moves while a pump placed in it runs. Sensors, dehumidifiers, energy meters, cameras and gates show their reading or state. A device that stopped answering is drawn dimmed, never as off.
 
 **Using it.** Switch floors with the floor rail (or the up and down arrow keys), or choose **All floors** to see them stacked. **3D** and **2D** switch between the isometric and the top-down view, and **Temperature** and **Humidity** tint each room by a sensor in it. Tapping a light or a plain switch turns it on or off. Tapping anything else opens its controls beside the plan. A gate always asks before it moves.
 
-**Rooms are the bridge's rooms.** Each device's room comes from the plan, so the device list (`GET /api/devices`) and the AI agent tools report it too. The plan is stored in `~/.openbridge/house.json`.
+**Rooms are the bridge's rooms.** Each device's room comes from the plan, so the Devices page, the device list (`GET /api/devices`) and the AI agent tools report it too. Agents can read the whole plan with the `house` tool. The plan is stored in `~/.openbridge/house.json`.
 
 ---
 
@@ -114,8 +114,10 @@ The Accessories view shows all HomeKit accessories currently registered with the
 Accessories are displayed as cards in a responsive grid. Each card shows:
 
 - Accessory name
-- Service type icon
+- Service type icon, and the room it is in when it is on the house plan
 - A summary of the primary characteristic value (on/off, temperature, etc.)
+
+The table view has a **Room** column. Sort by it to see the devices room by room.
 
 The grid **auto-polls every 5 seconds** via `GET /api/accessories`, so values stay current without a manual refresh.
 
