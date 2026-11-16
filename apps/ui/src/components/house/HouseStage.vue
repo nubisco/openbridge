@@ -1,10 +1,15 @@
 <template>
-  <div ref="stageEl" class="house-stage hv-stage-bg" :class="{ 'is-phone': phone }" @keydown="onKey">
+  <div
+    ref="stageEl"
+    class="house-stage hv-stage-bg"
+    :class="{ 'is-phone': phone, 'is-preview': preview }"
+    @keydown="preview ? undefined : onKey($event)"
+  >
     <svg
       ref="svgEl"
       class="house-stage__svg"
-      role="group"
-      aria-label="House plan, live device state"
+      :role="preview ? 'img' : 'group'"
+      :aria-label="preview ? 'House plan' : 'House plan, live device state'"
       :viewBox="viewBox"
       @click="onClick"
       @keydown="onSvgKey"
@@ -21,7 +26,7 @@
       </g>
     </svg>
 
-    <div class="house-stage__rail" role="group" aria-label="Floors">
+    <div v-if="!preview" class="house-stage__rail" role="group" aria-label="Floors">
       <NbButton
         v-if="plan.floors.length > 1"
         size="sm"
@@ -46,7 +51,7 @@
       </NbButton>
     </div>
 
-    <div v-if="showLegend" class="house-stage__legend" aria-hidden="true">
+    <div v-if="showLegend && !preview" class="house-stage__legend" aria-hidden="true">
       <div>Water temperature</div>
       <div class="house-stage__legend-bar" />
       <div class="house-stage__legend-ends">
@@ -75,6 +80,12 @@ const props = defineProps<{
   overlay: 'none' | 'temperature' | 'humidity'
   labels: boolean
   selected: string | null
+  /**
+   * A small, look-only copy for a card elsewhere (the dashboard): no floor
+   * rail, no legend, nothing focusable, and taps pass through to whatever
+   * the card links to.
+   */
+  preview?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -154,8 +165,8 @@ const layout = computed(() => {
   }
   if (!Number.isFinite(x1)) return null
   // Room for the floor rail: beside the plan on a wide stage, above it on a phone.
-  const padTop = phone.value ? 70 : 20
-  const padLeft = phone.value ? 0 : (170 * VW) / cw
+  const padTop = props.preview ? 10 : phone.value ? 70 : 20
+  const padLeft = props.preview || phone.value ? 0 : (170 * VW) / cw
   const k = Math.min((VW - padLeft) / (x2 - x1 + 50), (VH - padTop) / (y2 - y1 + 50), 2.2)
   const tx = padLeft / 2 + VW / 2 - (k * (x1 + x2)) / 2
   const ty = padTop / 2 + VH / 2 - (k * (y1 + y2)) / 2
@@ -200,7 +211,12 @@ const markup = computed<Record<string, string>>(() => {
     all: all.value,
   }
   const out: Record<string, string> = {}
-  for (const f of props.plan.floors) out[f.id] = renderFloor(props.plan, f, props.devices, options)
+  for (const f of props.plan.floors) {
+    const svg = renderFloor(props.plan, f, props.devices, options)
+    // A preview is a picture: its devices must not take keyboard focus or
+    // announce themselves as buttons inside a link.
+    out[f.id] = props.preview ? svg.replace(/ role="button" tabindex="0"/g, '') : svg
+  }
   return out
 })
 
@@ -210,6 +226,7 @@ function refOf(target: EventTarget | null): string | null {
 }
 
 function onClick(e: MouseEvent) {
+  if (props.preview) return
   // Hit-tested from the point, not the event target: a floor sliding away
   // still has its shapes under the pointer for a moment, and pointer-events
   // is what keeps them from taking the tap.
@@ -276,6 +293,13 @@ onBeforeUnmount(() => observer?.disconnect())
     height: min(108vw, 66vh);
     min-height: 340px;
   }
+
+  &.is-preview {
+    height: 220px;
+    min-height: 0;
+    border: 0;
+    border-radius: var(--nb-radius-control);
+  }
 }
 
 .house-stage__svg {
@@ -283,6 +307,10 @@ onBeforeUnmount(() => observer?.disconnect())
   height: 100%;
   display: block;
   touch-action: manipulation;
+
+  .is-preview & {
+    pointer-events: none;
+  }
 }
 
 .hv-world {

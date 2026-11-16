@@ -36,6 +36,38 @@ export interface HouseRoom {
   y: number
   w: number
   h: number
+  /**
+   * More rectangles joined to the main one, for a room that is not a
+   * rectangle: an L is one part, a U is two. Each shares an edge with the
+   * shape before it and none overlap, so the room is one connected piece
+   * with no wall inside it.
+   */
+  parts?: HouseRect[]
+}
+
+export interface HouseRect {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
+/** Every rectangle a room is made of, main one first. */
+export function roomRects(r: HouseRoom): HouseRect[] {
+  return [{ x: r.x, y: r.y, w: r.w, h: r.h }, ...(r.parts ?? [])]
+}
+
+const overlaps = (a: HouseRect, b: HouseRect) =>
+  a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
+
+/** Two rectangles that do not overlap but share at least one cell of edge. */
+const touches = (a: HouseRect, b: HouseRect) => {
+  const alongX = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)
+  const alongY = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y)
+  return (
+    ((a.y + a.h === b.y || b.y + b.h === a.y) && alongX >= 1) ||
+    ((a.x + a.w === b.x || b.x + b.w === a.x) && alongY >= 1)
+  )
 }
 
 export interface HouseOpening {
@@ -190,7 +222,23 @@ export function validateHousePlan(raw: unknown): HousePlan {
       const y = int(r.y, `${rp}.y`, 0, plot.h - 1)
       const w = int(r.w, `${rp}.w`, 1, plot.w - x)
       const h = int(r.h, `${rp}.h`, 1, plot.h - y)
-      return { id: rid, name: name(r.name, `${rp}.name`), kind, x, y, w, h }
+      const room: HouseRoom = { id: rid, name: name(r.name, `${rp}.name`), kind, x, y, w, h }
+      if (r.parts !== undefined) {
+        const shape: HouseRect[] = [{ x, y, w, h }]
+        room.parts = arr(r.parts, `${rp}.parts`, 8).map((partRaw, ki) => {
+          const kp = `${rp}.parts[${ki}]`
+          const k = obj(partRaw, kp)
+          const px = int(k.x, `${kp}.x`, 0, plot.w - 1)
+          const py = int(k.y, `${kp}.y`, 0, plot.h - 1)
+          const part = { x: px, y: py, w: int(k.w, `${kp}.w`, 1, plot.w - px), h: int(k.h, `${kp}.h`, 1, plot.h - py) }
+          if (shape.some((q) => overlaps(q, part))) fail(kp, 'overlaps the rest of the room')
+          if (!shape.some((q) => touches(q, part))) fail(kp, 'must share an edge with the rest of the room')
+          shape.push(part)
+          return part
+        })
+        if (!room.parts.length) delete room.parts
+      }
+      return room
     })
 
     const openingIds = new Set<string>()
@@ -262,16 +310,29 @@ export function validateHousePlan(raw: unknown): HousePlan {
 
 // ─── Rooms of devices ───────────────────────────────────────────────────────
 
+const area = (r: HouseRoom) => roomRects(r).reduce((a, q) => a + q.w * q.h, 0)
+
+/**
+ * The room a point is in. Rooms can sit inside rooms (an en-suite drawn in a
+ * bedroom, a house drawn on its garden), so the smallest room containing the
+ * point wins: that is the one the point is really in. Ties go to the room
+ * drawn first, which keeps the answer stable.
+ */
+function innermost(rooms: HouseRoom[]): HouseRoom | undefined {
+  return rooms.reduce<HouseRoom | undefined>((best, r) => (!best || area(r) < area(best) ? r : best), undefined)
+}
+
 function contains(r: HouseRoom, x: number, y: number): boolean {
-  return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h
+  return roomRects(r).some((q) => x >= q.x && x <= q.x + q.w && y >= q.y && y <= q.y + q.h)
 }
 
 /**
  * Which room every placed device is in, keyed by its ref.
  *
- * A point on a shared wall is in both rooms. The first room drawn wins, which
- * is stable and is what the person sees highlighted in the editor. A shutter
- * is in the room behind its window: the one with walls, not the garden.
+ * The smallest room containing a device is its room, so a device in a room
+ * drawn inside another is in the inner one. A point on a wall two equal rooms
+ * share goes to the room drawn first, which is stable. A shutter is in the
+ * room behind its window: the one with walls, not the garden.
  */
 export function roomsByRef(plan: HousePlan | null): Map<string, DeviceRoom> {
   const out = new Map<string, DeviceRoom>()
@@ -287,7 +348,7 @@ export function roomsByRef(plan: HousePlan | null): Map<string, DeviceRoom> {
         y = opening.y + (opening.axis === 'v' ? opening.len / 2 : 0)
       }
       const inside = f.rooms.filter((r) => contains(r, x, y))
-      const room = (opening ? inside.find((r) => r.kind === 'room') : undefined) ?? inside[0]
+      const room = (opening ? innermost(inside.filter((r) => r.kind === 'room')) : undefined) ?? innermost(inside)
       if (room) out.set(pl.ref, { id: room.id, name: room.name, floor })
     }
   }

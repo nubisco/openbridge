@@ -389,8 +389,9 @@ const deviceColumns: IDataTableColumn[] = [
   { key: 'name', header: 'Device', sortable: true, primary: true },
   { key: 'type', header: 'Type', sortable: true, width: 160, phoneMeta: true },
   { key: 'source', header: 'Source', sortable: true, width: 120, phoneMeta: true },
-  // From the house plan. Sorting by it groups the list by room.
-  { key: 'room', header: 'Room', sortable: true, width: 160 },
+  // From the house plan. Sorting by it groups the list by room. On a phone it
+  // joins type and source on the card's muted line ("Light, Native, Kitchen").
+  { key: 'room', header: 'Room', sortable: true, width: 160, phoneMeta: true },
   { key: 'state', header: 'State', sortable: true, width: 120 },
   { key: 'detail', header: 'Reading', sortable: true, width: 160 },
 ]
