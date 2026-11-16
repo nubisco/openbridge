@@ -10,10 +10,18 @@
 //
 // Keep in sync with WIDGET_ICON / CATEGORY_INFO (DeviceInspector.vue,
 // PluginInspector.vue, DevicesView.vue), navItems (AppLayout.vue), the House
-// view's empty state (HouseView.vue) and the
+// view's empty state (HouseView.vue), the House editor's tools (HouseEditor.vue) and the
 // bell's two states (NotificationBell.vue).
 import { registerIcons } from '@nubisco/ui'
 
+import * as armchair from '@nubisco/ui/icons/armchair'
+import * as arrowsOutLineHorizontal from '@nubisco/ui/icons/arrows-out-line-horizontal'
+import * as boundingBox from '@nubisco/ui/icons/bounding-box'
+import * as cursor from '@nubisco/ui/icons/cursor'
+import * as doorOpen from '@nubisco/ui/icons/door-open'
+import * as squaresFour from '@nubisco/ui/icons/squares-four'
+import * as swimmingPool from '@nubisco/ui/icons/swimming-pool'
+import * as tree from '@nubisco/ui/icons/tree'
 import * as appWindow from '@nubisco/ui/icons/app-window'
 import * as bell from '@nubisco/ui/icons/bell'
 import * as blueprint from '@nubisco/ui/icons/blueprint'
@@ -53,6 +61,14 @@ import * as wind from '@nubisco/ui/icons/wind'
 
 export function registerRuntimeIcons(): void {
   registerIcons({
+    armchair: armchair,
+    'arrows-out-line-horizontal': arrowsOutLineHorizontal,
+    'bounding-box': boundingBox,
+    cursor: cursor,
+    'door-open': doorOpen,
+    'squares-four': squaresFour,
+    'swimming-pool': swimmingPool,
+    tree: tree,
     'app-window': appWindow,
     bell: bell,
     'bell-ringing': bellRinging,

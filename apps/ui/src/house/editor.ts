@@ -7,7 +7,16 @@
  * given in place, so the view keeps one reactive draft and saves it as a
  * whole.
  */
-import type { HouseFloor, HouseOpening, HousePlan, HouseRadiator, HouseRect, HouseRoom } from '@/api'
+import type {
+  HouseFloor,
+  HouseFurniture,
+  HouseFurnitureKind,
+  HouseOpening,
+  HousePlan,
+  HouseRadiator,
+  HouseRect,
+  HouseRoom,
+} from '@/api'
 import {
   CELLS_PER_M,
   S,
@@ -182,6 +191,12 @@ export function roomPayload(floor: HouseFloor, r: HouseRoom) {
     radiators: (floor.radiators ?? [])
       .filter((r) => spanUnits(r).every((k) => edge.has(k)))
       .map((r) => ({ o: r, x: r.x, y: r.y })),
+    furniture: (floor.furniture ?? [])
+      .filter((f) => {
+        const at = roomAt(floor, f.x + f.w / 2, f.y + f.d / 2)
+        return !!at && group.has(at)
+      })
+      .map((f) => ({ o: f, x: f.x, y: f.y })),
     placements: floor.placements
       .filter((p) => {
         if (p.opening) return false
@@ -486,6 +501,104 @@ export function removeRadiator(floor: HouseFloor, id: string): void {
   if (!floor.radiators.length) delete floor.radiators
 }
 
+// ─── Furniture ──────────────────────────────────────────────────────────────
+
+export const FURNITURE_NAME: Record<HouseFurnitureKind, string> = {
+  table: 'Table',
+  cabinet: 'Cabinet',
+  island: 'Kitchen island',
+  bed: 'Bed',
+}
+
+/** The size a new piece starts at, in cells: a dining table, a sideboard, an island, a double bed. */
+const FURNITURE_SIZE: Record<HouseFurnitureKind, [number, number]> = {
+  table: [3, 1.5],
+  cabinet: [2, 1],
+  island: [4, 2],
+  bed: [3, 4],
+}
+
+const halfCell = (v: number) => Math.round(v * 2) / 2
+
+/** Keep a piece inside the plot, moving it rather than shrinking it. */
+function keepInPlot(plan: HousePlan, f: HouseFurniture): void {
+  f.w = clamp(f.w, 0.5, plan.plot.w)
+  f.d = clamp(f.d, 0.5, plan.plot.h)
+  f.x = clamp(f.x, 0, plan.plot.w - f.w)
+  f.y = clamp(f.y, 0, plan.plot.h - f.d)
+}
+
+/**
+ * Put a piece of furniture on the floor. A drawn rectangle sets its size, a
+ * tap centres one of the usual size on the tap.
+ */
+export function addFurniture(
+  plan: HousePlan,
+  floor: HouseFloor,
+  kind: HouseFurnitureKind,
+  at: { x: number; y: number; w?: number; d?: number },
+): HouseFurniture {
+  const [w0, d0] = FURNITURE_SIZE[kind]
+  const sized = !!at.w && !!at.d && at.w >= 0.5 && at.d >= 0.5
+  const w = sized ? (at.w as number) : w0
+  const d = sized ? (at.d as number) : d0
+  const id = uniqueId(kind, (v) => (floor.furniture ?? []).some((f) => f.id === v))
+  const f: HouseFurniture = {
+    id,
+    kind,
+    x: sized ? at.x : halfCell(at.x - w / 2),
+    y: sized ? at.y : halfCell(at.y - d / 2),
+    w,
+    d,
+  }
+  keepInPlot(plan, f)
+  ;(floor.furniture ??= []).push(f)
+  return f
+}
+
+/** Move a piece in quarter metres, `grab` being where on it the pointer took it. */
+export function moveFurniture(
+  plan: HousePlan,
+  f: HouseFurniture,
+  x: number,
+  y: number,
+  grab: { x: number; y: number },
+) {
+  f.x = halfCell(x - grab.x)
+  f.y = halfCell(y - grab.y)
+  keepInPlot(plan, f)
+}
+
+/** Drag a corner of a piece, in quarter metres, never under a quarter metre a side. */
+export function resizeFurniture(
+  plan: HousePlan,
+  f: HouseFurniture,
+  corner: string,
+  start: { x1: number; y1: number; x2: number; y2: number },
+  x: number,
+  y: number,
+) {
+  let { x1, y1, x2, y2 } = start
+  if (corner.includes('w')) x1 = clamp(halfCell(x), 0, x2 - 0.5)
+  if (corner.includes('e')) x2 = clamp(halfCell(x), x1 + 0.5, plan.plot.w)
+  if (corner.includes('n')) y1 = clamp(halfCell(y), 0, y2 - 0.5)
+  if (corner.includes('s')) y2 = clamp(halfCell(y), y1 + 0.5, plan.plot.h)
+  Object.assign(f, { x: x1, y: y1, w: x2 - x1, d: y2 - y1 })
+}
+
+/** A quarter turn about its centre: width and depth swap. */
+export function turnFurniture(plan: HousePlan, f: HouseFurniture) {
+  const cx = f.x + f.w / 2
+  const cy = f.y + f.d / 2
+  Object.assign(f, { w: f.d, d: f.w, x: halfCell(cx - f.d / 2), y: halfCell(cy - f.w / 2) })
+  keepInPlot(plan, f)
+}
+
+export function removeFurniture(floor: HouseFloor, id: string): void {
+  floor.furniture = (floor.furniture ?? []).filter((f) => f.id !== id)
+  if (!floor.furniture.length) delete floor.furniture
+}
+
 export function removeOpening(floor: HouseFloor, id: string): void {
   floor.openings = floor.openings.filter((o) => o.id !== id)
   for (const p of floor.placements) if (p.opening === id) delete p.opening
@@ -543,6 +656,8 @@ export function tidy(plan: HousePlan): HousePlan {
       f.radiators = f.radiators.filter((r) => radiatorFits(f, r))
       if (!f.radiators.length) delete f.radiators
     }
+    // A plot made smaller can leave a piece hanging off it.
+    for (const u of f.furniture ?? []) keepInPlot(plan, u)
     for (const p of f.placements) {
       if (p.opening && !kept.has(p.opening)) delete p.opening
       if (p.circuitRooms) {
@@ -563,6 +678,7 @@ export interface EditorDrawOptions {
   selectedRef: string | null
   selectedOpening: string | null
   selectedRadiator?: string | null
+  selectedFurniture?: string | null
   draft: Pick<HouseRoom, 'x' | 'y' | 'w' | 'h'> | null
   /** Screen pixels per editor unit, so labels and handles keep their size. */
   unit: number
@@ -613,6 +729,18 @@ export function renderEditor(
       `<text x="${r1(q.x * S + 7 * U)}" y="${r1(q.y * S + nfs * 1.5)}" font-size="${r1(nfs)}">${esc(r.name)}</text>` +
       (q.h * S > nfs * 3.2
         ? `<text class="hv-dim" x="${r1(q.x * S + 7 * U)}" y="${r1(q.y * S + nfs * 2.7)}" font-size="${r1(nfs * 0.85)}">${size}</text>`
+        : '') +
+      '</g>'
+  }
+  // Furniture: a dashed outline with its name, under the walls and devices.
+  for (const f of floor.furniture ?? []) {
+    const name = FURNITURE_NAME[f.kind]
+    const ffs = Math.min(fs * 0.85, (f.w * S - 6 * U) / Math.max(1, name.length * 0.6), f.d * S * 0.45)
+    h +=
+      `<g class="hv-efurn${o.selectedFurniture === f.id ? ' hv-sel' : ''}" data-furniture="${esc(f.id)}">` +
+      `<rect x="${f.x * S}" y="${f.y * S}" width="${f.w * S}" height="${f.d * S}" rx="${r1(Math.min(4, 3 * U))}"/>` +
+      (ffs >= 6
+        ? `<text x="${r1((f.x + f.w / 2) * S)}" y="${r1((f.y + f.d / 2) * S + ffs * 0.35)}" font-size="${r1(ffs)}">${esc(name)}</text>`
         : '') +
       '</g>'
   }
@@ -690,6 +818,18 @@ export function renderEditor(
     ]
     for (const [end, x, y] of ends) {
       h += `<circle class="hv-eh hv-eoh-${sr.axis}" data-rhandle="${end}" cx="${x * S}" cy="${y * S}" r="${r1(Math.max(6, 8 * U))}"/>`
+    }
+  }
+  const sf = (floor.furniture ?? []).find((x) => x.id === o.selectedFurniture)
+  if (sf) {
+    const corners: Array<[string, number, number]> = [
+      ['nw', sf.x, sf.y],
+      ['ne', sf.x + sf.w, sf.y],
+      ['se', sf.x + sf.w, sf.y + sf.d],
+      ['sw', sf.x, sf.y + sf.d],
+    ]
+    for (const [c, x, y] of corners) {
+      h += `<circle class="hv-eh${c === 'ne' || c === 'sw' ? ' hv-alt' : ''}" data-fhandle="${c}" cx="${x * S}" cy="${y * S}" r="${r1(Math.max(6, 8 * U))}"/>`
     }
   }
   const sel = floor.rooms.find((r) => r.id === o.selectedRoom)

@@ -8,7 +8,15 @@
  * elements (`role="button"`, a label, `data-ref`), and the view handles taps
  * and keys on the stage by delegation.
  */
-import type { HouseFloor, HouseLook, HousePlacement, HousePlan, HouseRoom } from '@/api'
+import type {
+  HouseFloor,
+  HouseFurniture,
+  HouseLightMount,
+  HouseLook,
+  HousePlacement,
+  HousePlan,
+  HouseRoom,
+} from '@/api'
 import {
   CELLS_PER_M,
   ISO_FLOOR_MATRIX,
@@ -18,6 +26,9 @@ import {
   doorSwing,
   esc,
   humidityColor,
+  bedHead,
+  furnitureAt,
+  furnitureHeight,
   lightMount,
   lerp,
   project,
@@ -41,6 +52,22 @@ export const WARM_LIGHT = '#ffb45e'
 
 /** How high each kind of light sits, in metres. */
 const LAMP_HEIGHT = { ceiling: 2.35, wall: 1.8, floor: 1.5, table: 0.75, pool: 0.02 } as const
+
+/**
+ * How high a light's bulb is, in metres. A table lamp stands on the
+ * furniture under it, or on a low side table when there is none drawn.
+ */
+function lampHeight(floor: HouseFloor, p: HousePlacement, mount: HouseLightMount): number {
+  if (mount !== 'table') return LAMP_HEIGHT[mount]
+  const under = furnitureAt(floor, p.x, p.y)
+  return (under ? furnitureHeight(under) : 0.4) + 0.35
+}
+
+/** The height of whatever a device stands on, in metres: 0 on the floor. */
+function standsOn(floor: HouseFloor, p: HousePlacement): number {
+  const under = furnitureAt(floor, p.x, p.y)
+  return under ? furnitureHeight(under) : 0
+}
 
 export interface SceneOptions {
   mode: ViewMode
@@ -408,6 +435,78 @@ function uprightCircle(o: SceneOptions, x: number, y: number, z: number, r: numb
   return poly(o, pts)
 }
 
+/**
+ * A piece of furniture, as plain volumes in one quiet tone, so the plan reads
+ * as the home without saying what style it is in. A table is a top on legs,
+ * a cabinet and an island are blocks, a bed is a frame with a mattress and a
+ * pillow at the head.
+ */
+function furniturePiece(o: SceneOptions, floor: HouseFloor, f: HouseFurniture): string {
+  const iso = o.mode === 'iso'
+  const top = zm(o, furnitureHeight(f))
+  const cx = f.x + f.w / 2
+  const cy = f.y + f.d / 2
+  switch (f.kind) {
+    case 'table': {
+      const t = zm(o, 0.04)
+      let svg = ''
+      if (iso) {
+        // Legs a little in from each corner, the back ones first.
+        const inset = 0.15
+        const legs: Point[] = [
+          [f.x + inset, f.y + inset],
+          [f.x + f.w - inset, f.y + inset],
+          [f.x + inset, f.y + f.d - inset],
+          [f.x + f.w - inset, f.y + f.d - inset],
+        ]
+        for (const [lx, ly] of legs) {
+          const a = project(o.mode, lx, ly, 0)
+          const b = project(o.mode, lx, ly, top - t)
+          svg += `<line class="hv-furnleg" x1="${r1(a[0])}" y1="${r1(a[1])}" x2="${r1(b[0])}" y2="${r1(b[1])}"/>`
+        }
+      }
+      return svg + box(o, cx, cy, f.w, f.d, top - t, top, 'hv-furn')
+    }
+    case 'bed': {
+      const frame = zm(o, 0.3)
+      const head = bedHead(floor, f)
+      const m = 0.08
+      // The mattress, a little in from the frame, and the pillow across the head end.
+      const p = 0.55
+      const pillow =
+        head === 'up'
+          ? { x: f.x + m * 2, y: f.y + m * 2, w: f.w - m * 4, d: p }
+          : head === 'down'
+            ? { x: f.x + m * 2, y: f.y + f.d - m * 2 - p, w: f.w - m * 4, d: p }
+            : head === 'left'
+              ? { x: f.x + m * 2, y: f.y + m * 2, w: p, d: f.d - m * 4 }
+              : { x: f.x + f.w - m * 2 - p, y: f.y + m * 2, w: p, d: f.d - m * 4 }
+      return (
+        box(o, cx, cy, f.w, f.d, 0, frame, 'hv-furn') +
+        box(o, cx, cy, f.w - m * 2, f.d - m * 2, frame, top, 'hv-bed') +
+        box(
+          o,
+          pillow.x + pillow.w / 2,
+          pillow.y + pillow.d / 2,
+          pillow.w,
+          pillow.d,
+          top,
+          top + zm(o, 0.08),
+          'hv-pillow',
+        )
+      )
+    }
+    case 'island':
+      // The worktop overhangs the block a little, as an island's does.
+      return (
+        box(o, cx, cy, Math.max(0.2, f.w - 0.12), Math.max(0.2, f.d - 0.12), 0, top - zm(o, 0.04), 'hv-furn') +
+        box(o, cx, cy, f.w, f.d, top - zm(o, 0.04), top, 'hv-worktop')
+      )
+    default:
+      return box(o, cx, cy, f.w, f.d, 0, top, 'hv-furn')
+  }
+}
+
 /** What an appliance's badge says: its power draw while it runs, when it reports one. */
 function applianceText(d: LiveDevice): string {
   if (d.reachable && d.on && d.power !== undefined) return formatPower(d.power)
@@ -708,6 +807,14 @@ export function renderFloor(
     }
   }
 
+  // Furniture, depth-sorted with the walls and appliances by its centre.
+  for (const f of floor.furniture ?? []) {
+    items.push({
+      depth: f.x + f.w / 2 + f.y + f.d / 2,
+      svg: `<g pointer-events="none">${furniturePiece(o, floor, f)}</g>`,
+    })
+  }
+
   // Radiators, against their walls. One is hot while a heating circuit that
   // serves its room is running, and takes the colour of that water.
   for (const rad of floor.radiators ?? []) {
@@ -937,7 +1044,7 @@ export function renderFloor(
         const color = d.color ?? p.color ?? WARM_LIGHT
         const k = clamp((d.brightness ?? 80) / 100, 0.08, 1)
         const mount = lightMount(floor, p)
-        const z = zm(o, LAMP_HEIGHT[mount])
+        const z = zm(o, lampHeight(floor, p, mount))
         // A shade over the bulb for a standing lamp, a dome for one hanging,
         // a flat lens set into the side of a pool.
         const shade =
@@ -967,7 +1074,14 @@ export function renderFloor(
         const parts: string[] = []
         if (d.temperature !== undefined) parts.push(`${d.temperature.toFixed(1)}°`)
         if (d.humidity !== undefined && !o.compact) parts.push(`${Math.round(d.humidity)}%`)
-        svg = marker(o, d, p.x, p.y, lift(0.55), pill(parts.join('  ') || d.name))
+        svg = marker(
+          o,
+          d,
+          p.x,
+          p.y,
+          lift(Math.max(0.55, standsOn(floor, p) * Z + 0.2)),
+          pill(parts.join('  ') || d.name),
+        )
         break
       }
       case 'switch':
@@ -976,7 +1090,7 @@ export function renderFloor(
           d,
           p.x,
           p.y,
-          lift(0.45),
+          lift(Math.max(0.45, standsOn(floor, p) * Z + 0.2)),
           `<rect class="hv-pill${d.on ? ' hv-on' : ''}" x="-11" y="-11" width="22" height="22" rx="6"/>${ICON.power(!!d.on)}`,
         )
         break
@@ -1105,7 +1219,7 @@ export function renderFloor(
         svg = marker(o, d, p.x, p.y, lift(0.5), pill(stateText(d) || d.name))
         break
       default:
-        svg = marker(o, d, p.x, p.y, lift(0.45), pill(stateText(d) || d.name))
+        svg = marker(o, d, p.x, p.y, lift(Math.max(0.45, standsOn(floor, p) * Z + 0.2)), pill(stateText(d) || d.name))
     }
     push(depth, svg)
   }

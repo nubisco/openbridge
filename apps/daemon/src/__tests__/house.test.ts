@@ -113,6 +113,24 @@ describe('validateHousePlan', () => {
     expect('radiators' in validateHousePlan(p).floors[0]).toBe(false)
   })
 
+  it('keeps furniture in quarter metres, and refuses what does not fit the plot', () => {
+    const p = plan()
+    // Raw input, as a client sends it: unknown fields and bad values included.
+    const raw = p.floors[0] as unknown as { furniture?: Array<Record<string, unknown>> }
+    raw.furniture = [{ id: 'f1', kind: 'table', x: 2.5, y: 3, w: 3.5, d: 1.5, height: 0.723, extra: 1 }]
+    expect(validateHousePlan(p).floors[0].furniture).toEqual([
+      { id: 'f1', kind: 'table', x: 2.5, y: 3, w: 3.5, d: 1.5, height: 0.72 },
+    ])
+    raw.furniture[0].kind = 'sofa'
+    expect(() => validateHousePlan(p)).toThrow(/furniture\[0\]\.kind: must be one of table, cabinet, island, bed/)
+    raw.furniture[0] = { id: 'f1', kind: 'bed', x: 2.25, y: 3, w: 4, d: 4 }
+    expect(() => validateHousePlan(p)).toThrow(/furniture\[0\]\.x: must be a multiple of 0.5/)
+    raw.furniture[0] = { id: 'f1', kind: 'bed', x: 2, y: 3, w: 400, d: 4 }
+    expect(() => validateHousePlan(p)).toThrow(/furniture\[0\]\.w/)
+    delete raw.furniture
+    expect('furniture' in validateHousePlan(p).floors[0]).toBe(false)
+  })
+
   it('keeps how a lamp is mounted and what a device is drawn as', () => {
     const p = plan()
     Object.assign(p.floors[0].placements[0], { mount: 'floor' })

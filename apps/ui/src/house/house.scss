@@ -617,3 +617,62 @@
     animation: none;
   }
 }
+
+// Furniture: plain volumes in one quiet tone, so the plan never imposes a style.
+.hv-furn,
+.hv-worktop,
+.hv-bed,
+.hv-pillow {
+  fill: #ddd6ca;
+  stroke: #a59c8c;
+  stroke-width: 0.7;
+  stroke-linejoin: round;
+}
+.hv-furn.hv-t {
+  fill: #ebe6dd;
+}
+.hv-furn.hv-s {
+  fill: #cfc7b9;
+}
+.hv-worktop {
+  fill: #e4e1db;
+}
+.hv-worktop.hv-t {
+  fill: #f4f2ee;
+}
+.hv-bed {
+  fill: #ecebe8;
+}
+.hv-bed.hv-t {
+  fill: #f8f7f4;
+}
+.hv-pillow {
+  fill: #f2f1ee;
+}
+.hv-pillow.hv-t {
+  fill: #ffffff;
+}
+.hv-furnleg {
+  stroke: #a59c8c;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+}
+// In the editor: an outline on the blueprint, with its name.
+.hv-efurn rect {
+  fill: rgba(255, 255, 255, 0.12);
+  stroke: #e3eefa;
+  stroke-width: 1.2;
+  stroke-dasharray: 4 3;
+  cursor: move;
+}
+.hv-efurn.hv-sel rect {
+  stroke: #fff;
+  stroke-width: 2;
+  stroke-dasharray: none;
+  fill: rgba(255, 255, 255, 0.22);
+}
+.hv-efurn text {
+  fill: #e3eefa;
+  text-anchor: middle;
+  pointer-events: none;
+}

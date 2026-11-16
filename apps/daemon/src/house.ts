@@ -144,6 +144,25 @@ export interface HouseRadiator {
   side: 'up' | 'down' | 'left' | 'right'
 }
 
+/** What a piece of furniture is. Drawn as plain shapes, so the plan never imposes a style. */
+export const FURNITURE_KINDS = ['table', 'cabinet', 'island', 'bed'] as const
+
+/**
+ * A piece of furniture: a rectangle on the floor, in half cells (a quarter
+ * metre), `w` along x and `d` along y. It is there to make the plan read as
+ * the home, and so a lamp put on a table stands on it.
+ */
+export interface HouseFurniture {
+  id: string
+  kind: (typeof FURNITURE_KINDS)[number]
+  x: number
+  y: number
+  w: number
+  d: number
+  /** Height in metres, when it is not the usual one for its kind. */
+  height?: number
+}
+
 export interface HouseFloor {
   id: string
   name: string
@@ -154,6 +173,8 @@ export interface HouseFloor {
   placements: HousePlacement[]
   /** Absent on a plan saved before radiators existed. */
   radiators?: HouseRadiator[]
+  /** Absent on a plan saved before furniture existed. */
+  furniture?: HouseFurniture[]
 }
 
 export interface HousePlan {
@@ -181,7 +202,16 @@ export class HouseValidationError extends Error {}
 
 // ─── Validation ─────────────────────────────────────────────────────────────
 
-const LIMITS = { floors: 12, rooms: 300, openings: 600, placements: 500, radiators: 300, plot: 400, name: 80 }
+const LIMITS = {
+  floors: 12,
+  rooms: 300,
+  openings: 600,
+  placements: 500,
+  radiators: 300,
+  furniture: 400,
+  plot: 400,
+  name: 80,
+}
 const ID = /^[A-Za-z0-9_-]{1,64}$/
 const REF = /^(device|accessory):[^\s]{1,200}$/
 const COLOR = /^#[0-9a-fA-F]{6}$/
@@ -338,6 +368,36 @@ export function validateHousePlan(raw: unknown): HousePlan {
             return { id: rid, x, y, axis: r.axis, len, side: r.side as HouseRadiator['side'] }
           })
 
+    const furnitureIds = new Set<string>()
+    const furniture =
+      f.furniture === undefined
+        ? []
+        : arr(f.furniture, `${fp}.furniture`, LIMITS.furniture).map((uRaw, ui): HouseFurniture => {
+            const up = `${fp}.furniture[${ui}]`
+            const u = obj(uRaw, up)
+            const uid = id(u.id, `${up}.id`)
+            if (furnitureIds.has(uid)) fail(`${up}.id`, `'${uid}' is used twice`)
+            furnitureIds.add(uid)
+            if (!(FURNITURE_KINDS as readonly unknown[]).includes(u.kind))
+              fail(`${up}.kind`, `must be one of ${FURNITURE_KINDS.join(', ')}`)
+            const x = half(u.x, `${up}.x`, 0, plot.w - 0.5)
+            const y = half(u.y, `${up}.y`, 0, plot.h - 0.5)
+            const out: HouseFurniture = {
+              id: uid,
+              kind: u.kind as HouseFurniture['kind'],
+              x,
+              y,
+              w: half(u.w, `${up}.w`, 0.5, plot.w - x),
+              d: half(u.d, `${up}.d`, 0.5, plot.h - y),
+            }
+            if (u.height !== undefined) {
+              if (typeof u.height !== 'number' || !Number.isFinite(u.height) || u.height < 0.1 || u.height > 3)
+                fail(`${up}.height`, 'must be from 0.1 to 3 metres')
+              out.height = Math.round(u.height * 100) / 100
+            }
+            return out
+          })
+
     const placements = arr(f.placements, `${fp}.placements`, LIMITS.placements).map((plRaw, pi): HousePlacement => {
       const pp = `${fp}.placements[${pi}]`
       const pl = obj(plRaw, pp)
@@ -384,6 +444,7 @@ export function validateHousePlan(raw: unknown): HousePlan {
 
     const floor: HouseFloor = { id: fid, name: name(f.name, `${fp}.name`), level, rooms, openings, placements }
     if (radiators.length) floor.radiators = radiators
+    if (furniture.length) floor.furniture = furniture
     return floor
   })
 

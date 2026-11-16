@@ -7,7 +7,17 @@
  * turns the few lengths that are really metres (wall height, how high a lamp
  * hangs) into cells.
  */
-import type { HouseFloor, HouseLightMount, HouseOpening, HousePlan, HouseRadiator, HouseRect, HouseRoom } from '@/api'
+import type {
+  HouseFloor,
+  HouseFurniture,
+  HouseFurnitureKind,
+  HouseLightMount,
+  HouseOpening,
+  HousePlan,
+  HouseRadiator,
+  HouseRect,
+  HouseRoom,
+} from '@/api'
 
 /** Screen pixels per cell before the stage scales to fit. */
 export const S = 20
@@ -546,12 +556,43 @@ export function circuitPath(origin: { x: number; y: number }, rooms: HouseRoom[]
   return pts.filter((p, i) => i === 0 || p[0] !== pts[i - 1][0] || p[1] !== pts[i - 1][1])
 }
 
+// ─── Furniture ──────────────────────────────────────────────────────────────
+
+/** The usual height of each kind, in metres: a dining table, a sideboard, a kitchen island, a bed. */
+export const FURNITURE_HEIGHT: Record<HouseFurnitureKind, number> = { table: 0.75, cabinet: 0.9, island: 0.9, bed: 0.5 }
+
+export const furnitureHeight = (f: Pick<HouseFurniture, 'kind' | 'height'>) => f.height ?? FURNITURE_HEIGHT[f.kind]
+
+/** The piece of furniture a point stands on, the highest if pieces overlap. */
+export function furnitureAt(floor: HouseFloor, x: number, y: number): HouseFurniture | undefined {
+  let best: HouseFurniture | undefined
+  for (const f of floor.furniture ?? []) {
+    if (x < f.x || x > f.x + f.w || y < f.y || y > f.y + f.d) continue
+    if (!best || furnitureHeight(f) > furnitureHeight(best)) best = f
+  }
+  return best
+}
+
+/**
+ * The end of a bed its head is at: the short end nearer a wall of its room,
+ * which is how a bed is placed. Ties go to the end further back on the plan.
+ */
+export function bedHead(floor: HouseFloor, f: HouseFurniture): 'up' | 'down' | 'left' | 'right' {
+  const room = roomAt(floor, f.x + f.w / 2, f.y + f.d / 2)
+  const b = room ? roomBox(room) : { x: 0, y: 0, w: f.x + f.w, h: f.y + f.d }
+  if (f.d >= f.w) return f.y - b.y <= b.y + b.h - (f.y + f.d) ? 'up' : 'down'
+  return f.x - b.x <= b.x + b.w - (f.x + f.w) ? 'left' : 'right'
+}
+
 /**
  * How a light is mounted. Unset means the ceiling, except in a pool, where a
- * light is underwater: nobody hangs a lamp over the water.
+ * light is underwater (nobody hangs a lamp over the water), and on a piece
+ * of furniture, where it is a lamp standing on it.
  */
 export function lightMount(floor: HouseFloor, p: { x: number; y: number; mount?: HouseLightMount }): HouseLightMount {
-  return p.mount ?? (roomAt(floor, p.x, p.y)?.kind === 'pool' ? 'pool' : 'ceiling')
+  if (p.mount) return p.mount
+  if (roomAt(floor, p.x, p.y)?.kind === 'pool') return 'pool'
+  return furnitureAt(floor, p.x, p.y) ? 'table' : 'ceiling'
 }
 
 // ─── Turning the view ───────────────────────────────────────────────────────
@@ -608,6 +649,7 @@ function quarterTurn(plan: HousePlan): HousePlan {
           side: r.side === 'left' ? ('up' as const) : ('down' as const),
         }
       }),
+      furniture: f.furniture?.map((u) => ({ ...u, x: H - (u.y + u.d), y: u.x, w: u.d, d: u.w })),
       placements: f.placements.map((p) => ({
         ...p,
         x: H - p.y,
