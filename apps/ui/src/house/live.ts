@@ -72,6 +72,7 @@ const NATIVE_KIND: Record<string, LiveKind> = {
   camera: 'camera',
   shutter: 'shutter',
   outlet: 'switch',
+  valve: 'switch',
 }
 
 /** What a relay was re-presented as in HomeKit beats the plugin's own guess. */
@@ -103,6 +104,7 @@ export function fromNative(d: NativeDevice & { homekitType?: string | null }): L
   if (kind === 'gate' && typeof t.state === 'string') out.gateState = t.state as LiveDevice['gateState']
   if (d.homekitType === 'outlet' || (!d.homekitType && d.widgetType === 'outlet')) out.defaultLook = 'outlet'
   if (kind === 'dehumidifier') out.defaultLook = 'dehumidifier'
+  if (d.widgetType === 'valve') out.defaultLook = 'tap'
   return out
 }
 
@@ -127,6 +129,9 @@ const HAP_KIND: Record<string, LiveKind> = {
   HumidifierDehumidifier: 'dehumidifier',
   GarageDoorOpener: 'gate',
   CameraRTPStreamManagement: 'camera',
+  // A water timer on a garden tap, or a sprinkler controller.
+  Valve: 'switch',
+  IrrigationSystem: 'switch',
 }
 
 export function primaryService(acc: Accessory): AccessoryService | undefined {
@@ -171,6 +176,7 @@ export function fromAccessory(acc: Accessory): LiveDevice | null {
   out.target = num(v('TargetTemperature')) ?? num(v('HeatingThresholdTemperature'))
   out.humidity = num(v('CurrentRelativeHumidity'))
   if (svc.name === 'Outlet') out.defaultLook = 'outlet'
+  if (svc.name === 'Valve' || svc.name === 'IrrigationSystem') out.defaultLook = 'tap'
   if (kind === 'dehumidifier') out.defaultLook = 'dehumidifier'
   const door = num(v('CurrentDoorState'))
   if (door !== undefined) out.gateState = DOOR_STATE[door]
@@ -256,6 +262,7 @@ export const LOOK_LABEL: Record<HouseLook, string> = {
   dehumidifier: 'Dehumidifier',
   vacuum: 'Robot vacuum',
   mower: 'Lawn mower',
+  tap: 'Garden tap',
 }
 
 export const KIND_LABEL: Record<LiveKind, string> = {

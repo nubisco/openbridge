@@ -558,30 +558,84 @@ export function circuitPath(origin: { x: number; y: number }, rooms: HouseRoom[]
 
 // ─── Furniture ──────────────────────────────────────────────────────────────
 
-/** The usual height of each kind, in metres: a dining table, a sideboard, a kitchen island, a bed. */
-export const FURNITURE_HEIGHT: Record<HouseFurnitureKind, number> = { table: 0.75, cabinet: 0.9, island: 0.9, bed: 0.5 }
+/**
+ * The usual height of each kind, in metres. A shelf unit is a bookcase, a
+ * parasol and a pergola are their tops, and a rug lies flat.
+ */
+export const FURNITURE_HEIGHT: Record<HouseFurnitureKind, number> = {
+  table: 0.75,
+  cabinet: 0.9,
+  island: 0.9,
+  bed: 0.5,
+  sofa: 0.8,
+  shelves: 1.8,
+  rug: 0.01,
+  bath: 0.55,
+  shower: 2,
+  toilet: 0.8,
+  basin: 0.86,
+  lounger: 0.35,
+  parasol: 2.3,
+  planter: 0.5,
+  pergola: 2.5,
+}
 
 export const furnitureHeight = (f: Pick<HouseFurniture, 'kind' | 'height'>) => f.height ?? FURNITURE_HEIGHT[f.kind]
+
+/** What a lamp or a sensor can stand on. Nothing stands on a rug, a sofa or a pergola. */
+const SURFACES = new Set<HouseFurnitureKind>(['table', 'cabinet', 'island', 'bed', 'shelves', 'basin'])
 
 /** The piece of furniture a point stands on, the highest if pieces overlap. */
 export function furnitureAt(floor: HouseFloor, x: number, y: number): HouseFurniture | undefined {
   let best: HouseFurniture | undefined
   for (const f of floor.furniture ?? []) {
+    if (!SURFACES.has(f.kind)) continue
     if (x < f.x || x > f.x + f.w || y < f.y || y > f.y + f.d) continue
     if (!best || furnitureHeight(f) > furnitureHeight(best)) best = f
   }
   return best
 }
 
+export type Side = 'up' | 'down' | 'left' | 'right'
+
 /**
- * The end of a bed its head is at: the short end nearer a wall of its room,
- * which is how a bed is placed. Ties go to the end further back on the plan.
+ * Pieces with a back, and where it can be: a bed's head and a lounger's
+ * backrest are at a short end, a sofa's back and a shelf unit's are along a
+ * long side.
  */
-export function bedHead(floor: HouseFloor, f: HouseFurniture): 'up' | 'down' | 'left' | 'right' {
+export const FURNITURE_BACK: Partial<Record<HouseFurnitureKind, 'short' | 'long'>> = {
+  bed: 'short',
+  lounger: 'short',
+  toilet: 'short',
+  sofa: 'long',
+  shelves: 'long',
+  basin: 'long',
+}
+
+export const oppositeSide = (s: Side): Side => ({ up: 'down', down: 'up', left: 'right', right: 'left' })[s] as Side
+/** A side after a quarter turn clockwise, as seen from above. */
+export const clockwiseSide = (s: Side): Side => ({ up: 'right', right: 'down', down: 'left', left: 'up' })[s] as Side
+
+/**
+ * The side a piece's back is on: the one the person set, or else the
+ * possible side nearest a wall of its room, which is how a bed or a sofa is
+ * placed. Ties go to the side further back on the plan.
+ */
+export function furnitureBack(floor: HouseFloor, f: HouseFurniture): Side {
+  if (f.back) return f.back
   const room = roomAt(floor, f.x + f.w / 2, f.y + f.d / 2)
   const b = room ? roomBox(room) : { x: 0, y: 0, w: f.x + f.w, h: f.y + f.d }
-  if (f.d >= f.w) return f.y - b.y <= b.y + b.h - (f.y + f.d) ? 'up' : 'down'
-  return f.x - b.x <= b.x + b.w - (f.x + f.w) ? 'left' : 'right'
+  const gap: Record<Side, number> = {
+    up: f.y - b.y,
+    down: b.y + b.h - (f.y + f.d),
+    left: f.x - b.x,
+    right: b.x + b.w - (f.x + f.w),
+  }
+  const along = FURNITURE_BACK[f.kind] ?? 'short'
+  const ends: Side[] = f.d >= f.w ? ['up', 'down'] : ['left', 'right']
+  const sides: Side[] = f.d >= f.w ? ['left', 'right'] : ['up', 'down']
+  const options = f.w === f.d ? (['up', 'left', 'down', 'right'] as Side[]) : along === 'short' ? ends : sides
+  return options.reduce((best, s) => (gap[s] < gap[best] ? s : best))
 }
 
 /**
@@ -649,7 +703,14 @@ function quarterTurn(plan: HousePlan): HousePlan {
           side: r.side === 'left' ? ('up' as const) : ('down' as const),
         }
       }),
-      furniture: f.furniture?.map((u) => ({ ...u, x: H - (u.y + u.d), y: u.x, w: u.d, d: u.w })),
+      furniture: f.furniture?.map((u) => ({
+        ...u,
+        x: H - (u.y + u.d),
+        y: u.x,
+        w: u.d,
+        d: u.w,
+        ...(u.back ? { back: clockwiseSide(u.back) } : {}),
+      })),
       placements: f.placements.map((p) => ({
         ...p,
         x: H - p.y,

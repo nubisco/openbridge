@@ -613,6 +613,7 @@
   .hv-flow,
   .hv-waves.hv-on .hv-wave,
   .hv-apdrum.hv-spin,
+  .hv-tapwater,
   .hv-pulse {
     animation: none;
   }
@@ -674,5 +675,112 @@
 .hv-efurn text {
   fill: #e3eefa;
   text-anchor: middle;
+  pointer-events: none;
+}
+.hv-shelf {
+  stroke: #a59c8c;
+  stroke-width: 1;
+}
+.hv-rugs {
+  opacity: 0.85;
+}
+.hv-rug {
+  fill: #e6dfd2;
+  stroke: #b9ad98;
+  stroke-width: 0.8;
+}
+.hv-rugin {
+  fill: none;
+  stroke: #cfc5b4;
+  stroke-width: 0.8;
+}
+.hv-bathin {
+  fill: #dcecf2;
+  stroke: #b9cdd6;
+  stroke-width: 0.8;
+}
+.hv-sink {
+  fill: #e6eef1;
+  stroke: #b9c4c8;
+  stroke-width: 0.8;
+}
+// Shower glass: the room shows through it.
+.hv-glass {
+  fill: rgba(190, 225, 240, 0.16);
+  stroke: rgba(110, 160, 180, 0.55);
+  stroke-width: 0.8;
+}
+.hv-glass.hv-t {
+  fill: none;
+}
+.hv-pole,
+.hv-post {
+  stroke: #a59c8c;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+.hv-post {
+  stroke-width: 3;
+}
+.hv-canopy {
+  fill: #f3efe7;
+  stroke: #c9bfae;
+  stroke-width: 0.8;
+  opacity: 0.94;
+}
+.hv-plant {
+  fill: #8db36f;
+  stroke: #6f9654;
+  stroke-width: 0.6;
+}
+.hv-plant.hv-t {
+  fill: #a2c785;
+}
+.hv-beam {
+  stroke: #b3a792;
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+.hv-slat {
+  stroke: #c3b8a4;
+  stroke-width: 1.4;
+}
+// A garden tap, and its water while it runs.
+.hv-standpipe {
+  stroke: #8f8b84;
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+.hv-spout {
+  stroke: #8f8b84;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+.hv-handle {
+  fill: #c8553d;
+}
+.hv-drain {
+  fill: rgba(120, 110, 95, 0.25);
+}
+.hv-tapwater {
+  stroke: #3fa9e0;
+  stroke-width: 2;
+  stroke-dasharray: 3 3;
+  animation: hv-flow 0.6s linear infinite;
+}
+.hv-splash {
+  fill: rgba(63, 169, 224, 0.35);
+}
+// In the editor: the side a piece's back is on (a bed's head).
+.hv-efback {
+  stroke: #e3eefa;
+  stroke-width: 4;
+  stroke-linecap: round;
+  pointer-events: none;
+}
+.hv-efpillow {
+  fill: rgba(255, 255, 255, 0.35);
+  stroke: #e3eefa;
+  stroke-width: 1;
   pointer-events: none;
 }

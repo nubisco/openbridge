@@ -193,7 +193,7 @@
               @update:model-value="(v: number | null) => setPieceSize('d', v)"
             />
           </NbField>
-          <NbField v-slot="{ id }" label="Height (m)" orientation="stack">
+          <NbField v-if="piece.kind !== 'rug'" v-slot="{ id }" label="Height (m)" orientation="stack">
             <NbNumberInput
               :id="id"
               :model-value="furnitureHeight(piece)"
@@ -204,9 +204,14 @@
               @update:model-value="setPieceHeight"
             />
           </NbField>
-          <p class="house-editor__muted">
-            A lamp put on it stands on it. Drag it to move it, or drag a corner to resize it.
-          </p>
+          <p class="house-editor__muted">{{ pieceText }}</p>
+          <div v-if="FURNITURE_BACK[piece.kind]" class="house-editor__row house-editor__row--tight">
+            <NbButton size="sm" variant="secondary" icon="arrows-down-up" @click="flipPiece">
+              {{
+                piece.kind === 'bed' || piece.kind === 'lounger' ? 'Head at the other end' : 'Back to the other side'
+              }}
+            </NbButton>
+          </div>
           <div class="house-editor__row">
             <NbButton size="sm" variant="secondary" icon="arrow-clockwise" @click="turnPiece">Turn</NbButton>
             <NbButton size="sm" variant="danger" icon="trash" @click="deletePiece">Remove</NbButton>
@@ -398,6 +403,7 @@ import type {
 } from '@/api'
 import {
   CELLS_PER_M,
+  FURNITURE_BACK,
   FURNITURE_HEIGHT,
   S,
   clamp,
@@ -413,6 +419,7 @@ import {
   addFloor,
   addFurniture,
   addOpenWall,
+  flipFurniture,
   moveFurniture,
   removeFurniture,
   resizeFurniture,
@@ -719,8 +726,30 @@ function setPieceHeight(v: number | null) {
 }
 
 function turnPiece() {
-  if (piece.value) turnFurniture(props.plan, piece.value)
+  if (piece.value) turnFurniture(props.plan, floor.value, piece.value)
 }
+
+function flipPiece() {
+  if (piece.value) flipFurniture(floor.value, piece.value)
+}
+
+/** What the panel says about the selected piece: where its back is, and what stands on it. */
+const pieceText = computed(() => {
+  const f = piece.value
+  if (!f) return ''
+  const parts: string[] = []
+  if (FURNITURE_BACK[f.kind]) {
+    parts.push(
+      f.kind === 'bed' || f.kind === 'lounger'
+        ? 'The heavy line on the plan is its head.'
+        : 'The heavy line on the plan is its back.',
+    )
+  }
+  if (['table', 'cabinet', 'island', 'bed', 'shelves', 'basin'].includes(f.kind))
+    parts.push('A lamp put on it stands on it.')
+  parts.push('Drag it to move it, or drag a corner to resize it.')
+  return parts.join(' ')
+})
 
 function deletePiece() {
   if (piece.value) removeFurniture(floor.value, piece.value.id)

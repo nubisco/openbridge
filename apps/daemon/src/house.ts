@@ -104,7 +104,7 @@ export const LIGHT_MOUNTS = ['ceiling', 'wall', 'floor', 'table', 'pool'] as con
  * What a device is drawn as. The bridge sees a smart plug or a relay, and the
  * person knows it is the fridge, so they say so on the plan.
  */
-export const DEVICE_LOOKS = ['outlet', 'tv', 'fridge', 'washer', 'dehumidifier', 'vacuum', 'mower'] as const
+export const DEVICE_LOOKS = ['outlet', 'tv', 'fridge', 'washer', 'dehumidifier', 'vacuum', 'mower', 'tap'] as const
 
 export interface HousePlacement {
   /** `device:<id>` for a native device, `accessory:<uuid>` for a HomeKit accessory. */
@@ -145,7 +145,23 @@ export interface HouseRadiator {
 }
 
 /** What a piece of furniture is. Drawn as plain shapes, so the plan never imposes a style. */
-export const FURNITURE_KINDS = ['table', 'cabinet', 'island', 'bed'] as const
+export const FURNITURE_KINDS = [
+  'table',
+  'cabinet',
+  'island',
+  'bed',
+  'sofa',
+  'shelves',
+  'rug',
+  'bath',
+  'shower',
+  'toilet',
+  'basin',
+  'lounger',
+  'parasol',
+  'planter',
+  'pergola',
+] as const
 
 /**
  * A piece of furniture: a rectangle on the floor, in half cells (a quarter
@@ -161,6 +177,11 @@ export interface HouseFurniture {
   d: number
   /** Height in metres, when it is not the usual one for its kind. */
   height?: number
+  /**
+   * The side its back is on (a bed's head, a sofa's back), when the person
+   * set it. Unset, it is the side nearest a wall.
+   */
+  back?: 'up' | 'down' | 'left' | 'right'
 }
 
 export interface HouseFloor {
@@ -394,6 +415,11 @@ export function validateHousePlan(raw: unknown): HousePlan {
               if (typeof u.height !== 'number' || !Number.isFinite(u.height) || u.height < 0.1 || u.height > 3)
                 fail(`${up}.height`, 'must be from 0.1 to 3 metres')
               out.height = Math.round(u.height * 100) / 100
+            }
+            if (u.back !== undefined) {
+              if (u.back !== 'up' && u.back !== 'down' && u.back !== 'left' && u.back !== 'right')
+                fail(`${up}.back`, 'must be up, down, left or right')
+              out.back = u.back
             }
             return out
           })
