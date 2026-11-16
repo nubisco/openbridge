@@ -148,11 +148,13 @@ jobs:
                    @nubisco/openbridge"
           pending="$(echo $pending)"
 
-          # npm indexes provenance asynchronously and has taken over two minutes.
-          # Every outstanding package is re-checked on each pass against one
-          # shared deadline, so the wait is the slowest package rather than the
-          # sum of six separate budgets.
-          deadline=$(( $(date +%s) + 420 ))
+          # npm indexes provenance asynchronously. It has taken over two minutes,
+          # and for 1.9.0 over seven: four of six packages were attested only
+          # after a seven-minute wait gave up, which failed a good release and
+          # skipped its deploy. Every outstanding package is re-checked on each
+          # pass against one shared deadline, so the wait is the slowest package
+          # rather than the sum of six separate budgets.
+          deadline=$(( $(date +%s) + 1200 ))
 
           while :; do
             still=""

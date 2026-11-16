@@ -102,4 +102,19 @@ jobs:
         if: steps.release.outputs.current == 'true'
         env:
           VERSION: ${{ steps.release.outputs.version }}
-        run: ssh -o BatchMode=yes pi-deploy "openbridge $VERSION"
+        # The bridge is on Wi-Fi and drops off for a minute now and then: the 1.10.0 deploy failed
+        # on one 75-second connect timeout to a bridge that was up. So a failure to reach it is
+        # retried, five times over about five minutes. Only that: ssh exits 255 for its own errors,
+        # and any other code is the deploy script's verdict (including a rollback), which is final.
+        # A retry after a connection dropped mid-deploy is safe, because the script checks what is
+        # running first and does nothing when the version is already up and healthy.
+        run: |
+          for attempt in 1 2 3 4 5; do
+            status=0
+            ssh -o BatchMode=yes -o ConnectTimeout=20 pi-deploy "openbridge $VERSION" || status=$?
+            [ "$status" -ne 255 ] && exit "$status"
+            echo "::warning::could not reach the bridge (attempt $attempt of 5)"
+            [ "$attempt" -lt 5 ] && sleep 60
+          done
+          echo "::error::the bridge did not answer in five attempts. Not deployed."
+          exit 255
