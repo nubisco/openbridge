@@ -581,17 +581,35 @@ export function renderFloor(
       const supply = d?.supply ?? d?.temperature
       const color = waterColor(supply ?? 20)
       // On another floor the circuit rises at the same spot, so it starts there.
-      const pts = circuitPath({ x: p.x, y: p.y }, rooms)
+      const pts = circuitPath({ x: p.x, y: p.y }, rooms, floor)
       if (!pts) continue
       pipes += pipe(o, pts, supply, d?.return, flowing)
       if (f.id !== floor.id) {
-        // The riser: where the circuit arrives from the floor its source is on.
+        // Where the circuit arrives from the floor its source is on.
         const at = project(o.mode, p.x, p.y)
-        if (iso && o.all && o.offsets[f.id] && o.offsets[floor.id]) {
-          const len = o.offsets[f.id][1] - o.offsets[floor.id][1] - 0.8 * CELLS_PER_M * S
-          pipes += `<line x1="${r1(at[0])}" y1="${r1(at[1])}" x2="${r1(at[0])}" y2="${r1(at[1] + len)}" stroke="${color}" stroke-width="4" stroke-linecap="round" opacity="0.9"/>`
-        }
         pipes += `<circle cx="${r1(at[0])}" cy="${r1(at[1])}" r="${r1(5 * o.unit)}" class="hv-riser" stroke="${color}" stroke-width="${r1(2 * o.unit)}"/>`
+      }
+    }
+  }
+
+  // Risers between floors, in the stacked view. Each is drawn with the lower
+  // of its two floors, so the floor above, painted later, covers it where it
+  // goes up through the slab, and it never crosses that floor's garden.
+  if (iso && o.all) {
+    for (const f of plan.floors) {
+      for (const p of f.placements) {
+        if (!p.circuitRooms?.length) continue
+        const d = devices.get(p.ref)
+        const color = waterColor(d?.supply ?? d?.temperature ?? 20)
+        const served = plan.floors.filter((g) => g.id !== f.id && g.rooms.some((r) => p.circuitRooms!.includes(r.id)))
+        for (const g of served) {
+          const lower = f.level < g.level ? f : g
+          const upper = lower === f ? g : f
+          if (lower.id !== floor.id || !o.offsets[upper.id] || !o.offsets[floor.id]) continue
+          const at = project(o.mode, p.x, p.y)
+          const rise = o.offsets[upper.id][1] - o.offsets[floor.id][1]
+          pipes += `<line x1="${r1(at[0])}" y1="${r1(at[1])}" x2="${r1(at[0])}" y2="${r1(at[1] + rise)}" stroke="${color}" stroke-width="4" stroke-linecap="round" opacity="0.9"/>`
+        }
       }
     }
   }

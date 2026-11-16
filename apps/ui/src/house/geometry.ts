@@ -321,20 +321,149 @@ export function flippedSide(o: HouseOpening): HouseOpening['opens'] {
 // ─── Heating circuits ───────────────────────────────────────────────────────
 
 /**
+ * A pipe route between two points on a floor, along the grid, that keeps to
+ * the house: water pipes run inside walled rooms (through the walls between
+ * them), never across a pool, and over open ground only where there is no
+ * other way, such as from a heat pump standing in the garden to the house.
+ * A* over cells, 4-connected, so the route is made of straight runs.
+ */
+export function routeInside(floor: HouseFloor, from: Point, to: Point): Point[] {
+  const rooms = floor.rooms
+  let x0 = Math.min(from[0], to[0])
+  let y0 = Math.min(from[1], to[1])
+  let x1 = Math.max(from[0], to[0])
+  let y1 = Math.max(from[1], to[1])
+  for (const r of rooms) {
+    const b = roomBox(r)
+    x0 = Math.min(x0, b.x)
+    y0 = Math.min(y0, b.y)
+    x1 = Math.max(x1, b.x + b.w)
+    y1 = Math.max(y1, b.y + b.h)
+  }
+  x0 = Math.floor(x0) - 2
+  y0 = Math.floor(y0) - 2
+  const W = Math.ceil(x1) + 2 - x0
+  const H = Math.ceil(y1) + 2 - y0
+  const cost = new Float64Array(W * H)
+  for (let j = 0; j < H; j++) {
+    for (let i = 0; i < W; i++) {
+      const r = roomAt(floor, x0 + i + 0.5, y0 + j + 0.5)
+      cost[j * W + i] = r?.kind === 'pool' ? Infinity : r?.kind === 'room' ? 1 : 8
+    }
+  }
+  const cellOf = (p: Point) => {
+    const i = clamp(Math.floor(p[0] - x0), 0, W - 1)
+    const j = clamp(Math.floor(p[1] - y0), 0, H - 1)
+    return j * W + i
+  }
+  const start = cellOf(from)
+  const goal = cellOf(to)
+  const gi = goal % W
+  const gj = Math.floor(goal / W)
+  const g = new Float64Array(W * H).fill(Infinity)
+  const prev = new Int32Array(W * H).fill(-1)
+  g[start] = 0
+  // A small binary heap of [f, cell].
+  const heap: Array<[number, number]> = [[0, start]]
+  const push = (e: [number, number]) => {
+    heap.push(e)
+    let k = heap.length - 1
+    while (k > 0) {
+      const up = (k - 1) >> 1
+      if (heap[up][0] <= heap[k][0]) break
+      ;[heap[up], heap[k]] = [heap[k], heap[up]]
+      k = up
+    }
+  }
+  const pop = () => {
+    const top = heap[0]
+    const last = heap.pop() as [number, number]
+    if (heap.length) {
+      heap[0] = last
+      let k = 0
+      for (;;) {
+        const l = 2 * k + 1
+        const r = l + 1
+        let m = k
+        if (l < heap.length && heap[l][0] < heap[m][0]) m = l
+        if (r < heap.length && heap[r][0] < heap[m][0]) m = r
+        if (m === k) break
+        ;[heap[m], heap[k]] = [heap[k], heap[m]]
+        k = m
+      }
+    }
+    return top
+  }
+  while (heap.length) {
+    const [, c] = pop()
+    if (c === goal) break
+    const ci = c % W
+    const cj = Math.floor(c / W)
+    for (const [di, dj] of [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ]) {
+      const ni = ci + di
+      const nj = cj + dj
+      if (ni < 0 || nj < 0 || ni >= W || nj >= H) continue
+      const n = nj * W + ni
+      // A turn costs a little, so the route prefers long straight runs.
+      const turn = prev[c] >= 0 && prev[c] !== c - di - dj * W ? 0.3 : 0
+      const ng = g[c] + cost[n] + turn
+      if (ng < g[n]) {
+        g[n] = ng
+        prev[n] = c
+        push([ng + Math.abs(ni - gi) + Math.abs(nj - gj), n])
+      }
+    }
+  }
+  if (g[goal] === Infinity) return [from, [to[0], from[1]], to]
+  const cells: number[] = []
+  for (let c = goal; c !== -1; c = prev[c]) cells.unshift(c)
+  const raw: Point[] = [from]
+  for (const c of cells) raw.push([x0 + (c % W) + 0.5, y0 + Math.floor(c / W) + 0.5])
+  raw.push(to)
+  // Straight runs only: a step that moves on both axes gets a corner.
+  const out: Point[] = [raw[0]]
+  for (let k = 1; k < raw.length; k++) {
+    const a = out[out.length - 1]
+    const b = raw[k]
+    if (a[0] !== b[0] && a[1] !== b[1]) out.push([b[0], a[1]])
+    out.push(b)
+  }
+  // Drop points in the middle of a straight run.
+  return out.filter((p, k) => {
+    if (k === 0 || k === out.length - 1) return true
+    const a = out[k - 1]
+    const b = out[k + 1]
+    return !((a[0] === p[0] && p[0] === b[0]) || (a[1] === p[1] && p[1] === b[1]))
+  })
+}
+
+/**
  * A plausible pipe route from a heating device through the rooms it serves on
  * one floor, as a polyline in cells.
  *
  * Not where the pipes really are: nobody knows that, and asking would make
  * the plan a plumbing survey. It is a serpentine through each room, nearest
  * room first, like underfloor heating, so the eye reads "this circuit warms
- * these rooms" and the colour along it reads supply to return.
+ * these rooms" and the colour along it reads supply to return. Between rooms
+ * it keeps to the house (see routeInside), so it never crosses the pool or
+ * the garden in the middle of a U-shaped house.
  */
-export function circuitPath(origin: { x: number; y: number }, rooms: HouseRoom[]): Point[] | null {
+export function circuitPath(origin: { x: number; y: number }, rooms: HouseRoom[], floor?: HouseFloor): Point[] | null {
   // Each part of an L-shaped room gets its own run of the serpentine.
   const rects: HouseRect[] = rooms.flatMap(roomRects)
   if (!rects.length) return null
   let cur = { x: origin.x, y: origin.y }
   const pts: Point[] = [[cur.x, cur.y]]
+  const go = (to: Point) => {
+    const from = pts[pts.length - 1]
+    if (floor) pts.push(...routeInside(floor, from, to).slice(1))
+    else pts.push([to[0], from[1]], to)
+  }
   const left = rects.slice()
   const dist = (a: { x: number; y: number }, r: HouseRect) =>
     Math.abs(a.x - (r.x + r.w / 2)) + Math.abs(a.y - (r.y + r.h / 2))
@@ -349,7 +478,7 @@ export function circuitPath(origin: { x: number; y: number }, rooms: HouseRoom[]
     if (!ys.length) ys.push(r.y + r.h / 2)
     if (Math.abs(cur.y - ys[ys.length - 1]) < Math.abs(cur.y - ys[0])) ys.reverse()
     let xi = Math.abs(cur.x - xs[0]) <= Math.abs(cur.x - xs[1]) ? 0 : 1
-    pts.push([xs[xi], cur.y], [xs[xi], ys[0]])
+    go([xs[xi], ys[0]])
     ys.forEach((y, i) => {
       if (i > 0) pts.push([xs[xi], y])
       xi = 1 - xi
@@ -357,7 +486,8 @@ export function circuitPath(origin: { x: number; y: number }, rooms: HouseRoom[]
     })
     cur = { x: xs[xi], y: ys[ys.length - 1] }
   }
-  pts.push([cur.x, origin.y + 0.6], [origin.x + 0.5, origin.y + 0.6])
+  // The return, back beside where the flow left.
+  go([origin.x + 0.5, origin.y + 0.6])
   return pts.filter((p, i) => i === 0 || p[0] !== pts[i - 1][0] || p[1] !== pts[i - 1][1])
 }
 
