@@ -1,3 +1,10 @@
+## [1.13.2](https://github.com/nubisco/openbridge/compare/v1.13.1...v1.13.2) (2026-11-16)
+
+
+### Bug Fixes
+
+* **house:** heating pipes stay inside the house, and risers go behind the floor above ([#18](https://github.com/nubisco/openbridge/issues/18)) ([12ccb6f](https://github.com/nubisco/openbridge/commit/12ccb6fe1eb3cad5e3a8f7a8452282c97b05aafb))
+
 ## [1.13.1](https://github.com/nubisco/openbridge/compare/v1.13.0...v1.13.1) (2026-11-16)
 
 
