@@ -555,8 +555,19 @@ export function renderFloor(
     // is drawn once over them, so an L reads as one room with no seam.
     // In the exploded view a tap on a floor's rooms brings that floor forward.
     const pick = o.all ? ` hv-pick" data-plate="${esc(floor.id)}` : ''
+    // Paving is laid flat on the ground: its joints are a pattern in plan
+    // units, turned onto the floor with the same matrix as the room names.
+    const paveId = `hv-pave-${o.mode}`
+    if (r.kind === 'paved' && !defs.includes(`id="${paveId}"`)) {
+      const M = CELLS_PER_M * S
+      defs +=
+        `<pattern id="${paveId}" patternUnits="userSpaceOnUse" width="${M}" height="${M / 2}"${iso ? ` patternTransform="${ISO_FLOOR_MATRIX}"` : ''}>` +
+        `<rect width="${M}" height="${M / 2}" fill="#ddd5c7"/>` +
+        `<path d="M0,0.5H${M}M${M / 2},0V${M / 2}" stroke="#c6bcaa" stroke-width="1" fill="none"/></pattern>`
+    }
+    const fill = r.kind === 'paved' ? ` style="fill:url(#${paveId})"` : ''
     for (const pts of shapes) {
-      base += `<polygon class="hv-room-fill hv-k-${r.kind}${pick}" points="${pts}"/>`
+      base += `<polygon class="hv-room-fill hv-k-${r.kind}${pick}"${fill} points="${pts}"/>`
       if (tint) base += `<polygon class="hv-tint" fill="${tint}" fill-opacity="0.55" points="${pts}"/>`
     }
     let outline = ''

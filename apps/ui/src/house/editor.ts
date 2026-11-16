@@ -56,7 +56,7 @@ function uniqueId(prefix: string, taken: (id: string) => boolean): string {
 
 const roomTaken = (plan: HousePlan) => (id: string) => plan.floors.some((f) => f.rooms.some((r) => r.id === id))
 
-const KIND_NAME: Record<HouseRoom['kind'], string> = { room: 'Room', outdoor: 'Garden', pool: 'Pool' }
+const KIND_NAME: Record<HouseRoom['kind'], string> = { room: 'Room', outdoor: 'Garden', paved: 'Paving', pool: 'Pool' }
 
 export function addRoom(
   plan: HousePlan,

@@ -25,7 +25,8 @@ export const HOUSE_VERSION = 1
 /** Metres per grid cell. */
 export const HOUSE_GRID = 0.5
 
-export type HouseRoomKind = 'room' | 'outdoor' | 'pool'
+/** `paved` is hard ground with no walls: a terrace, a path, the deck round a pool. */
+export type HouseRoomKind = 'room' | 'outdoor' | 'paved' | 'pool'
 
 export interface HouseRoom {
   id: string
@@ -244,7 +245,8 @@ export function validateHousePlan(raw: unknown): HousePlan {
       if (roomIds.has(rid)) fail(`${rp}.id`, `'${rid}' is used twice`)
       roomIds.add(rid)
       const kind = r.kind
-      if (kind !== 'room' && kind !== 'outdoor' && kind !== 'pool') fail(`${rp}.kind`, 'must be room, outdoor or pool')
+      if (kind !== 'room' && kind !== 'outdoor' && kind !== 'paved' && kind !== 'pool')
+        fail(`${rp}.kind`, 'must be room, outdoor, paved or pool')
       const x = int(r.x, `${rp}.x`, 0, plot.w - 1)
       const y = int(r.y, `${rp}.y`, 0, plot.h - 1)
       const w = int(r.w, `${rp}.w`, 1, plot.w - x)
