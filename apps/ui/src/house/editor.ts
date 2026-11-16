@@ -15,6 +15,7 @@ import {
   doorSwing,
   esc,
   openingFits,
+  openingsOverlap,
   openingUnits,
   r1,
   roomArea,
@@ -266,10 +267,53 @@ export function nearestFreeWindow(floor: HouseFloor, x: number, y: number, reach
 }
 
 /** Whether an opening would sit wholly on wall, clear of every other opening. */
-function fitsFree(floor: HouseFloor, o: HouseOpening): boolean {
+export function fitsFree(floor: HouseFloor, o: HouseOpening): boolean {
+  if (o.len < 1) return false
   const units = wallUnits(floor)
-  const taken = new Set(floor.openings.filter((x) => x.id !== o.id).flatMap(openingUnits))
-  return openingUnits(o).every((k) => units.has(k) && !taken.has(k))
+  return (
+    openingUnits(o).every((k) => units.has(k)) && !floor.openings.some((x) => x.id !== o.id && openingsOverlap(x, o))
+  )
+}
+
+/** Openings move and resize in half cells, a quarter metre. */
+const quarter = (v: number) => Math.round(v * 2) / 2
+
+/**
+ * Leave the wall at `u` out: the whole stretch of it the same two rooms
+ * share, up to the corners or the doors and windows already on it. Two rooms
+ * that run into each other usually have nothing between them at all.
+ */
+export function addOpenWall(floor: HouseFloor, u: WallUnit): HouseOpening | null {
+  const units = wallUnits(floor)
+  const sides = (i: number) => {
+    const x = u.axis === 'h' ? u.x + i : u.x
+    const y = u.axis === 'v' ? u.y + i : u.y
+    const a = u.axis === 'h' ? roomAt(floor, x + 0.5, y - 0.5) : roomAt(floor, x - 0.5, y + 0.5)
+    const b = u.axis === 'h' ? roomAt(floor, x + 0.5, y + 0.5) : roomAt(floor, x + 0.5, y + 0.5)
+    return `${a?.id ?? ''}|${b?.id ?? ''}`
+  }
+  const pair = sides(0)
+  const probe = (i: number): HouseOpening => ({
+    id: '',
+    type: 'open',
+    axis: u.axis,
+    x: u.axis === 'h' ? u.x + i : u.x,
+    y: u.axis === 'v' ? u.y + i : u.y,
+    len: 1,
+  })
+  const free = (i: number) =>
+    units.has(openingUnits(probe(i))[0]) &&
+    sides(i) === pair &&
+    !floor.openings.some((x) => openingsOverlap(x, probe(i)))
+  if (!free(0)) return null
+  let start = 0
+  let end = 1
+  while (free(start - 1)) start--
+  while (free(end)) end++
+  const id = uniqueId('open', (x) => floor.openings.some((o) => o.id === x))
+  const o: HouseOpening = { ...probe(start), id, len: end - start }
+  floor.openings.push(o)
+  return o
 }
 
 /**
@@ -281,7 +325,7 @@ function fitsFree(floor: HouseFloor, o: HouseOpening): boolean {
 export function moveOpening(floor: HouseFloor, o: HouseOpening, x: number, y: number, grab: number): boolean {
   const u = nearestWall(floor, x, y)
   if (!u) return false
-  const start = Math.round((u.axis === 'h' ? x : y) - grab)
+  const start = quarter((u.axis === 'h' ? x : y) - grab)
   const next: HouseOpening = { ...o, axis: u.axis, x: u.axis === 'h' ? start : u.x, y: u.axis === 'v' ? start : u.y }
   // A side is named for the wall's direction, so a turned door opens the default way.
   if (next.axis !== o.axis) delete next.opens
@@ -291,9 +335,9 @@ export function moveOpening(floor: HouseFloor, o: HouseOpening, x: number, y: nu
   return true
 }
 
-/** Drag one end of an opening along its wall, never under a cell long. */
+/** Drag one end of an opening along its wall, in quarter metres, never under half a metre long. */
 export function resizeOpening(floor: HouseFloor, o: HouseOpening, end: 'start' | 'end', x: number, y: number): boolean {
-  const at = Math.round(o.axis === 'h' ? x : y)
+  const at = quarter(o.axis === 'h' ? x : y)
   const s0 = o.axis === 'h' ? o.x : o.y
   const s1 = s0 + o.len
   const start = end === 'start' ? Math.min(at, s1 - 1) : s0
@@ -359,7 +403,7 @@ export function tidy(plan: HousePlan): HousePlan {
     const kept = new Set<string>()
     f.openings = f.openings.filter((o) => {
       const ok = openingFits(o, units)
-      if (ok) kept.add(o.id)
+      if (ok && o.type === 'window') kept.add(o.id)
       return ok
     })
     for (const p of f.placements) {
@@ -387,10 +431,7 @@ export interface EditorDrawOptions {
   showHandles: boolean
 }
 
-const metres = (cells: number) => {
-  const m = cells / CELLS_PER_M
-  return Number.isInteger(m) ? String(m) : m.toFixed(1)
-}
+const metres = (cells: number) => String(Math.round((cells / CELLS_PER_M) * 100) / 100)
 
 export function renderEditor(
   plan: HousePlan,
@@ -449,6 +490,7 @@ export function renderEditor(
     const sel = w.opening && w.opening.id === o.selectedOpening ? ' hv-sel' : ''
     if (w.type === 'wall') h += `<line class="hv-ewall" ${c}/>`
     else if (w.type === 'window') h += `<line class="hv-ewinb" ${c}/><line class="hv-ewin${sel}" ${c}/>`
+    else if (w.type === 'open') h += `<line class="hv-eopen${sel}" ${c}/>`
     else if (w.opening) {
       const sw = doorSwing(w.opening)
       const len = w.opening.len * S

@@ -144,10 +144,11 @@ const draft = ref<HousePlan | null>(null)
 const saving = ref(false)
 
 // The live house runs edge to edge. The empty state and the editor keep the
-// page's padding, as every other page does.
+// page's padding, as every other page does. The rail folds to icons while the
+// House is open, to give the plan the width.
 watch(
   () => mode.value === 'live' && house.hasPlan,
-  (bleed) => layout.setPage('House', { fullBleed: bleed }),
+  (bleed) => layout.setPage('House', { fullBleed: bleed, compactNav: true }),
   { immediate: true },
 )
 

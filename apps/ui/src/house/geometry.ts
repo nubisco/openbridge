@@ -116,13 +116,31 @@ export function wallUnits(floor: HouseFloor): Map<string, WallUnit> {
   return units
 }
 
-/** The wall units an opening covers. */
+/** Where an opening starts and ends along its wall, in cells. */
+export function openingSpan(o: HouseOpening): [number, number] {
+  const s = o.axis === 'h' ? o.x : o.y
+  return [s, s + o.len]
+}
+
+/**
+ * The wall units an opening covers, even partly: one that starts a quarter
+ * metre into a unit still needs that unit to be wall.
+ */
 export function openingUnits(o: HouseOpening): string[] {
+  const [s, e] = openingSpan(o)
   const out: string[] = []
-  for (let i = 0; i < o.len; i++) {
-    out.push(o.axis === 'h' ? unitKey(o.x + i, o.y, 'h') : unitKey(o.x, o.y + i, 'v'))
+  for (let i = Math.floor(s); i < Math.ceil(e); i++) {
+    out.push(o.axis === 'h' ? unitKey(i, o.y, 'h') : unitKey(o.x, i, 'v'))
   }
   return out
+}
+
+/** Whether two openings claim the same stretch of the same wall line. */
+export function openingsOverlap(a: HouseOpening, b: HouseOpening): boolean {
+  if (a.axis !== b.axis || (a.axis === 'h' ? a.y !== b.y : a.x !== b.x)) return false
+  const [s1, e1] = openingSpan(a)
+  const [s2, e2] = openingSpan(b)
+  return s1 < e2 && s2 < e1
 }
 
 /** Whether an opening still sits entirely on wall, after rooms moved under it. */
@@ -132,7 +150,7 @@ export function openingFits(o: HouseOpening, units: Map<string, WallUnit>): bool
 
 export interface WallRun {
   /** `wall`, or the opening this run is. */
-  type: 'wall' | 'door' | 'window'
+  type: 'wall' | 'door' | 'window' | 'open'
   opening: HouseOpening | null
   axis: 'h' | 'v'
   x1: number
@@ -144,32 +162,47 @@ export interface WallRun {
 /**
  * Walls merged into straight runs, cut where doors and windows sit. Drawing a
  * run as one shape instead of one per cell keeps the scene to a few hundred
- * nodes and joins without seams.
+ * nodes and joins without seams. An opening may start or end part way into a
+ * cell, so the cuts fall wherever the openings say, not on the grid.
  */
 export function wallRuns(floor: HouseFloor): WallRun[] {
   const units = wallUnits(floor)
-  const owner = new Map<string, HouseOpening>()
+  // Openings that still fit, first come first served where two overlap.
+  const kept: HouseOpening[] = []
   for (const o of floor.openings) {
-    if (!openingFits(o, units)) continue
-    for (const k of openingUnits(o)) owner.set(k, o)
+    if (openingFits(o, units) && !kept.some((k) => openingsOverlap(k, o))) kept.push(o)
   }
   const runs: WallRun[] = []
   for (const axis of ['h', 'v'] as const) {
     const list = [...units.values()]
       .filter((u) => u.axis === axis)
       .sort((a, b) => (axis === 'h' ? a.y - b.y || a.x - b.x : a.x - b.x || a.y - b.y))
-    let cur: WallRun | null = null
+    // Unbroken stretches of wall on one line, as [line, start, end].
+    const lines: Array<[number, number, number]> = []
     for (const u of list) {
-      const o = owner.get(unitKey(u.x, u.y, axis)) ?? null
-      const x2 = axis === 'h' ? u.x + 1 : u.x
-      const y2 = axis === 'h' ? u.y : u.y + 1
-      if (cur && cur.opening === o && cur.x2 === u.x && cur.y2 === u.y) {
-        cur.x2 = x2
-        cur.y2 = y2
-        continue
+      const line = axis === 'h' ? u.y : u.x
+      const at = axis === 'h' ? u.x : u.y
+      const cur = lines[lines.length - 1]
+      if (cur && cur[0] === line && cur[2] === at) cur[2] = at + 1
+      else lines.push([line, at, at + 1])
+    }
+    const run = (line: number, a: number, b: number, o: HouseOpening | null): WallRun =>
+      axis === 'h'
+        ? { type: o ? o.type : 'wall', opening: o, axis, x1: a, y1: line, x2: b, y2: line }
+        : { type: o ? o.type : 'wall', opening: o, axis, x1: line, y1: a, x2: line, y2: b }
+    for (const [line, start, end] of lines) {
+      const inside = kept
+        .filter((o) => o.axis === axis && (axis === 'h' ? o.y : o.x) === line)
+        .map((o) => ({ o, span: openingSpan(o) }))
+        .filter(({ span }) => span[0] >= start && span[1] <= end)
+        .sort((a, b) => a.span[0] - b.span[0])
+      let at = start
+      for (const { o, span } of inside) {
+        if (span[0] > at) runs.push(run(line, at, span[0], null))
+        runs.push(run(line, span[0], span[1], o))
+        at = span[1]
       }
-      cur = { type: o ? o.type : 'wall', opening: o, axis, x1: u.x, y1: u.y, x2, y2 }
-      runs.push(cur)
+      if (at < end) runs.push(run(line, at, end, null))
     }
   }
   return runs

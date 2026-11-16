@@ -61,15 +61,28 @@
   stroke-width: 5;
   stroke-linejoin: round;
 }
-.hv-ripple {
-  stroke: rgba(255, 255, 255, 0.6);
-  stroke-width: 1.5;
+// Waves on a pool, drawn flat in plan units. A wave moves by exactly one
+// wavelength (WAVE in scene.ts, 1.4 cells of 20) per cycle, so it loops
+// without a jump. Rows alternate direction, which reads as chop.
+.hv-wave {
+  stroke: rgba(255, 255, 255, 0.35);
+  stroke-width: 1.2;
   fill: none;
-  stroke-dasharray: 10 16;
   stroke-linecap: round;
 }
-.hv-ripple.hv-on {
-  animation: hv-flow 2.4s linear infinite;
+.hv-waves.hv-on .hv-wave {
+  stroke: rgba(255, 255, 255, 0.7);
+  stroke-width: 1.6;
+  animation: hv-wave 2.2s linear infinite;
+}
+.hv-waves.hv-on .hv-wave.hv-w2 {
+  animation-duration: 3.1s;
+  animation-direction: reverse;
+}
+// Light on floors and walls never takes a tap meant for the room under it.
+.hv-wash,
+.hv-walllit {
+  pointer-events: none;
 }
 .hv-rlabel {
   fill: rgba(78, 62, 42, 0.6);
@@ -465,7 +478,15 @@
   fill: none;
   pointer-events: none;
 }
+.hv-eopen {
+  stroke: #bfe2ff;
+  stroke-width: 1.5;
+  stroke-dasharray: 4 5;
+  opacity: 0.7;
+  pointer-events: none;
+}
 .hv-ewin.hv-sel,
+.hv-eopen.hv-sel,
 .hv-edoor.hv-sel {
   stroke: #fff;
   stroke-width: 3.5;
@@ -519,6 +540,11 @@
     stroke-dashoffset: -18;
   }
 }
+@keyframes hv-wave {
+  to {
+    transform: translateX(-28px);
+  }
+}
 @keyframes hv-pulse {
   50% {
     opacity: 0.35;
@@ -530,7 +556,7 @@
     transition: none;
   }
   .hv-flow,
-  .hv-ripple.hv-on,
+  .hv-waves.hv-on .hv-wave,
   .hv-apdrum.hv-spin,
   .hv-pulse {
     animation: none;

@@ -80,7 +80,7 @@
         </div>
       </NbPanel>
 
-      <NbPanel v-else-if="opening" :title="opening.type === 'door' ? 'Door' : 'Window'" :flat="true">
+      <NbPanel v-else-if="opening" :title="OPENING_TITLE[opening.type]" :flat="true">
         <NbField v-slot="{ id }" label="Type" orientation="stack">
           <NbSelect :id="id" v-model="opening.type" :options="OPENING_KINDS" size="sm" />
         </NbField>
@@ -89,8 +89,8 @@
             :id="id"
             :model-value="opening.len / CELLS_PER_M"
             :min="0.5"
-            :max="10"
-            :step="0.5"
+            :max="20"
+            :step="0.25"
             size="sm"
             @update:model-value="setOpeningLength"
           />
@@ -102,6 +102,9 @@
             <NbButton size="sm" variant="secondary" icon="arrows-down-up" @click="flipSide">Open other way</NbButton>
           </div>
         </template>
+        <p v-if="opening.type === 'open'" class="house-editor__muted">
+          No wall is drawn here, so the two rooms run into each other. Drag an end to leave part of the wall standing.
+        </p>
         <p class="house-editor__muted">Drag it along the wall to move it, or drag an end to resize it.</p>
         <div class="house-editor__row">
           <span />
@@ -279,12 +282,14 @@
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useConfirm, usePhoneLayout, useToast } from '@nubisco/ui'
 import type { HouseFloor, HouseLightMount, HouseLook, HouseOpening, HousePlan, HouseRect, HouseRoom } from '@/api'
-import { CELLS_PER_M, S, clamp, flippedSide, openingUnits, roomArea, roomRects, wallUnits } from '@/house/geometry'
+import { CELLS_PER_M, S, clamp, flippedSide, roomArea, roomRects } from '@/house/geometry'
 import {
   addFloor,
+  addOpenWall,
   addOpening,
   addPart,
   addRoom,
+  fitsFree,
   moveOpening,
   nearestWall,
   openingAt,
@@ -323,6 +328,7 @@ const TOOLS = [
   { id: 'pool', label: 'Pool' },
   { id: 'door', label: 'Door' },
   { id: 'window', label: 'Window' },
+  { id: 'open', label: 'Open wall' },
 ]
 const ROOM_KINDS = [
   { label: 'Room (has walls)', value: 'room' },
@@ -332,7 +338,9 @@ const ROOM_KINDS = [
 const OPENING_KINDS = [
   { label: 'Door', value: 'door' },
   { label: 'Window', value: 'window' },
+  { label: 'Open, no wall', value: 'open' },
 ]
+const OPENING_TITLE = { door: 'Door', window: 'Window', open: 'Open wall' } as const
 const GATE_AXES = [
   { label: 'Left to right', value: 'h' },
   { label: 'Front to back', value: 'v' },
@@ -353,7 +361,7 @@ const GLOW_COLOURS = [
   { label: 'Red', value: '#ff5a4d' },
 ]
 
-type Tool = 'select' | 'room' | 'outdoor' | 'pool' | 'door' | 'window'
+type Tool = 'select' | 'room' | 'outdoor' | 'pool' | 'door' | 'window' | 'open'
 const isAreaTool = (t: Tool): t is 'room' | 'outdoor' | 'pool' => t === 'room' || t === 'outdoor' || t === 'pool'
 const tool = ref<Tool>('room')
 const floorId = ref(props.initialFloor ?? props.plan.floors[0].id)
@@ -418,13 +426,11 @@ const help = computed(() => {
     pool: 'Drag on the grid to draw a pool.',
     door: 'Tap a wall to put a door there. Drag a door to move it, or its ends to resize it.',
     window: 'Tap a wall to put a window there. Drag a window to move it, or its ends to resize it.',
+    open: 'Tap a wall that is not really there, such as between a kitchen and the living room, and it is left out.',
   }[tool.value]
 })
 
-const metres = (cells: number) => {
-  const m = cells / CELLS_PER_M
-  return Number.isInteger(m) ? String(m) : m.toFixed(1)
-}
+const metres = (cells: number) => String(Math.round((cells / CELLS_PER_M) * 100) / 100)
 
 function setTool(id: string) {
   tool.value = id as Tool
@@ -496,17 +502,11 @@ function deleteOpening() {
 function setOpeningLength(v: number | null) {
   const o = opening.value
   if (!o || v === null) return
-  const units = wallUnits(floor.value)
-  const want = clamp(Math.round(v * CELLS_PER_M), 1, 20)
-  // Grow only along wall, and never over another opening.
-  const others = new Set(floor.value.openings.filter((x) => x !== o).flatMap(openingUnits))
-  let len = 1
-  while (len < want) {
-    const next: HouseOpening = { ...o, len: len + 1 }
-    const k = openingUnits(next)[len]
-    if (!units.has(k) || others.has(k)) break
-    len++
-  }
+  // In quarter metres, growing only along wall and never over another opening.
+  const want = clamp(Math.round(v * CELLS_PER_M * 2) / 2, 1, 40)
+  let len = o.len
+  const step = want > len ? 0.5 : -0.5
+  while (len !== want && fitsFree(floor.value, { ...o, len: len + step })) len += step
   o.len = len
 }
 
@@ -663,13 +663,14 @@ function onDown(e: PointerEvent) {
     const y0 = clamp(Math.round(p.y), 0, ph)
     drag = { type: 'draw', x0, y0 }
     draft.value = { x: x0, y: y0, w: 0, h: 0 }
-  } else if (tool.value === 'door' || tool.value === 'window') {
+  } else if (tool.value === 'door' || tool.value === 'window' || tool.value === 'open') {
     if (!grabOpening(t, p)) {
       const u = nearestWall(floor.value, p.x, p.y)
       clearSelection()
       if (!u) return
       const existing = openingAt(floor.value, u)
-      const o = existing ?? addOpening(floor.value, u, tool.value)
+      const o =
+        existing ?? (tool.value === 'open' ? addOpenWall(floor.value, u) : addOpening(floor.value, u, tool.value))
       if (o) selOpening.value = o.id
       if (existing)
         drag = {

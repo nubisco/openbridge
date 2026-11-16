@@ -8,7 +8,7 @@
  * elements (`role="button"`, a label, `data-ref`), and the view handles taps
  * and keys on the stage by delegation.
  */
-import type { HouseFloor, HouseLook, HousePlacement, HousePlan } from '@/api'
+import type { HouseFloor, HouseLook, HousePlacement, HousePlan, HouseRoom } from '@/api'
 import {
   CELLS_PER_M,
   ISO_FLOOR_MATRIX,
@@ -22,6 +22,7 @@ import {
   project,
   r1,
   roomAt,
+  roomBox,
   roomTempColor,
   roomOutline,
   roomRects,
@@ -134,6 +135,80 @@ function poly(o: SceneOptions, pts: Array<[number, number, number]>): string {
       return `${r1(p[0])},${r1(p[1])}`
     })
     .join(' ')
+}
+
+/** A pool wave's length, in cells. The CSS animation moves a wave by exactly this. */
+const WAVE = 1.4
+
+/**
+ * A pool's water: lit through in the colour of a light placed in it, and
+ * with waves moving across it while its pump or filter runs. Still water
+ * keeps a few faint, unmoving lines so it still reads as water.
+ */
+function poolWater(
+  o: SceneOptions,
+  floor: HouseFloor,
+  r: HouseRoom,
+  shapes: string[],
+  placed: Array<{ p: HousePlacement; d: LiveDevice }>,
+  lit: Array<{ p: HousePlacement; room: HouseRoom | undefined; color: string; k: number }>,
+  roomOf: (p: HousePlacement) => HouseRoom | undefined,
+): string {
+  const cp = `hv-cp-${svgId(floor.id)}-${svgId(r.id)}`
+  // The pump or filter: anything but a light in the pool, or a plain switch
+  // standing beside it (within 1.5 m), which is where a pool pump usually is.
+  const near = (x: number, y: number) =>
+    roomRects(r).some(
+      (q) => Math.hypot(x - clamp(x, q.x, q.x + q.w), y - clamp(y, q.y, q.y + q.h)) <= 1.5 * CELLS_PER_M,
+    )
+  const running = placed.some(
+    ({ p, d }) =>
+      d.on &&
+      d.reachable &&
+      d.kind !== 'light' &&
+      (roomOf(p) === r || (d.kind === 'switch' && !p.look && near(p.x, p.y))),
+  )
+  const light = lit.find((l) => l.room === r)
+  let out = ''
+  if (light) {
+    const { color, k } = light
+    const id = `hv-pl-${svgId(floor.id)}-${svgId(r.id)}`
+    const c = project(o.mode, light.p.x, light.p.y)
+    const box = roomBox(r)
+    const R = Math.max(box.w, box.h) * S * 0.8
+    out +=
+      `<defs><filter id="${id}-b" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="${r1(7 * o.unit + 3)}"/></filter>` +
+      `<radialGradient id="${id}-g" gradientUnits="userSpaceOnUse" cx="${r1(c[0])}" cy="${r1(c[1])}" r="${r1(R)}">` +
+      `<stop offset="0" stop-color="#fff" stop-opacity="${(0.35 * k).toFixed(2)}"/><stop offset="0.25" stop-color="${color}" stop-opacity="0.4"/>` +
+      `<stop offset="1" stop-color="${color}" stop-opacity="0"/></radialGradient></defs>` +
+      // The glow spilling over the stone edge, then the water itself.
+      `<g pointer-events="none" fill="none" stroke="${color}" stroke-width="${r1(16 * o.unit + 6)}" stroke-opacity="${(0.25 + 0.35 * k).toFixed(2)}" filter="url(#${id}-b)">` +
+      shapes.map((pts) => `<polygon points="${pts}"/>`).join('') +
+      '</g>' +
+      `<g pointer-events="none" fill="${color}" fill-opacity="${(0.45 + 0.4 * k).toFixed(2)}">` +
+      shapes.map((pts) => `<polygon points="${pts}"/>`).join('') +
+      '</g>' +
+      `<g pointer-events="none" clip-path="url(#${cp})">${shapes.map((pts) => `<polygon points="${pts}" fill="url(#${id}-g)"/>`).join('')}</g>`
+  }
+  // Waves are drawn flat in plan units and laid on the floor with the same
+  // matrix as the room names, so they move across the water, not the screen.
+  const amp = running ? 0.11 : 0.035
+  let waves = ''
+  let row = 0
+  for (const q of roomRects(r)) {
+    for (let y = q.y + 0.55; y < q.y + q.h - 0.25; y += 0.75, row++) {
+      let d = ''
+      for (let x = q.x - WAVE; x <= q.x + q.w + WAVE + 0.01; x += WAVE / 8) {
+        const yy = y + amp * Math.sin(((x - q.x) / WAVE) * 2 * Math.PI + row * 1.7)
+        d += `${d ? 'L' : 'M'}${r1(x * S)},${r1(yy * S)}`
+      }
+      waves += `<path class="hv-wave${row % 2 ? ' hv-w2' : ''}" d="${d}"/>`
+    }
+  }
+  out +=
+    `<g pointer-events="none" clip-path="url(#${cp})"><g transform="${o.mode === 'iso' ? ISO_FLOOR_MATRIX : ''}">` +
+    `<g class="hv-waves${running ? ' hv-on' : ''}">${waves}</g></g></g>`
+  return out
 }
 
 /**
@@ -394,6 +469,17 @@ export function renderFloor(
 
   // Rooms, with the overlay tint from a sensor in the room.
   const roomOf = (p: HousePlacement) => roomAt(floor, p.x, p.y)
+  // The lights that are on, each with the room it lights.
+  const lit = placed
+    .filter(({ d }) => d.kind === 'light' && d.on && d.reachable)
+    .map(({ p, d }) => ({
+      p,
+      room: roomOf(p),
+      color: d.color ?? p.color ?? WARM_LIGHT,
+      k: clamp((d.brightness ?? 80) / 100, 0.08, 1),
+    }))
+  // A light in a pool lights the water, not the floor.
+  let water = ''
   // Biggest first, so a room drawn inside another is painted on top of it.
   for (const r of roomsOutsideIn(floor.rooms)) {
     const rects = roomRects(r)
@@ -431,16 +517,7 @@ export function renderFloor(
       outline += `M${r1(a[0])},${r1(a[1])}L${r1(b[0])},${r1(b[1])}`
     }
     base += `<path class="hv-room-edge hv-k-${r.kind}" d="${outline}"/>`
-    if (r.kind === 'pool') {
-      const running = placed.some(({ p, d }) => roomOf(p) === r && d.on && d.kind !== 'light')
-      for (const q of rects) {
-        for (let yy = q.y + 1.2; yy < q.y + q.h - 0.4; yy += 1.6) {
-          const a = project(o.mode, q.x + 0.6, yy)
-          const c = project(o.mode, q.x + q.w - 0.6, yy)
-          base += `<path class="hv-ripple${running ? ' hv-on' : ''}" d="M${r1(a[0])},${r1(a[1])}L${r1(c[0])},${r1(c[1])}"/>`
-        }
-      }
-    }
+    if (r.kind === 'pool') water += poolWater(o, floor, r, shapes, placed, lit, roomOf)
     if (o.labels || extra) {
       // On the largest part, which is where the eye looks for the room's name.
       const q = rects.reduce((a, b) => (b.w * b.h > a.w * a.h ? b : a))
@@ -451,23 +528,38 @@ export function renderFloor(
     }
   }
 
-  // Light pools on the floor, clipped to the room the lamp is in.
-  for (const { p, d } of placed) {
-    if (d.kind !== 'light' || !d.on || !d.reachable) continue
-    const k = clamp((d.brightness ?? 80) / 100, 0.08, 1)
-    const color = d.color ?? p.color ?? WARM_LIGHT
-    const r = roomOf(p)
+  // Light on the floor, clipped to the room the lamp is in: the whole room
+  // takes the light's colour, brightest under the lamp, so a room with the
+  // lights on reads as lit from across the house.
+  for (const { p, room: r, color, k } of lit) {
+    if (r?.kind === 'pool') continue
+    const mount = p.mount ?? 'ceiling'
+    const clip = r ? ` clip-path="url(#hv-cp-${svgId(floor.id)}-${svgId(r.id)})"` : ''
+    if (r) {
+      const wash = { ceiling: 0.34, wall: 0.26, floor: 0.22, table: 0.14 }[mount] * (0.35 + 0.65 * k)
+      glow += `<g class="hv-wash" fill="${color}" fill-opacity="${wash.toFixed(2)}"${clip}>${roomRects(r)
+        .map(
+          (q) =>
+            `<polygon points="${poly(o, [
+              [q.x, q.y, 0],
+              [q.x + q.w, q.y, 0],
+              [q.x + q.w, q.y + q.h, 0],
+              [q.x, q.y + q.h, 0],
+            ])}"/>`,
+        )
+        .join('')}</g>`
+    }
     // A ceiling light fills the room, a table lamp lights the corner it is in.
-    const reach = { ceiling: [1.3, 2.5], wall: [1, 1.8], floor: [0.9, 1.6], table: [0.7, 1.1] }[p.mount ?? 'ceiling']
+    const reach = { ceiling: [1.3, 2.5], wall: [1, 1.8], floor: [0.9, 1.6], table: [0.7, 1.1] }[mount]
     const R = (reach[0] + reach[1] * k) * CELLS_PER_M
     const c = project(o.mode, p.x, p.y)
     const gid = `hv-lg-${svgId(floor.id)}-${svgId(p.ref)}`
     defs +=
-      `<radialGradient id="${gid}"><stop offset="0" stop-color="${color}" stop-opacity="${(0.3 + 0.6 * k).toFixed(2)}"/>` +
-      `<stop offset="0.5" stop-color="${color}" stop-opacity="${(0.1 + 0.22 * k).toFixed(2)}"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></radialGradient>`
+      `<radialGradient id="${gid}"><stop offset="0" stop-color="${color}" stop-opacity="${(0.45 + 0.5 * k).toFixed(2)}"/>` +
+      `<stop offset="0.45" stop-color="${color}" stop-opacity="${(0.18 + 0.3 * k).toFixed(2)}"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></radialGradient>`
     glow +=
       `<ellipse cx="${r1(c[0])}" cy="${r1(c[1])}" rx="${r1(R * S * (iso ? 1.2247 : 1))}" ry="${r1(R * S * (iso ? 0.7071 : 1))}" ` +
-      `fill="url(#${gid})"${r ? ` clip-path="url(#hv-cp-${svgId(floor.id)}-${svgId(r.id)})"` : ''} pointer-events="none"/>`
+      `fill="url(#${gid})"${clip} pointer-events="none"/>`
   }
 
   // Heating circuits. A device on one floor can serve rooms on another, so
@@ -502,7 +594,12 @@ export function renderFloor(
   // Walls, doors, windows, and the shutters that sit on windows.
   const shutters = new Map<string, LiveDevice>()
   for (const { p, d } of placed) if (p.opening) shutters.set(p.opening, d)
+  // The walls of a lit room catch its light, on the side facing into it.
+  const litRooms = new Map<string, { color: string; k: number }>()
+  for (const l of lit) if (l.room && l.room.kind === 'room') litRooms.set(l.room.id, l)
   for (const w of wallRuns(floor)) {
+    // An open stretch is a wall that is not there: nothing to draw.
+    if (w.type === 'open') continue
     const depth = (w.x1 + w.x2 + w.y1 + w.y2) / 2
     const A: Point = [w.x1, w.y1]
     const B: Point = [w.x2, w.y2]
@@ -559,8 +656,19 @@ export function renderFloor(
       const c = `x1="${r1(p[0])}" y1="${r1(p[1])}" x2="${r1(q[0])}" y2="${r1(q[1])}"`
       return `<line class="hv-caprim" ${c}/><line class="hv-cap" ${c}/>`
     }
+    // The view looks in from +x and +y, so the face of a wall it shows is
+    // the one facing the room in front of it, at the higher x or y. That
+    // room's light is what tints it.
+    const mx = (A[0] + B[0]) / 2
+    const my = (A[1] + B[1]) / 2
+    const facing = roomAt(floor, w.axis === 'h' ? mx : mx + 0.25, w.axis === 'h' ? my + 0.25 : my)
+    const glowOn = facing ? litRooms.get(facing.id) : undefined
+    const tint = (z1: number, z2: number) =>
+      glowOn
+        ? `<polygon class="hv-walllit" fill="${glowOn.color}" fill-opacity="${(0.12 + 0.26 * glowOn.k).toFixed(2)}" points="${quad(z1, z2)}"/>`
+        : ''
     if (w.type === 'wall') {
-      svg = `<polygon class="hv-wall" points="${quad(0, H)}"/>${cap(H)}`
+      svg = `<polygon class="hv-wall" points="${quad(0, H)}"/>${tint(0, H)}${cap(H)}`
     } else if (w.type === 'door' && w.opening) {
       const hd = Math.min(H, 1.05 * CELLS_PER_M)
       const sw = doorSwing(w.opening)
@@ -578,10 +686,10 @@ export function renderFloor(
           [B[0], B[1], hd],
           [B[0], B[1], 0],
         ])}"/>`
-      if (H > hd + 0.1) svg += `<polygon class="hv-wall" points="${quad(hd, H)}"/>${cap(H)}`
+      if (H > hd + 0.1) svg += `<polygon class="hv-wall" points="${quad(hd, H)}"/>${tint(hd, H)}${cap(H)}`
     } else {
       const z0 = H * 0.3
-      svg = `<polygon class="hv-wall" points="${quad(0, z0)}"/><polygon class="hv-pane" points="${quad(z0, H)}"/>${cap(H)}`
+      svg = `<polygon class="hv-wall" points="${quad(0, z0)}"/>${tint(0, z0)}<polygon class="hv-pane" points="${quad(z0, H)}"/>${cap(H)}`
       if (sh) {
         const closed = 1 - clamp(sh.position ?? 100, 0, 100) / 100
         const zb = H - (H - z0) * closed
@@ -819,5 +927,5 @@ export function renderFloor(
 
   items.sort((a, b) => a.depth - b.depth)
   marks.sort((a, b) => a.depth - b.depth)
-  return `<defs>${defs}</defs>${base}${glow}${pipes}${items.map((i) => i.svg).join('')}${marks.map((i) => i.svg).join('')}`
+  return `<defs>${defs}</defs>${base}${water}${glow}${pipes}${items.map((i) => i.svg).join('')}${marks.map((i) => i.svg).join('')}`
 }
