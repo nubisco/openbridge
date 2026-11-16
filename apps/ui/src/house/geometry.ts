@@ -7,7 +7,7 @@
  * turns the few lengths that are really metres (wall height, how high a lamp
  * hangs) into cells.
  */
-import type { HouseFloor, HouseOpening, HousePlan, HouseRect, HouseRoom } from '@/api'
+import type { HouseFloor, HouseLightMount, HouseOpening, HousePlan, HouseRect, HouseRoom } from '@/api'
 
 /** Screen pixels per cell before the stage scales to fit. */
 export const S = 20
@@ -489,6 +489,61 @@ export function circuitPath(origin: { x: number; y: number }, rooms: HouseRoom[]
   // The return, back beside where the flow left.
   go([origin.x + 0.5, origin.y + 0.6])
   return pts.filter((p, i) => i === 0 || p[0] !== pts[i - 1][0] || p[1] !== pts[i - 1][1])
+}
+
+/**
+ * How a light is mounted. Unset means the ceiling, except in a pool, where a
+ * light is underwater: nobody hangs a lamp over the water.
+ */
+export function lightMount(floor: HouseFloor, p: { x: number; y: number; mount?: HouseLightMount }): HouseLightMount {
+  return p.mount ?? (roomAt(floor, p.x, p.y)?.kind === 'pool' ? 'pool' : 'ceiling')
+}
+
+// ─── Turning the view ───────────────────────────────────────────────────────
+
+/**
+ * The plan turned a quarter turn clockwise, as seen from above, `turns`
+ * times. The isometric view always looks in from the same corner, so turning
+ * the house is done by turning the plan before drawing it: walls, doors and
+ * devices all keep their depth order and face the right way. Ids and refs
+ * are unchanged, so a tap still names the same device.
+ */
+export function rotatePlan(plan: HousePlan, turns: number): HousePlan {
+  let out = plan
+  for (let t = 0; t < ((turns % 4) + 4) % 4; t++) out = quarterTurn(out)
+  return out
+}
+
+function quarterTurn(plan: HousePlan): HousePlan {
+  // (x, y) goes to (H - y, x): what ran along x now runs along y.
+  const H = plan.plot.h
+  const rect = <T extends HouseRect>(r: T): T => ({ ...r, x: H - (r.y + r.h), y: r.x, w: r.h, h: r.w })
+  const opening = (o: HouseOpening): HouseOpening => {
+    if (o.axis === 'h') {
+      // Along x becomes along y, same direction: the start end stays the start.
+      const opens = o.opens === 'up' ? 'right' : 'left'
+      return { ...o, axis: 'v', x: H - o.y, y: o.x, opens }
+    }
+    // Along y becomes along x, reversed: the start end becomes the end.
+    const opens = o.opens === 'left' ? 'up' : 'down'
+    const hinge = o.hinge === 'end' ? 'start' : 'end'
+    return { ...o, axis: 'h', x: H - o.y - o.len, y: o.x, hinge, opens }
+  }
+  return {
+    ...plan,
+    plot: { w: plan.plot.h, h: plan.plot.w },
+    floors: plan.floors.map((f) => ({
+      ...f,
+      rooms: f.rooms.map((r) => ({ ...rect(r), parts: r.parts?.map(rect) })),
+      openings: f.openings.map(opening),
+      placements: f.placements.map((p) => ({
+        ...p,
+        x: H - p.y,
+        y: p.x,
+        ...(p.axis ? { axis: p.axis === 'h' ? ('v' as const) : ('h' as const) } : {}),
+      })),
+    })),
+  }
 }
 
 // ─── Colour scales ──────────────────────────────────────────────────────────

@@ -18,6 +18,7 @@ import {
   doorSwing,
   esc,
   humidityColor,
+  lightMount,
   lerp,
   project,
   r1,
@@ -37,7 +38,7 @@ import { formatPower, stateText, type LiveDevice } from './live'
 export const WARM_LIGHT = '#ffb45e'
 
 /** How high each kind of light sits, in metres. */
-const LAMP_HEIGHT = { ceiling: 2.35, wall: 1.8, floor: 1.5, table: 0.75 } as const
+const LAMP_HEIGHT = { ceiling: 2.35, wall: 1.8, floor: 1.5, table: 0.75, pool: 0.02 } as const
 
 export interface SceneOptions {
   mode: ViewMode
@@ -121,11 +122,54 @@ function marker(
     `<g class="hv-dev${d.reachable ? '' : ' hv-off'}" data-ref="${esc(d.ref)}" role="button" tabindex="0" ` +
     `aria-label="${label(d)}" transform="translate(${r1(p[0])},${r1(p[1])}) scale(${o.unit.toFixed(4)})">` +
     under +
+    '<g class="hv-badge">' +
     '<circle class="hv-hit" r="20"/>' +
     (sel ? '<circle class="hv-selring" r="18"/>' : '') +
     inner +
-    '</g>'
+    '</g></g>'
   )
+}
+
+/**
+ * Markers that would overlap on screen are pulled apart. The one nearer the
+ * viewer keeps its place, and one behind it rises on a longer stem until it
+ * is clear, so every badge stays readable and still points at its spot.
+ */
+function separate(marks: Array<{ depth: number; svg: string }>, unit: number): void {
+  type Box = { x0: number; y0: number; x1: number; y1: number }
+  const boxes: Box[] = []
+  const at = (svg: string) => {
+    const m = /^<g class="hv-dev[^>]*transform="translate\(([-\d.]+),([-\d.]+)\)/.exec(svg)
+    return m ? [Number(m[1]), Number(m[2])] : null
+  }
+  // Front first: larger screen y is nearer the viewer.
+  const order = marks
+    .map((m, i) => ({ m, i, p: at(m.svg) }))
+    .filter((e): e is typeof e & { p: number[] } => !!e.p)
+    .sort((a, b) => b.p[1] - a.p[1])
+  for (const e of order) {
+    const widths = [...e.m.svg.matchAll(/class="hv-pill[^"]*"[^>]*width="([\d.]+)"/g)].map((m) => Number(m[1]))
+    const w = (Math.max(34, ...widths) + 6) * unit
+    const h = (widths.length ? 26 : 34) * unit
+    const [x, y] = e.p
+    let lift = 0
+    for (let tries = 0; tries < 12; tries++) {
+      const b = { x0: x - w / 2, y0: y - lift - h / 2, x1: x + w / 2, y1: y - lift + h / 2 }
+      const hit = boxes.find((q) => b.x0 < q.x1 && q.x0 < b.x1 && b.y0 < q.y1 && q.y0 < b.y1)
+      if (!hit) {
+        boxes.push(b)
+        break
+      }
+      lift += b.y1 - hit.y0 + 3 * unit
+    }
+    if (lift > 0.5) {
+      const L = r1(lift / unit)
+      e.m.svg = e.m.svg.replace(
+        '<g class="hv-badge">',
+        `<line class="hv-drop hv-leader" x1="0" y1="${-L}" x2="0" y2="0"/><g class="hv-badge" transform="translate(0,${-L})">`,
+      )
+    }
+  }
 }
 
 function poly(o: SceneOptions, pts: Array<[number, number, number]>): string {
@@ -538,7 +582,8 @@ export function renderFloor(
   // lights on reads as lit from across the house.
   for (const { p, room: r, color, k } of lit) {
     if (r?.kind === 'pool') continue
-    const mount = p.mount ?? 'ceiling'
+    const mount = lightMount(floor, p)
+    if (mount === 'pool') continue
     const clip = r ? ` clip-path="url(#hv-cp-${svgId(floor.id)}-${svgId(r.id)})"` : ''
     if (r) {
       const wash = { ceiling: 0.34, wall: 0.26, floor: 0.22, table: 0.14 }[mount] * (0.35 + 0.65 * k)
@@ -777,15 +822,18 @@ export function renderFloor(
         const lit = !!d.on && d.reachable
         const color = d.color ?? p.color ?? WARM_LIGHT
         const k = clamp((d.brightness ?? 80) / 100, 0.08, 1)
-        const mount = p.mount ?? 'ceiling'
+        const mount = lightMount(floor, p)
         const z = zm(o, LAMP_HEIGHT[mount])
-        // A shade over the bulb for a standing lamp, a dome for one hanging.
+        // A shade over the bulb for a standing lamp, a dome for one hanging,
+        // a flat lens set into the side of a pool.
         const shade =
-          mount === 'floor' || mount === 'table'
-            ? `<path class="hv-shade${lit ? ' hv-on' : ''}" d="M-7,-4 L7,-4 L10,5 L-10,5 Z"/>`
-            : mount === 'ceiling'
-              ? `<line class="hv-cord" x1="0" y1="-7" x2="0" y2="-16"/><path class="hv-shade${lit ? ' hv-on' : ''}" d="M-9,1 A9,8 0 0 1 9,1 Z"/>`
-              : `<rect class="hv-shade${lit ? ' hv-on' : ''}" x="-3" y="-9" width="6" height="8" rx="1.5"/>`
+          mount === 'pool'
+            ? `<ellipse class="hv-shade${lit ? ' hv-on' : ''}" rx="10" ry="5" fill-opacity="0.5"/>`
+            : mount === 'floor' || mount === 'table'
+              ? `<path class="hv-shade${lit ? ' hv-on' : ''}" d="M-7,-4 L7,-4 L10,5 L-10,5 Z"/>`
+              : mount === 'ceiling'
+                ? `<line class="hv-cord" x1="0" y1="-7" x2="0" y2="-16"/><path class="hv-shade${lit ? ' hv-on' : ''}" d="M-9,1 A9,8 0 0 1 9,1 Z"/>`
+                : `<rect class="hv-shade${lit ? ' hv-on' : ''}" x="-3" y="-9" width="6" height="8" rx="1.5"/>`
         const bulb = lit
           ? `<circle r="14" fill="${color}" opacity="${(0.22 + 0.3 * k).toFixed(2)}"/><circle class="hv-bulb" r="5.5" fill="${color}"/>`
           : '<circle class="hv-bulb hv-off-bulb" r="5"/>'
@@ -795,8 +843,8 @@ export function renderFloor(
           p.x,
           p.y,
           z,
-          mount === 'ceiling' ? shade + bulb : bulb + shade,
-          mount === 'floor' || mount === 'table' ? 'pole' : 'dotted',
+          mount === 'ceiling' || mount === 'pool' ? shade + bulb : bulb + shade,
+          mount === 'floor' || mount === 'table' ? 'pole' : mount === 'pool' ? 'none' : 'dotted',
         )
         depth += mount === 'ceiling' ? 0.3 : 0
         break
@@ -950,5 +998,6 @@ export function renderFloor(
 
   items.sort((a, b) => a.depth - b.depth)
   marks.sort((a, b) => a.depth - b.depth)
+  separate(marks, o.unit)
   return `<defs>${defs}</defs>${base}${water}${glow}${pipes}${items.map((i) => i.svg).join('')}${marks.map((i) => i.svg).join('')}`
 }

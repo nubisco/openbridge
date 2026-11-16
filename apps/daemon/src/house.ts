@@ -98,7 +98,7 @@ export interface HouseOpening {
 }
 
 /** How a light hangs: from the ceiling, on a wall, or as a floor or table lamp. */
-export const LIGHT_MOUNTS = ['ceiling', 'wall', 'floor', 'table'] as const
+export const LIGHT_MOUNTS = ['ceiling', 'wall', 'floor', 'table', 'pool'] as const
 /**
  * What a device is drawn as. The bridge sees a smart plug or a relay, and the
  * person knows it is the fridge, so they say so on the plan.

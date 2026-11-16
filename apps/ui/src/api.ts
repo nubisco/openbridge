@@ -272,7 +272,7 @@ export interface HouseOpening {
   opens?: 'up' | 'down' | 'left' | 'right'
 }
 
-export type HouseLightMount = 'ceiling' | 'wall' | 'floor' | 'table'
+export type HouseLightMount = 'ceiling' | 'wall' | 'floor' | 'table' | 'pool'
 export type HouseLook = 'outlet' | 'tv' | 'fridge' | 'washer' | 'dehumidifier' | 'vacuum' | 'mower'
 
 export interface HousePlacement {
