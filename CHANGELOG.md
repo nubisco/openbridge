@@ -1,3 +1,10 @@
+## [1.27.1](https://github.com/nubisco/openbridge/compare/v1.27.0...v1.27.1) (2026-11-17)
+
+
+### Bug Fixes
+
+* **security:** other websites cannot use the bridge's API or sockets ([#39](https://github.com/nubisco/openbridge/issues/39)) ([4c80f9e](https://github.com/nubisco/openbridge/commit/4c80f9e701df3e5259eff72277bdb2ecae4a356b))
+
 # [1.27.0](https://github.com/nubisco/openbridge/compare/v1.26.0...v1.27.0) (2026-11-17)
 
 
