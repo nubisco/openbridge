@@ -10,3 +10,6 @@ apps/daemon/ui-dist/
 apps/daemon/README.md
 packages/*/LICENSE
 apps/daemon/LICENSE
+
+# Agent worktrees and local tooling state: other checkouts of this repo
+.claude/
