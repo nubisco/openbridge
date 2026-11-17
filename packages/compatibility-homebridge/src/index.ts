@@ -374,7 +374,12 @@ export class HomebridgeAPI extends EventEmitter {
    * registry is optional: if provided, each platform is registered as a
    * PluginInstance so it appears in the OpenBridge UI plugins page.
    */
-  async launchPlatforms(configs: PlatformConfig[], log: any, registry?: any): Promise<void> {
+  async launchPlatforms(
+    configs: PlatformConfig[],
+    log: any,
+    registry?: any,
+    meta?: { version?: string; description?: string; author?: string },
+  ): Promise<void> {
     for (const reg of this._platformRegistrations) {
       const config = configs.find((c) => c.platform === reg.platformName)
       if (!config) {
@@ -387,9 +392,12 @@ export class HomebridgeAPI extends EventEmitter {
         const pseudoPlugin = {
           manifest: {
             name: reg.pluginName,
-            version: (config.version as string | undefined) ?? '?.?.?',
-            description: `Platform: ${reg.platformName}`,
-            author: 'homebridge-compat',
+            // What the plugin's own package.json says, when the loader knows it.
+            // A placeholder author would be shown on the plugin's card as if it
+            // were the plugin's author.
+            version: meta?.version ?? (config.version as string | undefined) ?? '?.?.?',
+            description: meta?.description || `Platform: ${reg.platformName}`,
+            author: meta?.author ?? '',
           },
           setup: undefined,
           start: undefined,

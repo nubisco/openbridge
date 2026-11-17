@@ -14,6 +14,8 @@ export default defineConfig(
       // scripts/prepare-publish.mjs. Minified bundles, never linted.
       'apps/daemon/ui-dist/**',
       '**/node_modules/**',
+      // Agent worktrees and local tooling state: other checkouts, never ours to lint.
+      '.claude/**',
       '**/coverage/**',
       'apps/docs/.vitepress/cache/**',
       'apps/docs/.vitepress/dist/**',

@@ -22,6 +22,7 @@ import { HomeKitVisibility } from './homekit-visibility.js'
 import { HomeKitServiceTypes } from './homekit-service-type.js'
 import { HouseStore } from './house.js'
 import { HomebridgeAPI, loadHomebridgePlugin, serializeAccessory } from '@nubisco/openbridge-compatibility-homebridge'
+import { packageAuthor } from './package-author.js'
 
 const log = Logger.create('system')
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -706,7 +707,11 @@ export class Daemon {
                 }
 
                 const platformLogger = Logger.create('hap')
-                await homebridgeAPI.launchPlatforms([platformConfig as any], platformLogger, this.registry)
+                await homebridgeAPI.launchPlatforms([platformConfig as any], platformLogger, this.registry, {
+                  version: pkg.version,
+                  description: pkg.description,
+                  author: packageAuthor(pkg),
+                })
 
                 // launchPlatforms registers the instance under the platform name,
                 // which is all it knows. Record the package name too: this
@@ -737,7 +742,7 @@ export class Daemon {
             name,
             version: pkg.version ?? '?.?.?',
             description: pkg.description ?? '',
-            author: typeof pkg.author === 'string' ? pkg.author : (pkg.author?.name ?? ''),
+            author: packageAuthor(pkg),
           },
         }
 

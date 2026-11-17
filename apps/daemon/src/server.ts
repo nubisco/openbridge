@@ -95,6 +95,7 @@ import {
   type HomeKitServiceTypes,
   type ServiceTypeKey,
 } from './homekit-service-type.js'
+import { packageAuthor } from './package-author.js'
 
 export interface HapInfo {
   /** Null when the bridge could not be published. */
@@ -687,7 +688,7 @@ export async function createServer(
                 name,
                 version: pkg.version ?? '?.?.?',
                 description: pkg.description ?? '',
-                author: typeof pkg.author === 'string' ? pkg.author : (pkg.author?.name ?? ''),
+                author: packageAuthor(pkg),
               },
             }
             const instance = registry.register(pseudoPlugin)
@@ -1370,7 +1371,7 @@ export async function createServer(
             name,
             version: pkg.version ?? '0.0.0',
             description: pkg.description ?? '',
-            author: typeof pkg.author === 'string' ? pkg.author : (pkg.author?.name ?? ''),
+            author: packageAuthor(pkg),
             path: join(dir, entry),
             platform: pkg.openbridge?.platform,
             displayName: pkg.openbridge?.displayName,
@@ -1527,7 +1528,7 @@ export async function createServer(
             name: p.name ?? pkg,
             version: p.version ?? '?.?.?',
             description: p.description ?? '',
-            author: typeof p.author === 'string' ? p.author : (p.author?.name ?? ''),
+            author: packageAuthor(p),
           },
         }
         if (!registry.get(p.name ?? pkg)) {
