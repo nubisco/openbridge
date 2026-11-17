@@ -319,6 +319,15 @@ function pipe(
 }
 
 /**
+ * Whether a heat pump that is on is resting: running its circulation with the
+ * compressor idle, so the water comes back as warm as it left. Half a degree
+ * covers the sensors' rounding.
+ */
+export function resting(d: { on?: boolean; supply?: number; return?: number }): boolean {
+  return d.on === true && d.supply !== undefined && d.return !== undefined && Math.abs(d.supply - d.return) < 0.5
+}
+
+/**
  * The visible edges of a floor's slab: the faces toward the viewer (larger y
  * and larger x) of every cell a room covers, merged into straight runs.
  */
@@ -1377,7 +1386,16 @@ export function renderFloor(
         // The water going out to the house, when the unit reports it: a heat
         // pump's bare "current" reading is often its hot water tank.
         const water = d.supply ?? d.temperature
-        const text = d.on === false ? 'Off' : water !== undefined ? `${water.toFixed(0)}°` : 'On'
+        const text =
+          d.on === false
+            ? 'Off'
+            : resting(d)
+              ? `${water!.toFixed(0)}° resting`
+              : water !== undefined && d.return !== undefined
+                ? `${water.toFixed(0)}° → ${d.return.toFixed(0)}°`
+                : water !== undefined
+                  ? `${water.toFixed(0)}°`
+                  : 'On'
         svg =
           `<g pointer-events="none">${box}</g>` +
           marker(o, d, p.x, p.y, iso ? 2.6 : 0, pill(text, { icon: ICON.heat, cls: d.on ? 'hv-on' : '' }))
