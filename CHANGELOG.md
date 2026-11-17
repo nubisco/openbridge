@@ -1,3 +1,10 @@
+# [1.26.0](https://github.com/nubisco/openbridge/compare/v1.25.1...v1.26.0) (2026-11-17)
+
+
+### Features
+
+* **house:** the heat pump says when its compressor is resting ([#37](https://github.com/nubisco/openbridge/issues/37)) ([5a2efd2](https://github.com/nubisco/openbridge/commit/5a2efd23ee2a4eb19a4b9ecc329e5e43c91048ad))
+
 ## [1.25.1](https://github.com/nubisco/openbridge/compare/v1.25.0...v1.25.1) (2026-11-17)
 
 
