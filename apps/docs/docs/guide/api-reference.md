@@ -1,10 +1,12 @@
 ---
 layout: nubisco
 title: API Reference
-intro: 'The OpenBridge daemon exposes a REST API and four WebSocket streams, all on port 8582 (configurable via `bridge.port`). The base URL for all REST endpoints is `http://localhost:8582`.'
+intro: 'The OpenBridge daemon exposes a REST API and WebSocket streams, all on port 8582 (configurable via `bridge.port`). The base URL for all REST endpoints is `http://localhost:8582`.'
 ---
 
 All REST responses are JSON unless noted. All request bodies must be `Content-Type: application/json`.
+
+**Other websites are refused.** Every `/api` and `/ws` request that a browser marks with an `Origin` other than the bridge's own address is answered `403` (`{ "error": "origin not allowed" }`), whether or not sign-in is on. The bridge's own address is the `Host` the request was sent to, or the `X-Forwarded-Host` a proxy set. Requests with no `Origin` (curl, scripts, the CLI) are not affected, nor are `/api/health`, `/mcp` and the OAuth and discovery paths, which exist to be called from elsewhere. This keeps a page on another site, open in a browser on your network, from using a bridge that has no sign-in.
 
 ---
 
