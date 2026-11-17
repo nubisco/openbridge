@@ -98,7 +98,7 @@
               <strong>Add Accessory</strong>
             </li>
             <li>
-              Scan the QR code from the Dashboard, or tap
+              Scan the QR code on the Status page, or tap
               <strong>More options</strong>
               and enter the PIN code manually
             </li>

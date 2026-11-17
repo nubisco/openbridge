@@ -214,4 +214,4 @@ The daemon scans `plugins/openbridge/` on startup. Each subdirectory that contai
 - [Config Reference](/guide/config-reference) — every config field explained
 - [Creating a Plugin](/guide/creating-a-plugin) — build your first native plugin
 - [Homebridge Compatibility](/guide/homebridge-compatibility) — what Homebridge features work and what does not
-- [Dashboard UI](/guide/ui) — what the web interface can do
+- [Web interface](/guide/ui) — what the web interface can do

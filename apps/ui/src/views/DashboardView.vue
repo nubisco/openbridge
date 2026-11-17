@@ -34,9 +34,7 @@
          to the Home app, so the QR code is the page's one raised region and
          sits where nobody has to scroll for it. It takes the width of the
          code, and system information, its flat neighbour, takes the rest. -->
-    <!-- The house plan joins this row once one is drawn: a small live
-         picture that opens the House page. -->
-    <div class="setup" :class="{ 'setup--house': house.hasPlan }">
+    <div class="setup">
       <NbPanel title="HomeKit pairing">
         <div class="hk">
           <div v-if="qrDataUrl" class="hk__qr">
@@ -77,8 +75,6 @@
         </NbDefinitionList>
         <NbSpinner v-else size="sm" show-label label="Loading..." />
       </NbPanel>
-
-      <HouseCard />
     </div>
 
     <!-- Live metrics: diagnostics, peers of each other, flat on the ground.
@@ -163,14 +159,11 @@ import QRCode from 'qrcode'
 import { api, type SystemInfo, type MetricsSnapshot } from '@/api'
 import { useDaemonStore } from '@/stores/daemon'
 import { useLayoutStore } from '@/stores/layout'
-import { useHouseStore } from '@/stores/house'
-import HouseCard from '@/components/house/HouseCard.vue'
 // Bound through a ternary, so the bundler plugin cannot link them by name.
 import * as iconCheck from '@nubisco/ui/icons/check'
 import * as iconRestart from '@nubisco/ui/icons/arrows-clockwise'
 
 const daemon = useDaemonStore()
-const house = useHouseStore()
 const layout = useLayoutStore()
 
 // ─── Restart OpenBridge ───────────────────────────────────────────────────────
@@ -304,7 +297,7 @@ const memTotal = computed(() => (latest.value ? fmtBytes(latest.value.memTotal) 
 const memPct = computed(() => (latest.value ? memPercent(latest.value) : 0))
 
 onMounted(async () => {
-  layout.setPage('Dashboard')
+  layout.setPage('Status')
   daemon.fetchPlugins()
 
   try {
@@ -372,10 +365,6 @@ onUnmounted(() => {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: var(--nb-spacing-24);
-
-  &--house {
-    grid-template-columns: auto minmax(0, 1fr) minmax(240px, 320px);
-  }
 
   @include variables.phone {
     grid-template-columns: minmax(0, 1fr);

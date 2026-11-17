@@ -738,7 +738,7 @@ This is what the Terminal view in the UI connects to when in shell mode. The she
 
 ## Related pages
 
-- [Dashboard UI](/guide/ui): how the UI uses these endpoints
+- [Web interface](/guide/ui): how the UI uses these endpoints
 - [The MCP endpoint](/guide/mcp): connecting Claude and other agents
 - [Config Reference](/guide/config-reference): the config schema behind the config endpoints
 - [Homebridge Compatibility](/guide/homebridge-compatibility): the marketplace endpoints in context

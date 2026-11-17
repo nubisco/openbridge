@@ -150,7 +150,7 @@ const saving = ref(false)
 // is open, to give the plan the width.
 watch(
   () => (mode.value === 'live' ? house.hasPlan : !phone.value),
-  (bleed) => layout.setPage('House', { fullBleed: bleed, compactNav: true }),
+  (bleed) => layout.setPage('Home', { fullBleed: bleed, compactNav: true }),
   { immediate: true },
 )
 

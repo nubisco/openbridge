@@ -28,15 +28,29 @@
 
     <!-- ═══ Navigation ═══ -->
     <template #sidebar-nav>
+      <!-- Two jobs, two groups (Jose, 2026-11-17). The home comes first: the
+           plan, which is also the landing page, and the devices in it. The
+           bridge that runs them follows under its own heading, because its
+           pages are for setting up and fixing, not for living with. -->
       <NbSidebarMenu>
         <NbSidebarMenuItem
-          v-for="item in navItems"
+          v-for="item in homeItems"
           :key="item.name"
           :icon="item.icon"
           :label="item.label"
           :to="item.href"
           :active="route.name === item.name"
         />
+        <NbSidebarMenuGroup label="Bridge">
+          <NbSidebarMenuItem
+            v-for="item in bridgeItems"
+            :key="item.name"
+            :icon="item.icon"
+            :label="item.label"
+            :to="item.href"
+            :active="route.name === item.name"
+          />
+        </NbSidebarMenuGroup>
       </NbSidebarMenu>
     </template>
 
@@ -279,11 +293,13 @@ async function checkForUpdate() {
   }
 }
 
-const navItems = [
-  { name: 'house', icon: 'blueprint', label: 'House', href: '/house' },
-  { name: 'dashboard', icon: 'house', label: 'Dashboard', href: '/dashboard' },
-  { name: 'plugins', icon: 'puzzle-piece', label: 'Plugins', href: '/plugins' },
+const homeItems = [
+  { name: 'house', icon: 'house', label: 'Home', href: '/house' },
   { name: 'devices', icon: 'devices', label: 'Devices', href: '/devices' },
+]
+const bridgeItems = [
+  { name: 'status', icon: 'pulse', label: 'Status', href: '/status' },
+  { name: 'plugins', icon: 'puzzle-piece', label: 'Plugins', href: '/plugins' },
   { name: 'config', icon: 'brackets-curly', label: 'Config', href: '/config' },
   { name: 'terminal', icon: 'terminal', label: 'Terminal', href: '/terminal' },
 ]

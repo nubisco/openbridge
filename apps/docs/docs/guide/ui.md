@@ -1,6 +1,6 @@
 ---
 layout: nubisco
-title: Dashboard UI
+title: Web interface
 intro: 'OpenBridge ships a built-in Vue 3 web interface.'
 ---
 
@@ -10,9 +10,17 @@ In production, the daemon serves it as static files at [http://localhost:8582](h
 
 ---
 
-## House
+## Finding your way
 
-A drawing of your home, floor by floor, with every device where it really is and showing what it is doing now. Once a plan is saved, OpenBridge opens on this page instead of the Dashboard.
+The menu has two parts, because there are two jobs. The top is your home: **Home** (the house plan) and **Devices**. Below it, under **Bridge**, are the pages for setting up and fixing the bridge that runs them: **Status**, **Plugins**, **Config** and **Terminal**. At the foot sit Documentation, Sponsor, Notifications, Settings and you.
+
+OpenBridge opens on Home once a house plan is saved, and on Status until then, because the first thing a new bridge needs is pairing with the Home app.
+
+---
+
+## Home
+
+A drawing of your home, floor by floor, with every device where it really is and showing what it is doing now. Once a plan is saved, OpenBridge opens on this page instead of Status.
 
 **Drawing the plan.** Choose **Start drawing** (or **Edit plan** later). The blueprint fills the page, and what you select, with the devices not on the plan yet, opens in the inspector beside it (under the blueprint on a phone). You draw rooms, not walls: The tools are icons along the top of the blueprint: hover over one (or press and hold on a phone) to see its name.
 
@@ -31,38 +39,24 @@ Nothing is saved until you choose **Save plan**. If the plan was saved from anot
 
 **What the plan shows.** The house is drawn as a model in natural materials, wood floors, plaster walls, grass and water, filling the page. A light that is on lights its room in its own colour and brightness, the floor and the walls, brightest under the lamp. A table lamp lights less of the room than a ceiling light, and a relay driving a lamp glows in a colour you pick. A light placed in a pool lights the whole pool. Shutters show how far they are open, on their window. Heating circuits run through the rooms they serve (under the floor, or through the room's radiators, which glow while hot water flows), staying inside the house (never across a pool or a garden between wings), coloured from blue to red by water temperature, with moving flow while the pump runs. When the plugin reports the water going out and coming back (`supplyTemperature` and `returnTemperature`), the pipe shades from one to the other along its length. Waves move across a pool while a pump or filter placed in it runs, and the water is still when it is off. Appliances are drawn as what they are, with their power draw while they run: a TV's screen lights up, a washing machine's drum turns, and a garden tap (a water timer or a valve is drawn as one) runs water while it is open. Sensors, dehumidifiers, energy meters, cameras and gates show their reading or state. A device that stopped answering is drawn dimmed, never as off.
 
-**Using it.** The sidebar folds to icons while the House is open, and its toggle opens it again for that visit. Zoom with the mouse wheel or a pinch, and drag to move around. The buttons at the right zoom in and out, fit the house back in view at normal zoom, and turn the house a quarter turn either way (remembered in this browser). Markers that would cover each other are pulled apart, the one further back rising on a longer stem. Switch floors with the floor rail (or the up and down arrow keys), or choose **All floors** to see them stacked. **3D** and **2D** switch between the isometric and the top-down view, and **Temperature** and **Humidity** colour each room by a sensor standing in it, with its reading floating over the room. The devices fade back, and the legend says how many rooms have such a sensor. A heat pump's temperature is its water, so it never colours a room. Tapping a device opens its controls in the inspector, and tapping empty space closes it. A camera shows its live picture there, made only while it is open. Tapping a light or a plain switch also turns it on or off. Anything drawn as an appliance or an outlet never switches on a tap, so a stray tap cannot turn off the fridge. A gate always asks before it moves.
+**Using it.** The sidebar folds to icons while Home is open, and its toggle opens it again for that visit. Zoom with the mouse wheel or a pinch, and drag to move around. The buttons at the right zoom in and out, fit the house back in view at normal zoom, and turn the house a quarter turn either way (remembered in this browser). Markers that would cover each other are pulled apart, the one further back rising on a longer stem. Switch floors with the floor rail (or the up and down arrow keys), or choose **All floors** to see them stacked. **3D** and **2D** switch between the isometric and the top-down view, and **Temperature** and **Humidity** colour each room by a sensor standing in it, with its reading floating over the room. The devices fade back, and the legend says how many rooms have such a sensor. A heat pump's temperature is its water, so it never colours a room. Tapping a device opens its controls in the inspector, and tapping empty space closes it. A camera shows its live picture there, made only while it is open. Tapping a light or a plain switch also turns it on or off. Anything drawn as an appliance or an outlet never switches on a tap, so a stray tap cannot turn off the fridge. A gate always asks before it moves.
 
 **Rooms are the bridge's rooms.** Each device's room comes from the plan, so the Devices page, the device list (`GET /api/devices`) and the AI agent tools report it too. Agents can read the whole plan with the `house` tool. The plan is stored in `~/.openbridge/house.json`.
 
 ---
 
-## Dashboard
+## Status
 
-The Dashboard gives you an at-a-glance view of the entire system. It is the landing page until a house plan is drawn. Once there is a plan, a small live copy of it sits beside System information and opens the House page.
+How the bridge itself is doing, at `/status` (the page was called Dashboard before, and `/dashboard` still leads here). It is the landing page until a house plan is drawn.
 
-### Plugin status cards
-
-Each loaded plugin appears as a card showing:
-
-- Plugin name and version
-- Current status badge (`running`, `error`, `stopped`, etc.)
-- Color coding: green for running, red for error, gray for stopped
-
-Clicking a card navigates to the Plugins view with that plugin selected.
-
-### System metrics row
-
-A row of live metrics pulled from `GET /api/system`:
-
-- OS and architecture
-- Hostname and IP address
-- Node.js version
-- Daemon uptime
+- **Three figures:** plugins running, plugin errors, and whether the HomeKit bridge is running. A figure turns red only when something is wrong, and the plugin figures open the Plugins page.
+- **HomeKit pairing:** the QR code and setup code to add the bridge to the Home app.
+- **System information:** OS, architecture, hostname, IP address, user, Node.js and OpenBridge versions, and where the config and plugins live.
+- **Live metrics:** CPU, memory, uptime (with **Restart OpenBridge**) and network traffic, from `GET /api/system`.
 
 ### Live log panel
 
-The Dashboard includes a real-time log panel that streams entries from `/ws/logs`.
+Every page has a real-time log panel along the bottom that streams entries from `/ws/logs`.
 
 **Features:**
 
@@ -106,7 +100,7 @@ The inspector has three tabs:
 **Logs tab:**
 
 - Live log stream filtered to only this plugin's entries.
-- Same expand mode and auto-scroll behavior as the Dashboard log panel.
+- Same expand mode and auto-scroll behavior as the live log panel.
 
 ---
 
