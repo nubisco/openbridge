@@ -1,3 +1,10 @@
+# [1.24.0](https://github.com/nubisco/openbridge/compare/v1.23.0...v1.24.0) (2026-11-17)
+
+
+### Features
+
+* **house:** sliding glass doors ([#32](https://github.com/nubisco/openbridge/issues/32)) ([dce8659](https://github.com/nubisco/openbridge/commit/dce8659295183fdf633b7949a4efec161a52caf4))
+
 # [1.23.0](https://github.com/nubisco/openbridge/compare/v1.22.0...v1.23.0) (2026-11-17)
 
 
