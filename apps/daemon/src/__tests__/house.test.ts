@@ -149,6 +149,15 @@ describe('validateHousePlan', () => {
     expect(() => validateHousePlan(p)).toThrow(/mount: must be one of/)
   })
 
+  it('keeps a sliding glass door, and lets a shutter sit on it', () => {
+    const p = plan()
+    p.floors[0].openings.push({ id: 's1', type: 'slider', axis: 'v', x: 12, y: 4, len: 4 })
+    p.floors[0].placements[1].opening = 's1'
+    const out = validateHousePlan(p)
+    expect(out.floors[0].openings[2]).toEqual({ id: 's1', type: 'slider', axis: 'v', x: 12, y: 4, len: 4 })
+    expect(out.floors[0].placements[1].opening).toBe('s1')
+  })
+
   it('accepts a sound plan and normalises it', () => {
     const out = validateHousePlan({ ...plan(), extra: 'dropped' })
     expect(out.floors).toHaveLength(2)
@@ -163,6 +172,11 @@ describe('validateHousePlan', () => {
     ['two floors on one level', (p) => (p.floors[1].level = 0), /share level 0/],
     ['a device placed twice', (p) => p.floors[1].placements.push({ ref: 'device:lamp', x: 1, y: 1 }), /placed twice/],
     ['a shutter on a door', (p) => (p.floors[0].placements[1].opening = 'd1'), /not a window/],
+    [
+      'an unknown opening type',
+      (p) => ((p.floors[0].openings[0] as { type: string }).type = 'hatch'),
+      /door, window, open or slider/,
+    ],
     [
       'a circuit through a missing room',
       (p) => (p.floors[0].placements[2].circuitRooms = ['attic']),

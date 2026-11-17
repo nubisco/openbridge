@@ -1092,7 +1092,20 @@ export function renderFloor(
           ln('hv-sill2d', a, c) +
           `<path class="hv-door2d" d="M${r1(h[0])},${r1(h[1])} L${r1(q[0])},${r1(q[1])} A${r1(len)},${r1(len)} 0 0 ${sw.sweep} ${r1(f[0])},${r1(f[1])}"/>`
       } else {
-        svg = ln('hv-wall2d hv-glass2d', a, c) + ln('hv-pane2d', a, c)
+        if (w.type === 'slider') {
+          // Two leaves on their own tracks, overlapping in the middle.
+          const g = 0.12
+          const at = (t: number, k: number) =>
+            project(
+              o.mode,
+              lerp(A[0], B[0], t) + (w.axis === 'v' ? k * g : 0),
+              lerp(A[1], B[1], t) + (w.axis === 'h' ? k * g : 0),
+            )
+          svg =
+            ln('hv-sill2d', a, c) +
+            ln('hv-pane2d hv-slide2d', at(0, -1), at(0.55, -1)) +
+            ln('hv-pane2d hv-slide2d', at(0.45, 1), at(1, 1))
+        } else svg = ln('hv-wall2d hv-glass2d', a, c) + ln('hv-pane2d', a, c)
         if (sh) {
           const closed = 1 - clamp(sh.position ?? 100, 0, 100) / 100
           const m: Point = [lerp(a[0], c[0], closed), lerp(a[1], c[1], closed)]
@@ -1157,15 +1170,34 @@ export function renderFloor(
         ])}"/>`
       if (H > hd + 0.1) svg += `<polygon class="hv-wall" points="${quad(hd, H)}"/>${tint(hd, H)}${cap(H)}`
     } else {
-      const z0 = H * 0.3
-      svg = `<polygon class="hv-wall" points="${quad(0, z0)}"/>${tint(0, z0)}<polygon class="hv-pane" points="${quad(z0, H)}"/>${cap(H)}`
+      // A window is glass over a low wall, up to the top. A sliding door is
+      // glass from the floor to door height, in a frame with a mullion where
+      // its two leaves meet, and wall above.
+      const slider = w.type === 'slider'
+      const z0 = slider ? 0 : H * 0.3
+      const zt = slider ? Math.min(H, 1.05 * CELLS_PER_M) : H
+      if (slider) {
+        const m1 = project(o.mode, (A[0] + B[0]) / 2, (A[1] + B[1]) / 2, 0)
+        const m2 = project(o.mode, (A[0] + B[0]) / 2, (A[1] + B[1]) / 2, zt)
+        svg =
+          `<polygon class="hv-pane" points="${quad(0, zt)}"/>` +
+          `<line class="hv-slideframe" x1="${r1(m1[0])}" y1="${r1(m1[1])}" x2="${r1(m2[0])}" y2="${r1(m2[1])}"/>` +
+          `<polyline class="hv-slideframe" points="${poly(o, [
+            [A[0], A[1], 0],
+            [A[0], A[1], zt],
+            [B[0], B[1], zt],
+            [B[0], B[1], 0],
+          ])}"/>`
+        if (H > zt + 0.1) svg += `<polygon class="hv-wall" points="${quad(zt, H)}"/>${tint(zt, H)}${cap(H)}`
+      } else
+        svg = `<polygon class="hv-wall" points="${quad(0, z0)}"/>${tint(0, z0)}<polygon class="hv-pane" points="${quad(z0, H)}"/>${cap(H)}`
       if (sh) {
         const closed = 1 - clamp(sh.position ?? 100, 0, 100) / 100
-        const zb = H - (H - z0) * closed
+        const zb = zt - (zt - z0) * closed
         let slats = ''
         if (closed > 0.01) {
-          slats = `<polygon class="hv-slats" points="${quad(zb, H)}"/>`
-          for (let z = H - 0.18; z > zb + 0.04; z -= 0.18) {
+          slats = `<polygon class="hv-slats" points="${quad(zb, zt)}"/>`
+          for (let z = zt - 0.18; z > zb + 0.04; z -= 0.18) {
             const p = project(o.mode, A[0], A[1], z)
             const q = project(o.mode, B[0], B[1], z)
             slats += `<line class="hv-slatl" x1="${r1(p[0])}" y1="${r1(p[1])}" x2="${r1(q[0])}" y2="${r1(q[1])}"/>`

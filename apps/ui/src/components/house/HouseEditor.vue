@@ -480,6 +480,7 @@ const TOOLS = [
   { id: 'pool', label: 'Pool', icon: 'swimming-pool' },
   { id: 'door', label: 'Door', icon: 'door-open' },
   { id: 'window', label: 'Window', icon: 'app-window' },
+  { id: 'slider', label: 'Sliding door', icon: 'columns' },
   { id: 'open', label: 'Open wall', icon: 'arrows-out-line-horizontal' },
   { id: 'radiator', label: 'Radiator', icon: 'thermometer-hot' },
   { id: 'furniture', label: 'Furniture', icon: 'armchair' },
@@ -497,9 +498,10 @@ const ROOM_KINDS = [
 const OPENING_KINDS = [
   { label: 'Door', value: 'door' },
   { label: 'Window', value: 'window' },
+  { label: 'Sliding glass door', value: 'slider' },
   { label: 'Open, no wall', value: 'open' },
 ]
-const OPENING_TITLE = { door: 'Door', window: 'Window', open: 'Open wall' } as const
+const OPENING_TITLE = { door: 'Door', window: 'Window', open: 'Open wall', slider: 'Sliding door' } as const
 const GATE_AXES = [
   { label: 'Left to right', value: 'h' },
   { label: 'Front to back', value: 'v' },
@@ -521,7 +523,18 @@ const GLOW_COLOURS = [
   { label: 'Red', value: '#ff5a4d' },
 ]
 
-type Tool = 'select' | 'room' | 'outdoor' | 'paved' | 'pool' | 'door' | 'window' | 'open' | 'radiator' | 'furniture'
+type Tool =
+  | 'select'
+  | 'room'
+  | 'outdoor'
+  | 'paved'
+  | 'pool'
+  | 'door'
+  | 'window'
+  | 'slider'
+  | 'open'
+  | 'radiator'
+  | 'furniture'
 const isAreaTool = (t: Tool): t is 'room' | 'outdoor' | 'paved' | 'pool' =>
   t === 'room' || t === 'outdoor' || t === 'paved' || t === 'pool'
 const tool = ref<Tool>('room')
@@ -609,6 +622,8 @@ const help = computed(() => {
     pool: 'Drag on the grid to draw a pool.',
     door: 'Tap a wall to put a door there. Drag a door to move it, or its ends to resize it.',
     window: 'Tap a wall to put a window there. Drag a window to move it, or its ends to resize it.',
+    slider:
+      'Tap a wall to put a sliding glass door there, two metres wide. Drag it to move it, or its ends to resize it. A shutter can sit on it.',
     radiator:
       'Tap a wall, on the side the radiator hangs, to put one there. Drag it to move it, or its ends to resize it. A heating circuit serving the room runs through it.',
     furniture:
@@ -963,7 +978,7 @@ function onDown(e: PointerEvent) {
     const y0 = clamp(Math.round(p.y), 0, ph)
     drag = { type: 'draw', x0, y0 }
     draft.value = { x: x0, y: y0, w: 0, h: 0 }
-  } else if (tool.value === 'door' || tool.value === 'window' || tool.value === 'open') {
+  } else if (tool.value === 'door' || tool.value === 'window' || tool.value === 'slider' || tool.value === 'open') {
     if (!grabOpening(t, p)) {
       const u = nearestWall(floor.value, p.x, p.y)
       clearSelection()
