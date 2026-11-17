@@ -751,7 +751,9 @@ function appliance(o: SceneOptions, d: LiveDevice, p: HousePlacement, look: Hous
 /**
  * Each walled room's reading for an overlay, from a sensor standing in it. A
  * heating device's temperature is its water, not the room's, so it never
- * counts. A device on a window (a shutter) is in no room.
+ * counts. A device on a window (a shutter) is in no room. For temperature, a
+ * garden with no sensor of its own takes the outside temperature a heat pump
+ * reports, wherever that heat pump stands.
  */
 export function roomReadings(
   floor: HouseFloor,
@@ -766,6 +768,11 @@ export function roomReadings(
     if (v === undefined) continue
     const r = roomAt(floor, p.x, p.y)
     if (r?.kind === 'room' && !out.has(r.id)) out.set(r.id, v)
+  }
+  if (overlay === 'temperature') {
+    const outside = [...devices.values()].find((d) => d.reachable && d.outside !== undefined)?.outside
+    if (outside !== undefined)
+      for (const r of floor.rooms) if (r.kind === 'outdoor' && !out.has(r.id)) out.set(r.id, outside)
   }
   return out
 }
@@ -838,9 +845,14 @@ export function renderFloor(
         tint = fill
         // The reading floats over the room, above the walls, so it reads in
         // 3D as well as from above.
+        // A garden usually has the house standing in its middle, so its
+        // reading sits near its front-left corner instead, and says what it is.
         const q = roomRects(r).reduce((a, b) => (b.w * b.h > a.w * a.h ? b : a))
-        const c = project(o.mode, q.x + q.w / 2, q.y + q.h / 2, zm(o, 1.6))
-        const text = overlayText(o.overlay, reading)
+        const outdoor = r.kind === 'outdoor'
+        const c = outdoor
+          ? project(o.mode, q.x + Math.min(2.5, q.w / 2), q.y + Math.max(q.h - 1.5, q.h / 2), zm(o, 0.4))
+          : project(o.mode, q.x + q.w / 2, q.y + q.h / 2, zm(o, 1.6))
+        const text = (outdoor ? 'Outside ' : '') + overlayText(o.overlay, reading)
         const w = text.length * 9 + 22
         badges +=
           `<g class="hv-reading" transform="translate(${r1(c[0])},${r1(c[1])}) scale(${o.unit.toFixed(4)})" pointer-events="none">` +
@@ -1326,7 +1338,10 @@ export function renderFloor(
             [x1, y2, 0],
           ])}"/>`
         }
-        const text = d.on === false ? 'Off' : d.temperature !== undefined ? `${d.temperature.toFixed(0)}°` : 'On'
+        // The water going out to the house, when the unit reports it: a heat
+        // pump's bare "current" reading is often its hot water tank.
+        const water = d.supply ?? d.temperature
+        const text = d.on === false ? 'Off' : water !== undefined ? `${water.toFixed(0)}°` : 'On'
         svg =
           `<g pointer-events="none">${box}</g>` +
           marker(o, d, p.x, p.y, iso ? 2.6 : 0, pill(text, { icon: ICON.heat, cls: d.on ? 'hv-on' : '' }))

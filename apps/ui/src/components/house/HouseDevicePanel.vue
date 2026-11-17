@@ -107,9 +107,14 @@ const readings = computed(() => {
   const d = props.device
   if (!d) return []
   const out: Array<{ term: string; value: string }> = [{ term: 'Kind', value: KIND_LABEL[d.kind] }]
-  if (d.temperature !== undefined) out.push({ term: 'Temperature', value: `${d.temperature.toFixed(1)} °C` })
+  // A heat pump that names its readings says them itself: its bare "current"
+  // temperature is one of them (often the tank), so it is not repeated.
+  const named = d.kind === 'heating' && (d.supply !== undefined || d.hotWater !== undefined)
+  if (d.temperature !== undefined && !named) out.push({ term: 'Temperature', value: `${d.temperature.toFixed(1)} °C` })
   if (d.supply !== undefined) out.push({ term: 'Water out', value: `${d.supply.toFixed(1)} °C` })
   if (d.return !== undefined) out.push({ term: 'Water back', value: `${d.return.toFixed(1)} °C` })
+  if (d.hotWater !== undefined) out.push({ term: 'Hot water tank', value: `${d.hotWater.toFixed(1)} °C` })
+  if (d.outside !== undefined) out.push({ term: 'Outside', value: `${d.outside.toFixed(1)} °C` })
   if (d.target !== undefined && !caps.value.target) out.push({ term: 'Target', value: `${d.target.toFixed(1)} °C` })
   if (d.humidity !== undefined) out.push({ term: 'Humidity', value: `${Math.round(d.humidity)}%` })
   if (d.power !== undefined) out.push({ term: 'Power', value: formatPower(d.power) })

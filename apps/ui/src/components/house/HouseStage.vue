@@ -293,7 +293,8 @@ const overlayLegend = computed(() => {
   let measured = 0
   for (const f of shown) {
     rooms += f.rooms.filter((r) => r.kind === 'room').length
-    measured += roomReadings(f, props.devices, ov).size
+    const read = roomReadings(f, props.devices, ov)
+    measured += f.rooms.filter((r) => r.kind === 'room' && read.has(r.id)).length
   }
   const [lo, hi] = ov === 'temperature' ? [16, 26] : [35, 80]
   const stops = [0, 0.25, 0.5, 0.75, 1].map((k) => overlayColor(ov, lo + (hi - lo) * k))
