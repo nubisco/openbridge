@@ -75,9 +75,11 @@ export interface HouseOpening {
   id: string
   /**
    * `open` is a stretch with no wall at all: two rooms that run into each
-   * other, such as a kitchen open to the living room.
+   * other, such as a kitchen open to the living room. `slider` is a sliding
+   * glass door: glass to door height, and a shutter can sit on it like on a
+   * window.
    */
-  type: 'door' | 'window' | 'open'
+  type: 'door' | 'window' | 'open' | 'slider'
   /**
    * Start of the opening, on a wall line. Along the wall it may sit on a half
    * cell (a quarter metre), so a door can be centred on a wall of any length.
@@ -348,10 +350,10 @@ export function validateHousePlan(raw: unknown): HousePlan {
       const oid = id(o.id, `${op}.id`)
       if (openingIds.has(oid)) fail(`${op}.id`, `'${oid}' is used twice`)
       openingIds.add(oid)
-      if (o.type !== 'door' && o.type !== 'window' && o.type !== 'open')
-        fail(`${op}.type`, 'must be door, window or open')
+      if (o.type !== 'door' && o.type !== 'window' && o.type !== 'open' && o.type !== 'slider')
+        fail(`${op}.type`, 'must be door, window, open or slider')
       if (o.axis !== 'h' && o.axis !== 'v') fail(`${op}.axis`, 'must be h or v')
-      if (o.type === 'window') windows.add(oid)
+      if (o.type === 'window' || o.type === 'slider') windows.add(oid)
       // On the wall's line in whole cells, along it in half cells.
       const x = (o.axis === 'h' ? half : int)(o.x, `${op}.x`, 0, plot.w)
       const y = (o.axis === 'v' ? half : int)(o.y, `${op}.y`, 0, plot.h)
@@ -438,7 +440,7 @@ export function validateHousePlan(raw: unknown): HousePlan {
       }
       if (pl.opening !== undefined) {
         const oid = id(pl.opening, `${pp}.opening`)
-        if (!windows.has(oid)) fail(`${pp}.opening`, `'${oid}' is not a window on this floor`)
+        if (!windows.has(oid)) fail(`${pp}.opening`, `'${oid}' is not a window or sliding door on this floor`)
         out.opening = oid
       }
       if (pl.color !== undefined) {

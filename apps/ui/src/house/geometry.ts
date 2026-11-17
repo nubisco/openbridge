@@ -160,7 +160,7 @@ export function openingFits(o: HouseOpening, units: Map<string, WallUnit>): bool
 
 export interface WallRun {
   /** `wall`, or the opening this run is. */
-  type: 'wall' | 'door' | 'window' | 'open'
+  type: 'wall' | 'door' | 'window' | 'open' | 'slider'
   opening: HouseOpening | null
   axis: 'h' | 'v'
   x1: number
@@ -741,4 +741,25 @@ export function humidityColor(h: number): string {
 /** HomeKit hue (0-360) and saturation (0-100) as a CSS colour, at full value. */
 export function hueSatColor(hue: number, sat: number): string {
   return `hsl(${Math.round(hue)} ${Math.round(clamp(sat, 0, 100))}% ${Math.round(100 - clamp(sat, 0, 100) / 2)}%)`
+}
+
+/**
+ * A sliding door's two panes in plan, as SVG line attributes: each a little
+ * over half the opening, overlapping in the middle and set off either side of
+ * the wall line by `gap`, so they read as two leaves on their own tracks.
+ * `scale` turns cells into the drawing's units.
+ */
+export function sliderPanes(
+  w: { axis: 'h' | 'v'; x1: number; y1: number; x2: number; y2: number },
+  scale: number,
+  gap: number,
+): [string, string] {
+  const at = (t: number): [number, number] => [(w.x1 + (w.x2 - w.x1) * t) * scale, (w.y1 + (w.y2 - w.y1) * t) * scale]
+  const off: [number, number] = w.axis === 'h' ? [0, gap] : [gap, 0]
+  const seg = (t1: number, t2: number, k: number) => {
+    const a = at(t1)
+    const b = at(t2)
+    return `x1="${(a[0] + off[0] * k).toFixed(1)}" y1="${(a[1] + off[1] * k).toFixed(1)}" x2="${(b[0] + off[0] * k).toFixed(1)}" y2="${(b[1] + off[1] * k).toFixed(1)}"`
+  }
+  return [seg(0, 0.55, -1), seg(0.45, 1, 1)]
 }

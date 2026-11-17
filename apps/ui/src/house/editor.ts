@@ -36,6 +36,7 @@ import {
   roomOutline,
   roomRects,
   roomsOutsideIn,
+  sliderPanes,
   unitKey,
   wallRuns,
   wallUnits,
@@ -236,7 +237,7 @@ export function openingAt(floor: HouseFloor, u: WallUnit): HouseOpening | undefi
  * Put a door or window on the wall at `u`, a metre long and centred on the tap
  * where the wall allows. Returns null when there is no wall left there.
  */
-export function addOpening(floor: HouseFloor, u: WallUnit, type: 'door' | 'window'): HouseOpening | null {
+export function addOpening(floor: HouseFloor, u: WallUnit, type: 'door' | 'window' | 'slider'): HouseOpening | null {
   const units = wallUnits(floor)
   const taken = new Set(floor.openings.flatMap(openingUnits))
   const free = (i: number) => {
@@ -244,7 +245,8 @@ export function addOpening(floor: HouseFloor, u: WallUnit, type: 'door' | 'windo
     return units.has(k) && !taken.has(k)
   }
   if (!free(0)) return null
-  const want = CELLS_PER_M
+  // A sliding door starts two metres wide, the usual two-pane door.
+  const want = type === 'slider' ? 2 * CELLS_PER_M : CELLS_PER_M
   // Grow from the tapped unit, preferring to centre on it.
   let start = 0
   let end = 1
@@ -253,7 +255,7 @@ export function addOpening(floor: HouseFloor, u: WallUnit, type: 'door' | 'windo
     else if (free(end)) end++
     else start--
   }
-  const id = uniqueId(type === 'door' ? 'door' : 'window', (x) => floor.openings.some((o) => o.id === x))
+  const id = uniqueId(type, (x) => floor.openings.some((o) => o.id === x))
   const o: HouseOpening = {
     id,
     type,
@@ -267,7 +269,8 @@ export function addOpening(floor: HouseFloor, u: WallUnit, type: 'door' | 'windo
 }
 
 /**
- * The window nearest a point, within two cells, that has no shutter yet.
+ * The window or sliding door nearest a point, within two cells, that has no
+ * shutter yet.
  * Measured to the window's segment, so a drop anywhere along a wide window
  * counts, not only near its middle.
  */
@@ -276,7 +279,7 @@ export function nearestFreeWindow(floor: HouseFloor, x: number, y: number, reach
   let best: HouseOpening | null = null
   let bd = reach
   for (const o of floor.openings) {
-    if (o.type !== 'window' || taken.has(o.id)) continue
+    if ((o.type !== 'window' && o.type !== 'slider') || taken.has(o.id)) continue
     const cx = o.axis === 'h' ? clamp(x, o.x, o.x + o.len) : o.x
     const cy = o.axis === 'v' ? clamp(y, o.y, o.y + o.len) : o.y
     const d = Math.hypot(x - cx, y - cy)
@@ -683,7 +686,7 @@ export function tidy(plan: HousePlan): HousePlan {
     const kept = new Set<string>()
     f.openings = f.openings.filter((o) => {
       const ok = openingFits(o, units)
-      if (ok && o.type === 'window') kept.add(o.id)
+      if (ok && (o.type === 'window' || o.type === 'slider')) kept.add(o.id)
       return ok
     })
     if (f.radiators) {
@@ -829,7 +832,12 @@ export function renderEditor(
     if (w.type === 'wall') h += `<line class="hv-ewall" ${c}/>`
     else if (w.type === 'window') h += `<line class="hv-ewinb" ${c}/><line class="hv-ewin${sel}" ${c}/>`
     else if (w.type === 'open') h += `<line class="hv-eopen${sel}" ${c}/>`
-    else if (w.opening) {
+    else if (w.type === 'slider') {
+      // Two panes, side by side and overlapping in the middle, as a plan
+      // draws a sliding door.
+      const [p1, p2] = sliderPanes(w, S, 3)
+      h += `<line class="hv-ewinb" ${c}/><line class="hv-ewin${sel}" ${p1}/><line class="hv-ewin${sel}" ${p2}/>`
+    } else if (w.opening) {
       const sw = doorSwing(w.opening)
       const len = w.opening.len * S
       h +=

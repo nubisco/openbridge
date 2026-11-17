@@ -261,7 +261,7 @@ export interface HouseRoom extends HouseRect {
 export interface HouseOpening {
   id: string
   /** `open` is a stretch of wall that is not there: two rooms that run into each other. */
-  type: 'door' | 'window' | 'open'
+  type: 'door' | 'window' | 'open' | 'slider'
   x: number
   y: number
   axis: 'h' | 'v'
