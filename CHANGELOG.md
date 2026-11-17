@@ -1,3 +1,10 @@
+# [1.22.0](https://github.com/nubisco/openbridge/compare/v1.21.0...v1.22.0) (2026-11-17)
+
+
+### Features
+
+* **house:** a heat pump's water out, hot water tank and outside temperature ([#30](https://github.com/nubisco/openbridge/issues/30)) ([3273c3a](https://github.com/nubisco/openbridge/commit/3273c3afeb3fb3e65fcb7db003501cf4f777f082))
+
 # [1.21.0](https://github.com/nubisco/openbridge/compare/v1.20.1...v1.21.0) (2026-11-17)
 
 
