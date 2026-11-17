@@ -1,3 +1,10 @@
+# [1.27.0](https://github.com/nubisco/openbridge/compare/v1.26.0...v1.27.0) (2026-11-17)
+
+
+### Features
+
+* **notifications:** clear, a live frame that says what changed, and the walkthrough to desktop notifications ([#38](https://github.com/nubisco/openbridge/issues/38)) ([9e35b5e](https://github.com/nubisco/openbridge/commit/9e35b5e1f95b15dc0aca85fe1241710f159c35a2))
+
 # [1.26.0](https://github.com/nubisco/openbridge/compare/v1.25.1...v1.26.0) (2026-11-17)
 
 
