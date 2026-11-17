@@ -25,6 +25,7 @@
       <NbSidebarMenu>
         <NbSidebarMenuItem
           :ref="setTriggerRef"
+          v-nb-tour-step="'notifications'"
           v-bind="triggerProps"
           label="Notifications"
           :icon="notifications.unread > 0 ? 'bell-ringing' : 'bell'"
@@ -63,15 +64,40 @@
       :variant="entry.variant"
       :interactive="entry.target !== null"
       @select="openEntry(entry)"
-    />
+    >
+      <!-- Every row has the same one action, so it never shifts between
+           rows. The item draws this slot beside the row, not inside it,
+           because a button inside a button is not reachable by keyboard. -->
+      <template #actions>
+        <NbButton
+          v-nb-tooltip="{ body: 'Clear' }"
+          size="xs"
+          variant="ghost"
+          icon="x"
+          :aria-label="`Clear: ${entry.title}`"
+          @click="notifications.clear(entry.id)"
+        />
+      </template>
+    </NbNotificationCenterItem>
+
+    <!-- Clearing the whole list is rarer than reading it, so it waits at the
+         foot rather than competing with "Mark all as read" in the header. -->
+    <template v-if="notifications.items.length > 0" #footer>
+      <NbButton size="xs" variant="ghost" @click="notifications.clearAll()">Clear all</NbButton>
+    </template>
   </NbNotificationCenter>
 
   <NotificationSettingsModal :open="settingsOpen" @close="settingsOpen = false" />
+
+  <!-- The way to this device's desktop permission, which nobody finds on
+       their own (Acta's notifications walkthrough). -->
+  <NbWalkthrough :controller="tour" />
 </template>
 
 <script setup lang="ts">
 import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { useWalkthrough, type IWalkthrough } from '@nubisco/ui'
 import { useNotificationsStore, type BridgeNotification } from '@/stores/notifications'
 import { useDaemonStore } from '@/stores/daemon'
 import { useInspectorStore } from '@/stores/inspector'
@@ -153,6 +179,59 @@ function openSettings(): void {
   open.value = false
   settingsOpen.value = true
 }
+
+/**
+ * The notifications walkthrough, after Acta's (`acta/web/src/lib/tour.ts`).
+ * It ends on the control that allows desktop notifications on this device,
+ * because that is the part nobody finds on their own.
+ *
+ * Remembered per browser (the library's default storage), which is the right
+ * scope here and not a shortcut: the permission it leads to is per browser
+ * too, so a second computer is exactly where it should play again.
+ */
+const notificationsTour: IWalkthrough = {
+  id: 'openbridge-notifications',
+  version: 1,
+  steps: [
+    {
+      target: 'notifications',
+      title: 'Your notifications',
+      body: 'When a device stops answering, a plugin fails or an update is out, it lands here. The number counts what you have not opened, and clearing a row takes it out of your list.',
+      placement: 'right',
+    },
+    {
+      id: 'notify-go-settings',
+      title: 'On this computer too',
+      body: 'OpenBridge can also show a desktop notification the moment something happens, while it is open in a tab. Next, where you allow it.',
+    },
+    {
+      target: 'notify-device',
+      title: 'Notifications on this device',
+      body: 'Allow them here. Each browser asks separately, so do this on every computer you use.',
+      placement: 'bottom',
+    },
+  ],
+}
+
+const tour = useWalkthrough(notificationsTour, {
+  onStepChange: (step) => {
+    // The last step points into the settings dialog, so the dialog is opened
+    // one step ahead, while the reader is still reading the step before it.
+    if (step.id === 'notify-go-settings') settingsOpen.value = true
+  },
+})
+
+// Plays once the panel is closed for the first time: the reader has seen
+// what lands here, and the tour then shows where it is set up. Not while it
+// is open, which would cover the list they opened it to read. Only when there
+// is something to allow: once the browser has answered, or cannot ask, the
+// last step would point at a fact rather than a choice. The pause lets the
+// panel finish closing.
+watch(open, (now, before) => {
+  if (!before || now) return
+  if (typeof Notification === 'undefined' || Notification.permission !== 'default') return
+  setTimeout(() => void tour.maybeAutoStart(), 250)
+})
 
 // The read state is the signed-in person's, so another person signing in in
 // this tab starts from theirs.

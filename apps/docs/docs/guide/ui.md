@@ -187,9 +187,17 @@ The bell in the sidebar, between Sponsor and Settings, lists what happened while
 - a plugin fails to load or stops with an error
 - a new version of OpenBridge or of an installed plugin is published (once per version)
 
-Each row opens what it is about: the device, the plugin, or Settings. The badge is the number of rows you have not read yet, counted by the daemon. Rows arrive live in every open tab. From the panel's settings button you can also turn on desktop notifications for this browser.
+Each row opens what it is about: the device, the plugin, or Settings, and opening it marks it read. The badge is the number of rows you have not read yet, counted by the daemon. Rows arrive live in every open tab, and reading or clearing in one tab updates your others.
 
-Rows are kept in `~/.openbridge/notifications.json` (the newest 200), and read state is kept per signed-in person.
+- **Mark all as read**, at the top of the panel, keeps the rows and drops the badge.
+- **Clear** (the cross on a row) takes that row out of your list. **Clear all**, at the foot, empties it, up to the newest row you can see, so a row that arrives as you click is kept. Clearing is also reading.
+- **Desktop notifications** are off until you turn them on. The settings button at the top of the panel opens this browser's setting, and the browser asks for permission only when you click **Allow notifications on this device**. Each browser asks separately. Once allowed, anything new shows as a desktop notification while OpenBridge is open in a tab, and clicking one opens it and marks it read.
+
+The first time you close the panel in a browser that has not been asked yet, a short walkthrough shows where the bell is and ends on that setting. It plays once per browser.
+
+Rows are kept in `~/.openbridge/notifications.json` (the newest 200). They are about the house, so everybody who signs in sees the same rows. What you have read and what you have cleared is kept per signed-in person, so clearing your list does not clear anybody else's. With sign-in off, there is one person.
+
+OpenBridge does not email or message you about rows you have not read. The bell, and the desktop notifications, are the only places they appear.
 
 Devices that never report telemetry (most Homebridge accessories) cannot be watched this way, so they never produce an offline row.
 
