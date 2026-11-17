@@ -1,3 +1,10 @@
+## [1.24.1](https://github.com/nubisco/openbridge/compare/v1.24.0...v1.24.1) (2026-11-17)
+
+
+### Bug Fixes
+
+* **devices:** short time labels on the history chart, on every screen ([#33](https://github.com/nubisco/openbridge/issues/33)) ([1e1dadc](https://github.com/nubisco/openbridge/commit/1e1dadc4b310ca5eaa63f7b3ab672606be5f2b9b))
+
 # [1.24.0](https://github.com/nubisco/openbridge/compare/v1.23.0...v1.24.0) (2026-11-17)
 
 
