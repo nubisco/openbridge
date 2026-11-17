@@ -157,7 +157,7 @@ The `platform` field in config must exactly match the string passed to `register
 If a package registers multiple platforms, add a separate `platforms[]` entry for each one. Each entry gets its own config object.
 
 **Version checks.**
-Some plugins call `api.versionGreaterOrEqual('x.y.z')` to gate features. The shim returns `true` for all version checks. If a plugin behaves unexpectedly, this could be the cause.
+Some plugins call `api.versionGreaterOrEqual('x.y.z')` to gate features, and some refuse to start below a minimum (homebridge-meross needs 1.4.0). The shim presents itself as Homebridge 2.6.0 (`api.version`) and answers each check against that version, so a plugin asking for 2.6.0 or lower gets `true` and one asking for anything newer gets `false`.
 
 ---
 

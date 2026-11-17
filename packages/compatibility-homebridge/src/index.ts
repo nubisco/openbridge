@@ -106,6 +106,28 @@ function makePlatformAccessoryClass(hapNodeJs: any) {
   return PlatformAccessory
 }
 
+/**
+ * Compares two versions by major.minor.patch. A leading "v" and any
+ * pre-release or build suffix are ignored, so "v1.3.0-beta.23" reads as 1.3.0.
+ * Returns a negative number, zero or a positive number, like a sort compare.
+ */
+export function compareVersions(a: string, b: string): number {
+  const parts = (v: string) =>
+    String(v)
+      .trim()
+      .replace(/^v/i, '')
+      .split(/[-+]/)[0]
+      .split('.')
+      .map((n) => parseInt(n, 10) || 0)
+  const x = parts(a)
+  const y = parts(b)
+  for (let i = 0; i < 3; i++) {
+    const d = (x[i] ?? 0) - (y[i] ?? 0)
+    if (d !== 0) return d
+  }
+  return 0
+}
+
 export class HomebridgeAPI extends EventEmitter {
   hap: any
   platformAccessory: any
@@ -308,12 +330,14 @@ export class HomebridgeAPI extends EventEmitter {
   }
 
   /**
-   * Returns whether the running Homebridge version is >= the given semver string.
-   * We always return false (we are not Homebridge), which disables optional features
-   * like Adaptive Lighting that check for minimum versions.
+   * Returns whether the Homebridge version we present (`version`) is >= the
+   * given one. This used to answer false to everything, which some plugins
+   * read as "Homebridge is too old" and disable themselves over: Meross
+   * checks for 1.4.0 at start-up and stops. Answering for the version we
+   * claim to be is what the plugins expect.
    */
-  versionGreaterOrEqual(_version: string): boolean {
-    return false
+  versionGreaterOrEqual(version: string): boolean {
+    return compareVersions(this.version, version) >= 0
   }
 
   getRawAccessories(): any[] {
