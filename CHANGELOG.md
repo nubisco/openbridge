@@ -1,3 +1,10 @@
+## [1.25.1](https://github.com/nubisco/openbridge/compare/v1.25.0...v1.25.1) (2026-11-17)
+
+
+### Bug Fixes
+
+* **plugins:** show a Homebridge plugin's real version and author ([#36](https://github.com/nubisco/openbridge/issues/36)) ([5386c69](https://github.com/nubisco/openbridge/commit/5386c69e4f340646e1140ec16805ad145ff74903))
+
 # [1.25.0](https://github.com/nubisco/openbridge/compare/v1.24.1...v1.25.0) (2026-11-17)
 
 
