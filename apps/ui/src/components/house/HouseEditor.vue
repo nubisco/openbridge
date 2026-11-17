@@ -130,15 +130,11 @@
             />
           </NbField>
           <template v-if="opening.type === 'door'">
-            <div class="house-editor__row house-editor__row--tight">
-              <span>Glass</span>
-              <NbSwitch
-                name="house-door-glass"
-                :model-value="!!opening.glass"
-                @update:model-value="(v?: boolean) => setGlass(!!v)"
-              />
-            </div>
-            <p v-if="opening.glass" class="house-editor__muted">A shutter can sit on it, like on a window.</p>
+            <NbCheckbox
+              label="Glass, so a shutter can sit on it"
+              :model-value="!!opening.glass"
+              @update:model-value="(v?: boolean) => setGlass(!!v)"
+            />
             <p class="house-editor__muted">{{ doorText }}</p>
             <div class="house-editor__row house-editor__row--tight">
               <NbButton size="sm" variant="secondary" icon="arrows-left-right" @click="flipHinge">Flip hinge</NbButton>
