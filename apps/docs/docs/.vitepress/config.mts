@@ -15,7 +15,7 @@ const users = [
     text: 'User Guide',
     items: [
       { text: 'Configuration', link: '/guide/config-reference' },
-      { text: 'Dashboard UI', link: '/guide/ui' },
+      { text: 'Web interface', link: '/guide/ui' },
       { text: 'Homebridge Compatibility', link: '/guide/homebridge-compatibility' },
     ],
   },

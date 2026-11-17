@@ -32,7 +32,7 @@ flowchart TB
   end
 
   homekit["Apple HomeKit<br/>Home app / Apple TV<br/>HomePod / iPad"]
-  ui["Vue 3 Dashboard UI<br/>Dashboard / Plugins<br/>Devices / Terminal"]
+  ui["Vue 3 web interface<br/>Home / Devices / Status<br/>Plugins / Config / Terminal"]
 
   configFile --> cfg
   cfg --> core

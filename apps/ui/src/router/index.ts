@@ -24,10 +24,12 @@ export const router = createRouter({
     {
       path: '/',
       component: AppLayout,
-      redirect: '/dashboard',
+      redirect: '/status',
       children: [
         { path: 'house', name: 'house', component: HouseView },
-        { path: 'dashboard', name: 'dashboard', component: DashboardView },
+        { path: 'status', name: 'status', component: DashboardView },
+        // The page was called Dashboard until 2026-11-17. Old links still work.
+        { path: 'dashboard', redirect: '/status' },
         { path: 'plugins', name: 'plugins', component: PluginsView },
         { path: 'devices', name: 'devices', component: DevicesView },
         { path: 'devices/:id', name: 'device-detail', component: DeviceDetailView },
@@ -76,12 +78,12 @@ router.beforeEach(async (to) => {
   return true
 })
 
-// The app opens on the House view once a plan is drawn, and on the dashboard
-// until then. Only the bare address does this: a link to /dashboard still
-// lands on the dashboard. Registered after the auth gate, so the plan is only
+// The app opens on Home (the house plan) once a plan is drawn, and on Status
+// until then. Only the bare address does this: a link to /status still lands
+// on Status. Registered after the auth gate, so the plan is only
 // read once the person is let in.
 router.beforeEach(async (to) => {
-  if (to.name !== 'dashboard' || to.redirectedFrom?.path !== '/') return true
+  if (to.name !== 'status' || to.redirectedFrom?.path !== '/') return true
   const house = useHouseStore()
   await house.ensure()
   return house.hasPlan ? { name: 'house', replace: true } : true
