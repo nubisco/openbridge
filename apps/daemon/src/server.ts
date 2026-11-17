@@ -96,6 +96,7 @@ import {
   type ServiceTypeKey,
 } from './homekit-service-type.js'
 import { packageAuthor } from './package-author.js'
+import { registerOriginGuard } from './origin-guard.js'
 
 export interface HapInfo {
   /** Null when the bridge could not be published. */
@@ -175,6 +176,9 @@ export async function createServer(
     exposedHeaders: ['WWW-Authenticate'],
   })
   await app.register(websocket)
+
+  // Other websites never reach the API or the sockets, signed in or not.
+  registerOriginGuard(app)
 
   // Optional: Nubisco Platform auth. No-op when PLATFORM_ENABLED is unset.
   const authConfig = loadAuthConfig()

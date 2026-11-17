@@ -20,6 +20,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import type { WebSocket } from '@fastify/websocket'
 import { readSession, type TAuthConfig } from './auth.js'
+import { isOwnOrigin } from './origin-guard.js'
 import { LOCAL_USER, type NotificationEvent, type NotificationStore } from './notifications.js'
 
 /**
@@ -46,38 +47,6 @@ export interface NotificationFrame {
 export function notificationUser(authConfig: TAuthConfig | null, req: FastifyRequest): string {
   if (!authConfig) return LOCAL_USER
   return readSession(authConfig, req)?.userId ?? LOCAL_USER
-}
-
-function firstHeader(value: string | string[] | undefined): string | undefined {
-  const raw = Array.isArray(value) ? value[0] : value
-  return raw?.split(',')[0]?.trim().toLowerCase() || undefined
-}
-
-/**
- * Whether a socket comes from this app's own page.
- *
- * A WebSocket is not covered by CORS, and a `SameSite=Lax` cookie still
- * travels between subdomains of one site, so without this any page on a
- * neighbouring subdomain could open the stream with the visitor's session.
- * A browser always sends `Origin` on a socket, so its absence means a client
- * that is not a browser (curl, a script on the bridge), which the session
- * gate already governs.
- *
- * The page's host is compared with the host the request was addressed to,
- * and with the one a reverse proxy says it forwarded, so a bridge behind a
- * tunnel that rewrites `Host` still accepts its own page.
- */
-export function isOwnOrigin(req: FastifyRequest): boolean {
-  const origin = firstHeader(req.headers.origin)
-  if (!origin) return true
-  let originHost: string
-  try {
-    originHost = new URL(origin).host.toLowerCase()
-  } catch {
-    return false
-  }
-  const hosts = [firstHeader(req.headers.host), firstHeader(req.headers['x-forwarded-host'])]
-  return hosts.some((host) => host !== undefined && host === originHost)
 }
 
 function idList(raw: unknown): string[] | undefined {
