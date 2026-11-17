@@ -1,3 +1,10 @@
+# [1.25.0](https://github.com/nubisco/openbridge/compare/v1.24.1...v1.25.0) (2026-11-17)
+
+
+### Features
+
+* **house:** glass doors, which can carry a shutter ([#34](https://github.com/nubisco/openbridge/issues/34)) ([11653a4](https://github.com/nubisco/openbridge/commit/11653a447d0d0943a6f8ede9f2722d2635e8b0db))
+
 ## [1.24.1](https://github.com/nubisco/openbridge/compare/v1.24.0...v1.24.1) (2026-11-17)
 
 
