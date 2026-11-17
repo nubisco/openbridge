@@ -141,6 +141,12 @@
             <span class="tabular">{{ fmtNum((selected as any).dev.telemetry.supplyTemperature, 1) }}°C</span>
           </NbDefinitionListItem>
           <NbDefinitionListItem
+            v-if="(selected as any).dev.telemetry.returnTemperature !== undefined"
+            term="Water back"
+          >
+            <span class="tabular">{{ fmtNum((selected as any).dev.telemetry.returnTemperature, 1) }}°C</span>
+          </NbDefinitionListItem>
+          <NbDefinitionListItem
             v-if="(selected as any).dev.telemetry.hotWaterTemperature !== undefined"
             term="Hot water tank"
           >
