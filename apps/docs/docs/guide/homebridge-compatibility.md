@@ -12,6 +12,8 @@ intro: 'OpenBridge includes a compatibility shim that lets you run existing Home
 | `registerPlatformAccessories`                              | Supported                               |
 | `publishExternalAccessories`                               | Supported                               |
 | `configureAccessory` callback                              | Supported                               |
+| Saved accessories restored across restarts                 | Supported                               |
+| `unregisterPlatformAccessories`                            | Supported                               |
 | `config.schema.json` visual forms in the UI                | Supported                               |
 | `versionGreaterOrEqual()`                                  | Supported                               |
 | User path helpers (`storagePath`, `configPath`, etc.)      | Supported                               |
@@ -22,15 +24,13 @@ intro: 'OpenBridge includes a compatibility shim that lets you run existing Home
 
 ## What does not work yet
 
-| Feature                                          | Status        | Notes                                             |
-| ------------------------------------------------ | ------------- | ------------------------------------------------- |
-| Accessory plugins (`registerAccessory`)          | Not supported | Only platform plugins work                        |
-| Child bridges                                    | Not supported | No separate bridge processes                      |
-| Cached accessory restore across restarts         | Not supported | Accessories are re-discovered fresh on each start |
-| Dynamic platform `unregisterPlatformAccessories` | Partial       | Logged but no HAP removal yet                     |
-| Config editor in Homebridge UI (HOOBS-style)     | N/A           | OpenBridge has its own UI                         |
+| Feature                                      | Status        | Notes                        |
+| -------------------------------------------- | ------------- | ---------------------------- |
+| Accessory plugins (`registerAccessory`)      | Not supported | Only platform plugins work   |
+| Child bridges                                | Not supported | No separate bridge processes |
+| Config editor in Homebridge UI (HOOBS-style) | N/A           | OpenBridge has its own UI    |
 
-> **Note on cached accessories:** Many Homebridge plugins call `configureAccessory()` to restore previously paired accessories from a cache. OpenBridge does not maintain this cache yet, so plugins that depend heavily on it may re-register accessories on every restart. In practice this usually works fine, but you may see transient HomeKit "accessory not responding" messages during startup.
+> **Cached accessories:** platform plugins that call `configureAccessory()` get their saved accessories back on restart, before discovery starts, as in Homebridge. Accessories a plugin unregisters are removed from the bridge, and those left behind by a plugin that is uninstalled or disabled are cleaned up.
 
 ---
 

@@ -4,56 +4,58 @@ title: What is OpenBridge?
 intro: 'OpenBridge is a TypeScript-first, local-first home automation bridge.'
 ---
 
-It runs as a Node.js daemon on your local network and connects smart devices to **Apple HomeKit** — the same job Homebridge does, but with a modern architecture, a built-in UI, and a plugin API designed for developers.
+It runs as a Node.js daemon on your local network and connects smart devices to **Apple Home** through HomeKit. That is the same job Homebridge does, and OpenBridge runs Homebridge platform plugins, so it is a bridge first: Apple Home stays where you control your home.
 
-If you have never used Homebridge: OpenBridge makes non-HomeKit devices appear in the Apple Home app on your iPhone, iPad, and Mac. Your lights, sensors, switches, and cameras show up as native HomeKit accessories — no cloud subscription, no third-party accounts, no data leaving your network.
+If you have never used Homebridge: OpenBridge makes devices that do not support HomeKit appear in the Home app on your iPhone, iPad and Mac. Your lights, sensors, switches and cameras show up as HomeKit accessories. OpenBridge itself needs no account and no subscription. Whether a device is reached locally or through its maker's cloud depends on the plugin, and the native `-local-` plugins talk to devices on your own network only.
 
 ## Why OpenBridge exists
 
-Homebridge is mature and battle-tested, but it carries significant historical weight: a plugin API that predates modern TypeScript idioms, a UI that is a separate optional project, no structured logging pipeline, and a trust model that can feel opaque to developers.
+Homebridge is mature, widely used and well supported, with a large plugin ecosystem and its own web interface. OpenBridge does not replace it. It is a different take on the same job, built around a few choices:
 
-OpenBridge was built from scratch with different defaults:
-
-- **TypeScript everywhere** — the runtime, the SDK, and the plugin API are all typed end-to-end.
-- **Built-in UI** — the dashboard, plugin manager, device inspector, and terminal ship with the daemon. There is nothing extra to install.
-- **Structured logging** — every plugin gets a scoped logger. Logs are buffered in memory, streamed over WebSocket, and filterable in the UI in real time.
-- **Homebridge compatibility** — existing Homebridge platform plugins work with a one-line config entry. You do not need to rewrite your plugin ecosystem.
-- **No cloud. Ever** — the daemon runs entirely on your local machine. No telemetry, no accounts, no remote APIs.
+- **TypeScript throughout:** the runtime, the SDK and the plugin API are typed end to end.
+- **One package:** the daemon serves its own web interface, so the dashboard, plugin manager, device pages and terminal come with it.
+- **A view of the whole home:** a plan of your home in 2D and 3D shows each device's live state where it is, and every device keeps its history on the bridge.
+- **You choose what Apple Home sees:** each device has an **Expose to HomeKit** switch, so OpenBridge can read a device without adding it to Apple Home twice. The Matter platform plugin goes further and reads Matter devices you already paired with Apple Home, as a second controller.
+- **Homebridge compatibility:** existing Homebridge platform plugins run unchanged, next to native OpenBridge plugins.
+- **Local by default:** the daemon sends no telemetry. It contacts the internet only to check for updates and to fetch the plugin catalogue and plugins.
 
 ## What OpenBridge does, step by step
 
 When you start the daemon, this is what happens in order:
 
 1. **Config is loaded** from `~/.openbridge/config.json` and validated against a Zod schema. Invalid config aborts startup with a clear error.
-2. **Native plugins are discovered** — the daemon scans `~/.openbridge/plugins/openbridge/`, finds each subdirectory that contains a `dist/index.js`, and dynamically imports it.
-3. **Homebridge plugins are registered** — each entry in `platforms[]` is loaded from its explicit `plugin` path and initialized through the Homebridge compatibility shim.
-4. **Plugin lifecycle runs** — `setup()` is called on every plugin, then `start()`. Errors in one plugin do not prevent others from starting.
-5. **The HAP bridge starts** — hap-nodejs advertises the bridge on your local network via Bonjour/mDNS. HomeKit devices poll and control accessories through this interface.
-6. **The Fastify HTTP server starts** on port 8582. It serves the REST API, all four WebSocket streams, and the built Vue 3 UI as static files.
+2. **Native plugins are discovered:** the daemon scans `~/.openbridge/plugins/openbridge/`, finds each subdirectory that contains a `dist/index.js`, and dynamically imports it.
+3. **Homebridge plugins are registered:** installed Homebridge plugins are loaded through the Homebridge compatibility layer, and their saved accessories are restored before discovery starts.
+4. **Plugin lifecycle runs:** `setup()` is called on every plugin, then `start()`. Errors in one plugin do not prevent others from starting.
+5. **The HAP bridge starts:** hap-nodejs advertises the bridge on your local network over Bonjour (mDNS). Apple Home reads and controls the accessories through it.
+6. **The Fastify HTTP server starts** on port 8582. It serves the REST API, the WebSocket streams (updates, metrics, logs and the terminal), and the built Vue 3 UI as static files.
 7. **On SIGINT or SIGTERM**, `stop()` is called on every plugin in reverse start order, then the server closes cleanly.
 
 ## What OpenBridge is NOT
 
 - **Not a cloud service.** There is no hosted version. You run it yourself.
-- **Not a replacement for Apple's Home app.** OpenBridge bridges devices into HomeKit; you still use the Home app to create automations and scenes.
-- **Not a full Homebridge clone.** Homebridge accessory plugins (non-platform) and child bridges are not supported yet. See [Homebridge Compatibility](/guide/homebridge-compatibility) for the full list.
+- **Not a replacement for the Home app.** OpenBridge bridges devices into Apple Home. You still use the Home app for automations and scenes.
+- **Not a full Homebridge replacement.** Homebridge accessory plugins (non-platform) and child bridges are not supported yet. See [Homebridge Compatibility](/guide/homebridge-compatibility) for the full list.
 - **Not stable for production yet.** The API and plugin format may change between releases. Pin your versions.
 
 ## OpenBridge vs Homebridge
 
-|                           | Homebridge                  | OpenBridge                       |
-| ------------------------- | --------------------------- | -------------------------------- |
-| Language                  | JavaScript / TypeScript     | TypeScript only                  |
-| Plugin API                | HAP-focused, callback-heavy | Lifecycle hooks, typed context   |
-| UI                        | Separate optional project   | Built-in, always available       |
-| Structured logging        | No                          | Yes — scoped, buffered, streamed |
-| WebSocket log stream      | No                          | Yes                              |
-| Config validation         | Partial                     | Full Zod schema                  |
-| Homebridge plugin support | Native                      | Compatibility shim               |
-| Native plugin SDK         | No                          | `@nubisco/openbridge-sdk`        |
-| Child bridges             | Yes                         | Not yet                          |
-| Cached accessory restore  | Yes                         | Not yet                          |
-| Cloud dependency          | Never                       | Never                            |
+Both are bridges into Apple Home that run on your own hardware. Where they differ:
+
+|                            | Homebridge                                | OpenBridge                                      |
+| -------------------------- | ----------------------------------------- | ----------------------------------------------- |
+| Maturity                   | Years in production, very large user base | Young, the API may still change                 |
+| Plugins                    | Platform and accessory plugins            | Homebridge platform plugins, and native plugins |
+| Plugin directory           | npm, with a verified-plugin programme     | npm, through the OpenBridge Marketplace         |
+| Web interface              | Homebridge UI, a separate package         | Built into the daemon                           |
+| Child bridges              | Yes                                       | Not yet                                         |
+| Saved accessory restore    | Yes                                       | Yes                                             |
+| Plan of your home          | No                                        | 2D and 3D, with live state                      |
+| History per device         | Through some plugins                      | Built in, kept on the bridge                    |
+| Hide a device from HomeKit | Where the plugin offers it                | A switch on every device                        |
+| Assistant access (MCP)     | Not built in                              | Optional                                        |
+
+OpenBridge is not affiliated with or endorsed by the Homebridge project or Apple. Apple, Apple Home and HomeKit are trademarks of Apple Inc.
 
 ## Monorepo structure
 
