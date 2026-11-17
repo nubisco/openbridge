@@ -137,6 +137,18 @@
           <NbDefinitionListItem term="Target">
             <span class="tabular">{{ fmtNum((selected as any).dev.telemetry.targetTemperature, 1) }}°C</span>
           </NbDefinitionListItem>
+          <NbDefinitionListItem v-if="(selected as any).dev.telemetry.supplyTemperature !== undefined" term="Water out">
+            <span class="tabular">{{ fmtNum((selected as any).dev.telemetry.supplyTemperature, 1) }}°C</span>
+          </NbDefinitionListItem>
+          <NbDefinitionListItem
+            v-if="(selected as any).dev.telemetry.hotWaterTemperature !== undefined"
+            term="Hot water tank"
+          >
+            <span class="tabular">{{ fmtNum((selected as any).dev.telemetry.hotWaterTemperature, 1) }}°C</span>
+          </NbDefinitionListItem>
+          <NbDefinitionListItem v-if="(selected as any).dev.telemetry.outsideTemperature !== undefined" term="Outside">
+            <span class="tabular">{{ fmtNum((selected as any).dev.telemetry.outsideTemperature, 1) }}°C</span>
+          </NbDefinitionListItem>
           <NbDefinitionListItem term="Active">
             <span :class="(selected as any).dev.telemetry.active ? 'state-on' : 'state-off'">
               {{ (selected as any).dev.telemetry.active ? 'On' : 'Off' }}

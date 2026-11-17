@@ -46,6 +46,10 @@ export interface LiveDevice {
   /** Water leaving and coming back, for a heating device that reports both. */
   supply?: number
   return?: number
+  /** A heat pump's own outdoor probe, which colours the garden in the Temperature view. */
+  outside?: number
+  /** A heat pump's domestic hot water tank. */
+  hotWater?: number
   target?: number
   humidity?: number
   power?: number
@@ -95,6 +99,8 @@ export function fromNative(d: NativeDevice & { homekitType?: string | null }): L
   out.target = num(t.targetTemperature)
   out.supply = num(t.supplyTemperature) ?? num(t.flowTemperature)
   out.return = num(t.returnTemperature)
+  out.outside = num(t.outsideTemperature)
+  out.hotWater = num(t.hotWaterTemperature)
   out.humidity = num(t.currentHumidity)
   out.power = num(t.power)
   out.position = num(t.position)
@@ -219,9 +225,13 @@ export function stateText(d: LiveDevice): string {
       if (d.humidity !== undefined) parts.push(`${Math.round(d.humidity)}%`)
       return parts.join(' · ')
     }
-    case 'heating':
+    case 'heating': {
       if (d.on === false) return 'Off'
-      return d.temperature !== undefined ? `${d.temperature.toFixed(1)}°` : 'On'
+      // The water going out to the house is what the marker is about. A heat
+      // pump's own "current" reading is often its hot water tank instead.
+      const t = d.supply ?? d.temperature
+      return t !== undefined ? `${t.toFixed(1)}°` : 'On'
+    }
     case 'dehumidifier':
       if (d.on === false) return 'Off'
       return d.humidity !== undefined ? `${Math.round(d.humidity)}%` : 'On'
