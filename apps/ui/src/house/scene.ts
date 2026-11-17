@@ -287,9 +287,11 @@ function poolWater(
 }
 
 /**
- * A circuit's pipe. With one water temperature the pipe is that colour along
- * its length. With supply and return it shades from one to the other, cut
- * into short pieces so the shading follows the pipe round every bend.
+ * A circuit's pipes. With one water temperature there is one pipe in that
+ * colour. When the device also reports the water coming back, there are two,
+ * side by side as they are laid in a real floor: the flow, out from the pump
+ * in its colour, and the return, back to it in its own, each moving its way
+ * while the pump runs.
  */
 function pipe(
   o: SceneOptions,
@@ -300,33 +302,20 @@ function pipe(
 ): string {
   // Under the floor, so drawn quieter than the things standing on it.
   const w = Math.max(3.5, 2 * o.unit)
-  const points = pts.map(([x, y]) => project(o.mode, x, y, 0.04)).map((p) => `${r1(p[0])},${r1(p[1])}`)
   const opacity = flowing ? 0.6 : 0.3
-  let s = ''
-  if (supply !== undefined && ret !== undefined) {
-    const lens = pts.slice(1).map((p, i) => Math.abs(p[0] - pts[i][0]) + Math.abs(p[1] - pts[i][1]))
-    const total = lens.reduce((a, b) => a + b, 0) || 1
-    let acc = 0
-    let pieces = ''
-    for (let i = 1; i < pts.length; i++) {
-      const a = pts[i - 1]
-      const b = pts[i]
-      const n = Math.max(1, Math.ceil(lens[i - 1]))
-      for (let j = 0; j < n; j++) {
-        const p = project(o.mode, lerp(a[0], b[0], j / n), lerp(a[1], b[1], j / n), 0.04)
-        const q = project(o.mode, lerp(a[0], b[0], (j + 1) / n), lerp(a[1], b[1], (j + 1) / n), 0.04)
-        const t = (acc + ((j + 0.5) / n) * lens[i - 1]) / total
-        pieces += `<line x1="${r1(p[0])}" y1="${r1(p[1])}" x2="${r1(q[0])}" y2="${r1(q[1])}" stroke="${waterColor(lerp(supply, ret, t))}"/>`
-      }
-      acc += lens[i - 1]
-    }
-    s = `<g class="hv-pipe" stroke-width="${r1(w)}" opacity="${opacity}">${pieces}</g>`
-  } else {
-    const color = waterColor(supply ?? 20)
-    s = `<polyline class="hv-pipe" points="${points.join(' ')}" stroke="${color}" stroke-width="${r1(w)}" opacity="${opacity}"/>`
+  const line = (path: Point[], color: string) => {
+    const points = path.map(([x, y]) => project(o.mode, x, y, 0.04)).map((p) => `${r1(p[0])},${r1(p[1])}`)
+    let s = `<polyline class="hv-pipe" points="${points.join(' ')}" stroke="${color}" stroke-width="${r1(w)}" opacity="${opacity}"/>`
+    if (flowing) s += `<polyline class="hv-flow" stroke-width="${r1(w * 0.36)}" points="${points.join(' ')}"/>`
+    return s
   }
-  if (flowing) s += `<polyline class="hv-flow" stroke-width="${r1(w * 0.36)}" points="${points.join(' ')}"/>`
-  return s
+  if (ret === undefined || supply === undefined) return line(pts, waterColor(supply ?? 20))
+  // The return runs alongside, a little off the flow. The paths are square,
+  // so one diagonal offset keeps it parallel on every leg. It is reversed so
+  // its water moves back toward the pump.
+  const k = 0.45
+  const back = pts.map(([x, y]) => [x + k, y + k] as Point).reverse()
+  return line(back, waterColor(ret)) + line(pts, waterColor(supply))
 }
 
 /**
@@ -1009,8 +998,21 @@ export function renderFloor(
     const water = waterColor(feed?.supply ?? feed?.temperature ?? 20)
     const [a, b] = radiatorEnds(rad, 0)
     const [a2, b2] = radiatorEnds(rad)
-    // Radiators stay white. Heat shows as a glow and an edge in the water's colour.
-    const style = hot ? ` style="--hv-water:${water};stroke:${water}"` : ''
+    // Radiators stay white. Heat shows as a glow and an edge in the water's
+    // colour. With the water coming back known, the edge runs from the flow's
+    // colour at one end to the return's at the other, as the water cools
+    // crossing it.
+    let edge = water
+    if (hot && feed?.return !== undefined && feed.supply !== undefined) {
+      const gid = `hv-rg-${svgId(floor.id)}-${svgId(rad.id)}`
+      const p = project(o.mode, a2[0], a2[1])
+      const q = project(o.mode, b2[0], b2[1])
+      defs +=
+        `<linearGradient id="${gid}" gradientUnits="userSpaceOnUse" x1="${r1(p[0])}" y1="${r1(p[1])}" x2="${r1(q[0])}" y2="${r1(q[1])}">` +
+        `<stop offset="0" stop-color="${water}"/><stop offset="1" stop-color="${waterColor(feed.return)}"/></linearGradient>`
+      edge = `url(#${gid})`
+    }
+    const style = hot ? ` style="--hv-water:${water};stroke:${edge}"` : ''
     const fins: string[] = []
     for (let t = 0.25; t < rad.len - 0.01; t += 0.25) {
       fins.push(rad.axis === 'h' ? `${a2[0] + t},${a2[1]}` : `${a2[0]},${a2[1] + t}`)
