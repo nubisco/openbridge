@@ -80,6 +80,7 @@ import { computed, ref } from 'vue'
 import { useConfirm, useToast } from '@nubisco/ui'
 import { capabilities, setBrightness, setGate, setPosition, setPower, setTarget } from '@/house/control'
 import { KIND_LABEL, formatPower, type LiveDevice } from '@/house/live'
+import { resting } from '@/house/scene'
 import CameraView from '@/components/CameraView.vue'
 
 const props = defineProps<{
@@ -113,6 +114,8 @@ const readings = computed(() => {
   if (d.temperature !== undefined && !named) out.push({ term: 'Temperature', value: `${d.temperature.toFixed(1)} °C` })
   if (d.supply !== undefined) out.push({ term: 'Water out', value: `${d.supply.toFixed(1)} °C` })
   if (d.return !== undefined) out.push({ term: 'Water back', value: `${d.return.toFixed(1)} °C` })
+  // Out and back the same while it is on: circulating, with no heat being added.
+  if (resting(d)) out.push({ term: 'Compressor', value: 'Resting' })
   if (d.hotWater !== undefined) out.push({ term: 'Hot water tank', value: `${d.hotWater.toFixed(1)} °C` })
   if (d.outside !== undefined) out.push({ term: 'Outside', value: `${d.outside.toFixed(1)} °C` })
   if (d.target !== undefined && !caps.value.target) out.push({ term: 'Target', value: `${d.target.toFixed(1)} °C` })
