@@ -98,6 +98,8 @@ export interface HouseOpening {
    * `down` or `right`.
    */
   opens?: 'up' | 'down' | 'left' | 'right'
+  /** A door with a glass leaf, such as a French door. A shutter can sit on it like on a window. */
+  glass?: boolean
 }
 
 /** How a light hangs: from the ceiling, on a wall, or as a floor or table lamp. */
@@ -353,7 +355,9 @@ export function validateHousePlan(raw: unknown): HousePlan {
       if (o.type !== 'door' && o.type !== 'window' && o.type !== 'open' && o.type !== 'slider')
         fail(`${op}.type`, 'must be door, window, open or slider')
       if (o.axis !== 'h' && o.axis !== 'v') fail(`${op}.axis`, 'must be h or v')
-      if (o.type === 'window' || o.type === 'slider') windows.add(oid)
+      if (o.glass !== undefined && (o.type !== 'door' || typeof o.glass !== 'boolean'))
+        fail(`${op}.glass`, 'only a door can be glass, and it is true or false')
+      if (o.type === 'window' || o.type === 'slider' || (o.type === 'door' && o.glass === true)) windows.add(oid)
       // On the wall's line in whole cells, along it in half cells.
       const x = (o.axis === 'h' ? half : int)(o.x, `${op}.x`, 0, plot.w)
       const y = (o.axis === 'v' ? half : int)(o.y, `${op}.y`, 0, plot.h)
@@ -369,6 +373,7 @@ export function validateHousePlan(raw: unknown): HousePlan {
           fail(`${op}.opens`, `must be ${sides.join(' or ')}`)
         out.opens = o.opens as HouseOpening['opens']
       }
+      if (o.glass === true) out.glass = true
       return out
     })
 
@@ -440,7 +445,8 @@ export function validateHousePlan(raw: unknown): HousePlan {
       }
       if (pl.opening !== undefined) {
         const oid = id(pl.opening, `${pp}.opening`)
-        if (!windows.has(oid)) fail(`${pp}.opening`, `'${oid}' is not a window or sliding door on this floor`)
+        if (!windows.has(oid))
+          fail(`${pp}.opening`, `'${oid}' is not a window, sliding door or glass door on this floor`)
         out.opening = oid
       }
       if (pl.color !== undefined) {

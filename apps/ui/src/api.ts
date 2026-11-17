@@ -270,6 +270,8 @@ export interface HouseOpening {
   hinge?: 'start' | 'end'
   /** The side a door swings into, on the plan. Default `down` or `right`. */
   opens?: 'up' | 'down' | 'left' | 'right'
+  /** A door with a glass leaf. A shutter can sit on it like on a window. */
+  glass?: boolean
 }
 
 export type HouseLightMount = 'ceiling' | 'wall' | 'floor' | 'table' | 'pool'

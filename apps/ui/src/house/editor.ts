@@ -37,6 +37,7 @@ import {
   roomRects,
   roomsOutsideIn,
   sliderPanes,
+  takesShutter,
   unitKey,
   wallRuns,
   wallUnits,
@@ -237,7 +238,11 @@ export function openingAt(floor: HouseFloor, u: WallUnit): HouseOpening | undefi
  * Put a door or window on the wall at `u`, a metre long and centred on the tap
  * where the wall allows. Returns null when there is no wall left there.
  */
-export function addOpening(floor: HouseFloor, u: WallUnit, type: 'door' | 'window' | 'slider'): HouseOpening | null {
+export function addOpening(
+  floor: HouseFloor,
+  u: WallUnit,
+  type: 'door' | 'window' | 'slider' | 'glassdoor',
+): HouseOpening | null {
   const units = wallUnits(floor)
   const taken = new Set(floor.openings.flatMap(openingUnits))
   const free = (i: number) => {
@@ -258,18 +263,19 @@ export function addOpening(floor: HouseFloor, u: WallUnit, type: 'door' | 'windo
   const id = uniqueId(type, (x) => floor.openings.some((o) => o.id === x))
   const o: HouseOpening = {
     id,
-    type,
+    type: type === 'glassdoor' ? 'door' : type,
     axis: u.axis,
     x: u.axis === 'h' ? u.x + start : u.x,
     y: u.axis === 'v' ? u.y + start : u.y,
     len: end - start,
   }
+  if (type === 'glassdoor') o.glass = true
   floor.openings.push(o)
   return o
 }
 
 /**
- * The window or sliding door nearest a point, within two cells, that has no
+ * The window, sliding door or glass door nearest a point, within two cells, that has no
  * shutter yet.
  * Measured to the window's segment, so a drop anywhere along a wide window
  * counts, not only near its middle.
@@ -279,7 +285,7 @@ export function nearestFreeWindow(floor: HouseFloor, x: number, y: number, reach
   let best: HouseOpening | null = null
   let bd = reach
   for (const o of floor.openings) {
-    if ((o.type !== 'window' && o.type !== 'slider') || taken.has(o.id)) continue
+    if (!takesShutter(o) || taken.has(o.id)) continue
     const cx = o.axis === 'h' ? clamp(x, o.x, o.x + o.len) : o.x
     const cy = o.axis === 'v' ? clamp(y, o.y, o.y + o.len) : o.y
     const d = Math.hypot(x - cx, y - cy)
@@ -686,7 +692,9 @@ export function tidy(plan: HousePlan): HousePlan {
     const kept = new Set<string>()
     f.openings = f.openings.filter((o) => {
       const ok = openingFits(o, units)
-      if (ok && (o.type === 'window' || o.type === 'slider')) kept.add(o.id)
+      // A door turned into a window or an open wall is no longer a glass door.
+      if (o.type !== 'door') delete o.glass
+      if (ok && takesShutter(o)) kept.add(o.id)
       return ok
     })
     if (f.radiators) {
@@ -842,7 +850,7 @@ export function renderEditor(
       const len = w.opening.len * S
       h +=
         `<line class="hv-ewinb" ${c}/>` +
-        `<path class="hv-edoor${sel}" d="M${sw.hinge[0] * S},${sw.hinge[1] * S} L${sw.open[0] * S},${sw.open[1] * S} ` +
+        `<path class="hv-edoor${w.opening.glass ? ' hv-eglassdoor' : ''}${sel}" d="M${sw.hinge[0] * S},${sw.hinge[1] * S} L${sw.open[0] * S},${sw.open[1] * S} ` +
         `A${len},${len} 0 0 ${sw.sweep} ${sw.free[0] * S},${sw.free[1] * S}"/>`
     }
     // A wide invisible line over every opening, so a finger can grab it.

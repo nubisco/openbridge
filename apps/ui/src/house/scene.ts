@@ -1082,19 +1082,19 @@ export function renderFloor(
       const ln = (cls: string, p: Point, q: Point, extra = '') =>
         `<line class="${cls}" x1="${r1(p[0])}" y1="${r1(p[1])}" x2="${r1(q[0])}" y2="${r1(q[1])}"${extra}/>`
       if (w.type === 'wall') svg = ln('hv-wall2d', a, c)
-      else if (w.type === 'door' && w.opening) {
-        // The leaf drawn open, and the arc its free end sweeps, on the side
-        // and from the hinge the plan says.
-        const sw = doorSwing(w.opening)
-        const h = project(o.mode, ...sw.hinge)
-        const q = project(o.mode, ...sw.open)
-        const f = project(o.mode, ...sw.free)
-        const len = w.opening.len * S
-        svg =
-          ln('hv-sill2d', a, c) +
-          `<path class="hv-door2d" d="M${r1(h[0])},${r1(h[1])} L${r1(q[0])},${r1(q[1])} A${r1(len)},${r1(len)} 0 0 ${sw.sweep} ${r1(f[0])},${r1(f[1])}"/>`
-      } else {
-        if (w.type === 'slider') {
+      else {
+        if (w.type === 'door' && w.opening) {
+          // The leaf drawn open, and the arc its free end sweeps, on the side
+          // and from the hinge the plan says. A glass leaf is drawn as glass.
+          const sw = doorSwing(w.opening)
+          const h = project(o.mode, ...sw.hinge)
+          const q = project(o.mode, ...sw.open)
+          const f = project(o.mode, ...sw.free)
+          const len = w.opening.len * S
+          svg =
+            ln('hv-sill2d', a, c) +
+            `<path class="hv-door2d${w.opening.glass ? ' hv-glassdoor2d' : ''}" d="M${r1(h[0])},${r1(h[1])} L${r1(q[0])},${r1(q[1])} A${r1(len)},${r1(len)} 0 0 ${sw.sweep} ${r1(f[0])},${r1(f[1])}"/>`
+        } else if (w.type === 'slider') {
           // Two leaves on their own tracks, overlapping in the middle.
           const g = 0.12
           const at = (t: number, k: number) =>
@@ -1153,32 +1153,34 @@ export function renderFloor(
         : ''
     if (w.type === 'wall') {
       svg = `<polygon class="hv-wall" points="${quad(0, H)}"/>${tint(0, H)}${cap(H)}`
-    } else if (w.type === 'door' && w.opening) {
-      const hd = Math.min(H, 1.05 * CELLS_PER_M)
-      const sw = doorSwing(w.opening)
-      const q = sw.at(0.78)
-      svg =
-        `<polygon class="hv-doorleaf" points="${poly(o, [
-          [sw.hinge[0], sw.hinge[1], 0.03],
-          [q[0], q[1], 0.03],
-          [q[0], q[1], hd * 0.96],
-          [sw.hinge[0], sw.hinge[1], hd * 0.96],
-        ])}"/>` +
-        `<polyline class="hv-doorframe" points="${poly(o, [
-          [A[0], A[1], 0],
-          [A[0], A[1], hd],
-          [B[0], B[1], hd],
-          [B[0], B[1], 0],
-        ])}"/>`
-      if (H > hd + 0.1) svg += `<polygon class="hv-wall" points="${quad(hd, H)}"/>${tint(hd, H)}${cap(H)}`
     } else {
       // A window is glass over a low wall, up to the top. A sliding door is
       // glass from the floor to door height, in a frame with a mullion where
-      // its two leaves meet, and wall above.
+      // its two leaves meet, and wall above. A door is its leaf, swung open,
+      // in a frame with wall above, and a glass door's leaf is glass.
+      const door = w.type === 'door' && !!w.opening
       const slider = w.type === 'slider'
-      const z0 = slider ? 0 : H * 0.3
-      const zt = slider ? Math.min(H, 1.05 * CELLS_PER_M) : H
-      if (slider) {
+      const z0 = slider || door ? 0 : H * 0.3
+      const zt = slider || door ? Math.min(H, 1.05 * CELLS_PER_M) : H
+      if (door && w.opening) {
+        const hd = zt
+        const sw = doorSwing(w.opening)
+        const q = sw.at(0.78)
+        svg =
+          `<polygon class="hv-doorleaf${w.opening.glass ? ' hv-glassleaf' : ''}" points="${poly(o, [
+            [sw.hinge[0], sw.hinge[1], 0.03],
+            [q[0], q[1], 0.03],
+            [q[0], q[1], hd * 0.96],
+            [sw.hinge[0], sw.hinge[1], hd * 0.96],
+          ])}"/>` +
+          `<polyline class="hv-doorframe" points="${poly(o, [
+            [A[0], A[1], 0],
+            [A[0], A[1], hd],
+            [B[0], B[1], hd],
+            [B[0], B[1], 0],
+          ])}"/>`
+        if (H > hd + 0.1) svg += `<polygon class="hv-wall" points="${quad(hd, H)}"/>${tint(hd, H)}${cap(H)}`
+      } else if (slider) {
         const m1 = project(o.mode, (A[0] + B[0]) / 2, (A[1] + B[1]) / 2, 0)
         const m2 = project(o.mode, (A[0] + B[0]) / 2, (A[1] + B[1]) / 2, zt)
         svg =
