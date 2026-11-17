@@ -1,3 +1,10 @@
+## [1.20.1](https://github.com/nubisco/openbridge/compare/v1.20.0...v1.20.1) (2026-11-17)
+
+
+### Bug Fixes
+
+* **homebridge:** answer version checks for the version we present ([#28](https://github.com/nubisco/openbridge/issues/28)) ([44892c1](https://github.com/nubisco/openbridge/commit/44892c18666b55129e6a1d46562a7b3aa7d4b69d))
+
 # [1.20.0](https://github.com/nubisco/openbridge/compare/v1.19.0...v1.20.0) (2026-11-16)
 
 
