@@ -1,3 +1,10 @@
+# [1.21.0](https://github.com/nubisco/openbridge/compare/v1.20.1...v1.21.0) (2026-11-17)
+
+
+### Features
+
+* **ui:** Home first, the bridge's pages grouped under Bridge ([#29](https://github.com/nubisco/openbridge/issues/29)) ([aba361b](https://github.com/nubisco/openbridge/commit/aba361b0a3abfad72f033482f4b091bf97120b12))
+
 ## [1.20.1](https://github.com/nubisco/openbridge/compare/v1.20.0...v1.20.1) (2026-11-17)
 
 
