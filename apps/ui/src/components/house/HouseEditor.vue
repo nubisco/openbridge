@@ -110,7 +110,11 @@
           </div>
         </NbPanel>
 
-        <NbPanel v-else-if="opening" :title="OPENING_TITLE[opening.type]" :flat="true">
+        <NbPanel
+          v-else-if="opening"
+          :title="opening.type === 'door' && opening.glass ? 'Glass door' : OPENING_TITLE[opening.type]"
+          :flat="true"
+        >
           <NbField v-slot="{ id }" label="Type" orientation="stack">
             <NbSelect :id="id" v-model="opening.type" :options="OPENING_KINDS" size="sm" />
           </NbField>
@@ -126,6 +130,11 @@
             />
           </NbField>
           <template v-if="opening.type === 'door'">
+            <NbCheckbox
+              label="Glass, so a shutter can sit on it"
+              :model-value="!!opening.glass"
+              @update:model-value="(v?: boolean) => setGlass(!!v)"
+            />
             <p class="house-editor__muted">{{ doorText }}</p>
             <div class="house-editor__row house-editor__row--tight">
               <NbButton size="sm" variant="secondary" icon="arrows-left-right" @click="flipHinge">Flip hinge</NbButton>
@@ -481,6 +490,7 @@ const TOOLS = [
   { id: 'door', label: 'Door', icon: 'door-open' },
   { id: 'window', label: 'Window', icon: 'app-window' },
   { id: 'slider', label: 'Sliding door', icon: 'columns' },
+  { id: 'glassdoor', label: 'Glass door', icon: 'door' },
   { id: 'open', label: 'Open wall', icon: 'arrows-out-line-horizontal' },
   { id: 'radiator', label: 'Radiator', icon: 'thermometer-hot' },
   { id: 'furniture', label: 'Furniture', icon: 'armchair' },
@@ -532,6 +542,7 @@ type Tool =
   | 'door'
   | 'window'
   | 'slider'
+  | 'glassdoor'
   | 'open'
   | 'radiator'
   | 'furniture'
@@ -624,6 +635,8 @@ const help = computed(() => {
     window: 'Tap a wall to put a window there. Drag a window to move it, or its ends to resize it.',
     slider:
       'Tap a wall to put a sliding glass door there, two metres wide. Drag it to move it, or its ends to resize it. A shutter can sit on it.',
+    glassdoor:
+      'Tap a wall to put a glass door there. Drag it to move it, or its ends to resize it. A shutter can sit on it.',
     radiator:
       'Tap a wall, on the side the radiator hangs, to put one there. Drag it to move it, or its ends to resize it. A heating circuit serving the room runs through it.',
     furniture:
@@ -824,6 +837,14 @@ const doorText = computed(() => {
   return `Hinged at the ${hinge}, opens ${side === 'up' || side === 'down' ? side + 'wards' : 'to the ' + side} on the plan.`
 })
 
+/** Glass or solid. A shutter on a door that is made solid comes off it when the plan is saved. */
+function setGlass(on: boolean) {
+  const o = opening.value
+  if (!o) return
+  if (on) o.glass = true
+  else delete o.glass
+}
+
 function flipHinge() {
   const o = opening.value
   if (!o) return
@@ -978,7 +999,13 @@ function onDown(e: PointerEvent) {
     const y0 = clamp(Math.round(p.y), 0, ph)
     drag = { type: 'draw', x0, y0 }
     draft.value = { x: x0, y: y0, w: 0, h: 0 }
-  } else if (tool.value === 'door' || tool.value === 'window' || tool.value === 'slider' || tool.value === 'open') {
+  } else if (
+    tool.value === 'door' ||
+    tool.value === 'window' ||
+    tool.value === 'slider' ||
+    tool.value === 'glassdoor' ||
+    tool.value === 'open'
+  ) {
     if (!grabOpening(t, p)) {
       const u = nearestWall(floor.value, p.x, p.y)
       clearSelection()

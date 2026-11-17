@@ -127,6 +127,11 @@ export function wallUnits(floor: HouseFloor): Map<string, WallUnit> {
 }
 
 /** Where an opening starts and ends along its wall, in cells. */
+/** Whether a shutter can sit on an opening: a window, a sliding door, or a glass door. */
+export function takesShutter(o: HouseOpening): boolean {
+  return o.type === 'window' || o.type === 'slider' || (o.type === 'door' && o.glass === true)
+}
+
 export function openingSpan(o: HouseOpening): [number, number] {
   const s = o.axis === 'h' ? o.x : o.y
   return [s, s + o.len]

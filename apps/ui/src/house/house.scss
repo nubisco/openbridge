@@ -175,6 +175,10 @@
   stroke-width: 1.6;
   pointer-events: none;
 }
+.hv-glassdoor2d {
+  fill: rgba(124, 195, 230, 0.16);
+  stroke: #7cc3e6;
+}
 .hv-pane {
   fill: rgba(150, 205, 235, 0.45);
   stroke: #f7f5f0;
@@ -210,6 +214,10 @@
   stroke: #7a5232;
   stroke-width: 0.8;
   pointer-events: none;
+}
+.hv-glassleaf {
+  fill: rgba(150, 205, 235, 0.55);
+  stroke: #8d949c;
 }
 .hv-leaf {
   fill: rgba(70, 72, 78, 0.55);
@@ -531,6 +539,10 @@
   stroke-width: 1.6;
   fill: none;
   pointer-events: none;
+}
+.hv-eglassdoor {
+  stroke: #5fe0ff;
+  fill: rgba(95, 224, 255, 0.12);
 }
 .hv-erad {
   fill: rgba(255, 170, 120, 0.25);

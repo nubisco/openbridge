@@ -158,6 +158,21 @@ describe('validateHousePlan', () => {
     expect(out.floors[0].placements[1].opening).toBe('s1')
   })
 
+  it('keeps a glass door, and lets a shutter sit on it', () => {
+    const p = plan()
+    p.floors[0].openings[1].glass = true
+    p.floors[0].placements[1].opening = 'd1'
+    const out = validateHousePlan(p)
+    expect(out.floors[0].openings[1].glass).toBe(true)
+    expect(out.floors[0].placements[1].opening).toBe('d1')
+  })
+
+  it('refuses glass on anything but a door', () => {
+    const p = plan()
+    p.floors[0].openings.push({ id: 's1', type: 'slider', axis: 'v', x: 12, y: 4, len: 4, glass: true })
+    expect(() => validateHousePlan(p)).toThrow(/only a door can be glass/)
+  })
+
   it('accepts a sound plan and normalises it', () => {
     const out = validateHousePlan({ ...plan(), extra: 'dropped' })
     expect(out.floors).toHaveLength(2)
