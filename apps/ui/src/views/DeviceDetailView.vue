@@ -123,13 +123,14 @@ watchEffect(() => layout.setPage(device.value?.name ?? deviceId.value, { crumbs:
 const currentMetric = computed(() => metrics.value.find((m) => m.key === selectedMetric.value) ?? null)
 
 /**
- * The chart prints a Date with its full `toString()`, time zone name and all,
- * which runs off a phone's edge. A phone gets a short label for the range
- * instead. The desktop keeps the Date it always had.
+ * The chart prints a Date with its full `toString()`, time zone name and all
+ * ("Mon Nov 16 2026 14:18:26 GMT+0000 (Western European Standard Time)"),
+ * which ran off a phone's edge and read as a bug on the desktop. Every screen
+ * gets a short label for the range instead: the time of day for an hour or a
+ * day, the date for longer.
  */
-function xValue(t: number): Date | string {
+function xValue(t: number): string {
   const d = new Date(t * 1000)
-  if (!phone.value) return d
   const short = selectedRange.value === '1h' || selectedRange.value === '24h'
   return short
     ? d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
