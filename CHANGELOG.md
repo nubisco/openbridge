@@ -1,3 +1,10 @@
+# [1.23.0](https://github.com/nubisco/openbridge/compare/v1.22.0...v1.23.0) (2026-11-17)
+
+
+### Features
+
+* **house:** flow and return as two pipes, and radiators that cool across ([#31](https://github.com/nubisco/openbridge/issues/31)) ([7474d39](https://github.com/nubisco/openbridge/commit/7474d39af71f405e14e45cb16a84d24cba5f876c))
+
 # [1.22.0](https://github.com/nubisco/openbridge/compare/v1.21.0...v1.22.0) (2026-11-17)
 
 
