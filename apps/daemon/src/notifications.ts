@@ -11,7 +11,9 @@
  * workspace AGENTS.md, adapted to a bridge:
  *
  * - Rows are about the house, not about one person, so every row reaches
- *   everybody who signs in. What is per person is whether they have read it.
+ *   everybody who signs in. What is per person is whether they have read it
+ *   and whether they have cleared it from their own list. One person clearing
+ *   the bell must not empty it for another.
  * - A write that changes nothing tells nobody. Every row carries a key built
  *   from the thing and the state that justified it, and a key is announced
  *   once, ever. Re-checking for updates every six hours finds the same
@@ -77,6 +79,30 @@ export interface NotificationView extends StoredNotification {
   read: boolean
 }
 
+/**
+ * What changed, for live delivery. Says what happened and to which row, never
+ * the row itself: a tab re-reads through the normal, session-checked route.
+ * `userId` is set for the per-person verbs, so only that person's tabs hear.
+ */
+export interface NotificationEvent {
+  verb: 'notification.created' | 'notification.read' | 'notification.cleared'
+  /** The row, when the change was to one row. Absent for "all of them". */
+  id?: string
+  userId?: string
+}
+
+/** Which rows a person is clearing. */
+export interface ClearSelection {
+  /** These rows. */
+  ids?: string[]
+  /**
+   * Every row created at or before this instant. What "Clear all" sends: the
+   * newest row the person was looking at, so a row that arrived while they
+   * reached for the button is not cleared unseen.
+   */
+  before?: string
+}
+
 export interface NotificationInput {
   /** The thing and the state that justified it. Announced at most once. */
   key: string
@@ -96,6 +122,11 @@ interface FileShape {
   notifications: StoredNotification[]
   /** Row ids each person has read. Pruned to rows that still exist. */
   readBy: Record<string, string[]>
+  /**
+   * Row ids each person has cleared from their own list. Pruned the same way.
+   * Absent from files written before clearing existed, which load as empty.
+   */
+  clearedBy: Record<string, string[]>
   /** Keys already announced, newest last. */
   announced: string[]
   /** Devices currently announced as unreachable. */
@@ -105,12 +136,12 @@ interface FileShape {
 }
 
 function empty(): FileShape {
-  return { notifications: [], readBy: {}, announced: [], outages: {}, failing: {} }
+  return { notifications: [], readBy: {}, clearedBy: {}, announced: [], outages: {}, failing: {} }
 }
 
 export class NotificationStore {
   private state: FileShape
-  private listeners = new Set<(event: { type: 'added' | 'read'; userId?: string }) => void>()
+  private listeners = new Set<(event: NotificationEvent) => void>()
 
   constructor(
     private readonly path: string,
@@ -145,25 +176,37 @@ export class NotificationStore {
     }
     this.pruneReadState()
     this.save()
-    this.emit({ type: 'added' })
+    this.emit({ verb: 'notification.created', id: row.id })
     return row
+  }
+
+  /** The rows one person still has in their list, newest first. */
+  private visible(userId: string): StoredNotification[] {
+    const cleared = this.state.clearedBy[userId]
+    if (!cleared || cleared.length === 0) return this.state.notifications
+    const gone = new Set(cleared)
+    return this.state.notifications.filter((n) => !gone.has(n.id))
   }
 
   /** The newest rows as one person sees them, and their unread count over every row. */
   list(userId: string, limit = 50): { notifications: NotificationView[]; unread: number } {
     const read = new Set(this.state.readBy[userId] ?? [])
     const capped = Math.min(Math.max(1, Math.floor(limit) || 50), MAX_NOTIFICATIONS)
-    const notifications = this.state.notifications.slice(0, capped).map((n) => ({ ...n, read: read.has(n.id) }))
+    const notifications = this.visible(userId)
+      .slice(0, capped)
+      .map((n) => ({ ...n, read: read.has(n.id) }))
     return { notifications, unread: this.unreadCount(userId) }
   }
 
   /**
-   * The badge. Counted over every stored row, never over the page the client
-   * happened to load, which is how Acta's badge came to understate.
+   * The badge. Counted over every row the person still has, never over the
+   * page the client happened to load, which is how Acta's badge came to
+   * understate. A cleared row is gone from the list, so it is gone from the
+   * count too, read or not.
    */
   unreadCount(userId: string): number {
     const read = new Set(this.state.readBy[userId] ?? [])
-    return this.state.notifications.filter((n) => !read.has(n.id)).length
+    return this.visible(userId).filter((n) => !read.has(n.id)).length
   }
 
   /** Mark some rows read for one person, or all of them when no ids are given. */
@@ -175,13 +218,48 @@ export class NotificationStore {
     if (read.size !== before) {
       this.state.readBy[userId] = [...read]
       this.save()
-      this.emit({ type: 'read', userId })
+      this.emit({ verb: 'notification.read', userId, ...(ids?.length === 1 ? { id: ids[0] } : {}) })
+    }
+    return this.unreadCount(userId)
+  }
+
+  /**
+   * Take rows out of one person's list. Nobody else's list changes, and the
+   * row itself is kept until it falls off the end, because it is still news
+   * to everybody who has not cleared it.
+   *
+   * Clearing is also reading: a row nobody can see any more must not keep a
+   * desktop notification or a badge owed. Returns the person's unread count.
+   * Clearing nothing new is a write that changes nothing, so it tells nobody.
+   */
+  clear(userId: string, selection: ClearSelection = {}): number {
+    const cutoff = selection.before !== undefined ? Date.parse(selection.before) : null
+    if (cutoff !== null && Number.isNaN(cutoff)) return this.unreadCount(userId)
+    const wanted = selection.ids ? new Set(selection.ids) : null
+    const cleared = new Set(this.state.clearedBy[userId] ?? [])
+    const read = new Set(this.state.readBy[userId] ?? [])
+    const before = cleared.size
+    for (const n of this.state.notifications) {
+      if (wanted && !wanted.has(n.id)) continue
+      if (cutoff !== null && Date.parse(n.createdAt) > cutoff) continue
+      cleared.add(n.id)
+      read.add(n.id)
+    }
+    if (cleared.size !== before) {
+      this.state.clearedBy[userId] = [...cleared]
+      this.state.readBy[userId] = [...read]
+      this.save()
+      this.emit({
+        verb: 'notification.cleared',
+        userId,
+        ...(selection.ids?.length === 1 ? { id: selection.ids[0] } : {}),
+      })
     }
     return this.unreadCount(userId)
   }
 
   /** Told about every write, for live delivery to open tabs. */
-  subscribe(listener: (event: { type: 'added' | 'read'; userId?: string }) => void): () => void {
+  subscribe(listener: (event: NotificationEvent) => void): () => void {
     this.listeners.add(listener)
     return () => this.listeners.delete(listener)
   }
@@ -214,12 +292,14 @@ export class NotificationStore {
 
   private pruneReadState(): void {
     const known = new Set(this.state.notifications.map((n) => n.id))
-    for (const [user, ids] of Object.entries(this.state.readBy)) {
-      this.state.readBy[user] = ids.filter((id) => known.has(id))
+    for (const perPerson of [this.state.readBy, this.state.clearedBy]) {
+      for (const [user, ids] of Object.entries(perPerson)) {
+        perPerson[user] = ids.filter((id) => known.has(id))
+      }
     }
   }
 
-  private emit(event: { type: 'added' | 'read'; userId?: string }): void {
+  private emit(event: NotificationEvent): void {
     for (const listener of this.listeners) {
       try {
         listener(event)
@@ -236,6 +316,7 @@ export class NotificationStore {
       return {
         notifications: Array.isArray(raw.notifications) ? raw.notifications : [],
         readBy: raw.readBy && typeof raw.readBy === 'object' ? raw.readBy : {},
+        clearedBy: raw.clearedBy && typeof raw.clearedBy === 'object' ? raw.clearedBy : {},
         announced: Array.isArray(raw.announced) ? raw.announced : [],
         outages: raw.outages && typeof raw.outages === 'object' ? raw.outages : {},
         failing: raw.failing && typeof raw.failing === 'object' ? raw.failing : {},

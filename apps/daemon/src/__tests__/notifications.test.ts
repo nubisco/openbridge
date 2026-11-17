@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { mkdtempSync, rmSync } from 'fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 import { createHmac } from 'crypto'
@@ -19,9 +19,10 @@ import {
   pluginLoadFailed,
   pluginLoaded,
   pluginUpdate,
+  type NotificationEvent,
   type ObservedDevice,
 } from '../notifications.js'
-import { registerNotificationRoutes } from '../notification-routes.js'
+import { REAUTH_CLOSE_CODE, SOCKET_MAX_AGE_MS, registerNotificationRoutes } from '../notification-routes.js'
 import type { TAuthConfig } from '../auth.js'
 
 const T0 = Date.parse('2026-11-05T12:00:00.000Z')
@@ -226,12 +227,114 @@ describe('unread count and read state', () => {
   })
 
   it('tells only the reader when somebody reads, and everybody when a row is added', () => {
-    const events: Array<{ type: string; userId?: string }> = []
+    const events: NotificationEvent[] = []
     store.subscribe((e) => events.push(e))
     addRows(1)
+    const id = store.list('ana').notifications[0]!.id
     store.markRead('ana')
     store.markRead('ana') // nothing left to read: no event
-    expect(events).toEqual([{ type: 'added' }, { type: 'read', userId: 'ana' }])
+    expect(events).toEqual([
+      { verb: 'notification.created', id },
+      { verb: 'notification.read', userId: 'ana' },
+    ])
+  })
+})
+
+describe('clearing', () => {
+  function addRows(n: number, prefix = 'r') {
+    for (let i = 0; i < n; i++) {
+      now += 1000
+      store.add({
+        key: `${prefix}${i}`,
+        kind: 'update.plugin',
+        title: `${prefix}${i}`,
+        body: '',
+        variant: 'info',
+        target: null,
+      })
+    }
+  }
+
+  it("takes a row out of one person's list and nobody else's", () => {
+    addRows(3)
+    const [newest] = store.list('ana').notifications
+    expect(store.clear('ana', { ids: [newest!.id] })).toBe(2)
+    expect(store.list('ana').notifications.map((n) => n.title)).toEqual(['r1', 'r0'])
+    expect(store.list('ben').notifications.map((n) => n.title)).toEqual(['r2', 'r1', 'r0'])
+    expect(store.unreadCount('ben')).toBe(3)
+  })
+
+  it('counts a cleared row as read, so it owes no badge and no desktop notification', () => {
+    addRows(2)
+    store.clear('ana')
+    expect(store.unreadCount('ana')).toBe(0)
+    expect(store.list('ana')).toEqual({ notifications: [], unread: 0 })
+  })
+
+  it('clears up to the newest row the person saw, never one that arrived after', () => {
+    addRows(2)
+    const seen = store.list('ana').notifications[0]!.createdAt
+    now += 1000
+    store.add({ key: 'late', kind: 'update.plugin', title: 'late', body: '', variant: 'info', target: null })
+    expect(store.clear('ana', { before: seen })).toBe(1)
+    expect(store.list('ana').notifications.map((n) => n.title)).toEqual(['late'])
+  })
+
+  it('shows rows that arrive after a clear', () => {
+    addRows(1)
+    store.clear('ana')
+    now += 1000
+    store.add({ key: 'next', kind: 'update.plugin', title: 'next', body: '', variant: 'info', target: null })
+    expect(store.list('ana')).toMatchObject({ notifications: [{ title: 'next', read: false }], unread: 1 })
+  })
+
+  it('survives a restart', () => {
+    addRows(2)
+    store.clear('ana', { ids: [store.list('ana').notifications[0]!.id] })
+    const reopened = new NotificationStore(path, () => now)
+    expect(reopened.list('ana').notifications.map((n) => n.title)).toEqual(['r0'])
+  })
+
+  it("tells only that person's tabs, and nobody when nothing changed", () => {
+    addRows(1)
+    const id = store.list('ana').notifications[0]!.id
+    const events: NotificationEvent[] = []
+    store.subscribe((e) => events.push(e))
+    store.clear('ana', { ids: [id] })
+    store.clear('ana', { ids: [id] })
+    store.clear('ana', { ids: ['no-such-row'] })
+    expect(events).toEqual([{ verb: 'notification.cleared', userId: 'ana', id }])
+  })
+
+  it('reads a file written before clearing existed', () => {
+    const row = {
+      id: 'old-1',
+      kind: 'update.openbridge',
+      title: 'OpenBridge v1.20.0 is available',
+      body: 'You are on v1.19.0.',
+      variant: 'info',
+      target: { kind: 'settings' },
+      createdAt: '2026-11-01T10:00:00.000Z',
+    }
+    writeFileSync(
+      path,
+      JSON.stringify({ notifications: [row], readBy: { ana: ['old-1'] }, announced: ['k'], outages: {}, failing: {} }),
+    )
+    const old = new NotificationStore(path, () => now)
+    expect(old.list('ana')).toEqual({ notifications: [{ ...row, read: true }], unread: 0 })
+    expect(old.list('ben').unread).toBe(1)
+    expect(old.clear('ben')).toBe(0)
+    const saved = JSON.parse(readFileSync(path, 'utf8'))
+    expect(saved.clearedBy).toEqual({ ben: ['old-1'] })
+    expect(saved.readBy.ana).toEqual(['old-1'])
+  })
+
+  it('forgets cleared ids once their rows fall off the end', () => {
+    addRows(1)
+    store.clear('ana')
+    addRows(MAX_NOTIFICATIONS, 'later')
+    const saved = JSON.parse(readFileSync(path, 'utf8'))
+    expect(saved.clearedBy.ana).toEqual([])
   })
 })
 
@@ -250,10 +353,22 @@ describe('routes', () => {
   async function app(authConfig: TAuthConfig | null) {
     const a = Fastify()
     await a.register(websocket)
-    registerNotificationRoutes(a, store, authConfig)
+    registerNotificationRoutes(a, store, authConfig, () => now)
     await a.ready()
     return a
   }
+
+  /** Open the socket and collect what it is sent, and how it closes. */
+  async function socket(a: Awaited<ReturnType<typeof app>>, headers: Record<string, string> = {}) {
+    const frames: unknown[] = []
+    let closed: number | null = null
+    const ws = await a.injectWS('/ws/notifications', { headers })
+    ws.on('message', (data: Buffer) => frames.push(JSON.parse(data.toString())))
+    ws.on('close', (code: number) => (closed = code))
+    return { ws, frames, closed: () => closed }
+  }
+
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 20))
 
   it('lists with the unread count, and marks read for the local person when sign-in is off', async () => {
     openBridgeUpdate(store, '1.6.0', '1.7.0')
@@ -276,6 +391,101 @@ describe('routes', () => {
     const ben = await a.inject({ method: 'GET', url: '/api/notifications', headers: { cookie: cookieFor('ben') } })
     expect(ana.json().unread).toBe(0)
     expect(ben.json().unread).toBe(1)
+    await a.close()
+  })
+  it('clears for the person asking, up to what they saw', async () => {
+    openBridgeUpdate(store, '1.6.0', '1.7.0')
+    const a = await app(auth)
+    const seen = store.list('ana').notifications[0]!.createdAt
+    now += 1000
+    pluginUpdate(store, { id: 'p', name: 'p', current: '1.0.0' }, '1.0.1')
+    const res = await a.inject({
+      method: 'POST',
+      url: '/api/notifications/clear',
+      headers: { cookie: cookieFor('ana') },
+      payload: { before: seen },
+    })
+    expect(res.json()).toEqual({ unread: 1 })
+    expect(store.list('ana').notifications.map((n) => n.kind)).toEqual(['update.plugin'])
+    expect(store.list('ben').notifications).toHaveLength(2)
+    await a.close()
+  })
+
+  it('refuses a clear with a date it cannot read, rather than clearing everything', async () => {
+    openBridgeUpdate(store, '1.6.0', '1.7.0')
+    const a = await app(null)
+    const res = await a.inject({ method: 'POST', url: '/api/notifications/clear', payload: { before: 'yesterday' } })
+    expect(res.statusCode).toBe(400)
+    expect(store.list(LOCAL_USER).notifications).toHaveLength(1)
+    await a.close()
+  })
+
+  it('sends what changed and never the row, to the tabs it concerns', async () => {
+    const a = await app(auth)
+    const ana = await socket(a, { cookie: cookieFor('ana'), host: 'bridge.test', origin: 'https://bridge.test' })
+    const ben = await socket(a, { cookie: cookieFor('ben'), host: 'bridge.test', origin: 'https://bridge.test' })
+    openBridgeUpdate(store, '1.6.0', '1.7.0')
+    const id = store.list('ana').notifications[0]!.id
+    store.markRead('ana', [id])
+    store.clear('ana', { ids: [id] })
+    await settle()
+    const created = { verb: 'notification.created', entity: 'notification', id, actor: 'bridge' }
+    expect(ana.frames).toEqual([
+      created,
+      { verb: 'notification.read', entity: 'notification', id, actor: 'person' },
+      { verb: 'notification.cleared', entity: 'notification', id, actor: 'person' },
+    ])
+    expect(ben.frames).toEqual([created])
+    ana.ws.terminate()
+    ben.ws.terminate()
+    await a.close()
+  })
+
+  it('refuses a socket opened from another site', async () => {
+    const a = await app(null)
+    const evil = await socket(a, { host: 'bridge.test', origin: 'https://evil.test' })
+    await settle()
+    expect(evil.closed()).toBe(1008)
+    openBridgeUpdate(store, '1.6.0', '1.7.0')
+    await settle()
+    expect(evil.frames).toEqual([])
+    await a.close()
+  })
+
+  it('accepts its own page behind a proxy that rewrites the host', async () => {
+    const a = await app(null)
+    const own = await socket(a, {
+      host: 'localhost:8582',
+      'x-forwarded-host': 'openbridge.example.test',
+      origin: 'https://openbridge.example.test',
+    })
+    openBridgeUpdate(store, '1.6.0', '1.7.0')
+    await settle()
+    expect(own.frames).toHaveLength(1)
+    expect(own.closed()).toBeNull()
+    own.ws.terminate()
+    await a.close()
+  })
+
+  it('makes a signed-in socket sign in again after thirty minutes', async () => {
+    const a = await app(auth)
+    const ana = await socket(a, { cookie: cookieFor('ana') })
+    now += SOCKET_MAX_AGE_MS + 1000
+    openBridgeUpdate(store, '1.6.0', '1.7.0')
+    await settle()
+    expect(ana.frames).toEqual([])
+    expect(ana.closed()).toBe(REAUTH_CLOSE_CODE)
+    await a.close()
+  })
+
+  it('keeps a socket open past thirty minutes when sign-in is off, as there is nothing to re-check', async () => {
+    const a = await app(null)
+    const local = await socket(a)
+    now += SOCKET_MAX_AGE_MS + 1000
+    openBridgeUpdate(store, '1.6.0', '1.7.0')
+    await settle()
+    expect(local.frames).toHaveLength(1)
+    local.ws.terminate()
     await a.close()
   })
 })

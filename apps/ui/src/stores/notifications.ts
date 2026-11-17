@@ -10,7 +10,10 @@ import { get } from '@/api'
  * - A failed read is reported to the caller, so the bell can say so rather
  *   than claim there is nothing to see.
  * - Open tabs hear about changes over /ws/notifications and re-read, so the
- *   list is always the daemon's, read state included.
+ *   list is always the daemon's, read and cleared state included. The frame
+ *   says what changed (verb, entity, id, actor), never the row.
+ * - Clearing is per person, like reading: it empties this person's list and
+ *   nobody else's.
  * - Anything new while the tab is open is also raised as a desktop
  *   notification, if this browser allows it, and clicking one marks it read.
  */
@@ -41,6 +44,9 @@ export function announceReason(n: BridgeNotification): string {
 
 /** This browser's answer about desktop notifications, or that it cannot give one. */
 export type DesktopPermission = 'default' | 'granted' | 'denied' | 'unsupported'
+
+/** The daemon closes a socket with this when it wants the tab to sign in again. */
+const REAUTH_CLOSE_CODE = 4001
 
 /** Ids already shown as a desktop notification, so a re-read never repeats one. */
 const announced = new Set<string>()
@@ -80,12 +86,12 @@ export const useNotificationsStore = defineStore('notifications', () => {
     return true
   }
 
-  async function post(ids?: string[]): Promise<void> {
+  async function post(action: 'read' | 'clear', body: { ids?: string[]; before?: string } = {}): Promise<void> {
     try {
-      const res = await fetch('/api/notifications/read', {
+      const res = await fetch(`/api/notifications/${action}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(ids ? { ids } : {}),
+        body: JSON.stringify(body),
       })
       if (res.ok) {
         const body = (await res.json()) as { unread?: number }
@@ -99,13 +105,35 @@ export const useNotificationsStore = defineStore('notifications', () => {
   async function markRead(id: string): Promise<void> {
     if (items.value.some((n) => n.id === id && !n.read)) unreadTotal.value = Math.max(0, unreadTotal.value - 1)
     items.value = items.value.map((n) => (n.id === id ? { ...n, read: true } : n))
-    await post([id])
+    await post('read', { ids: [id] })
   }
 
   async function markAllRead(): Promise<void> {
     items.value = items.value.map((n) => ({ ...n, read: true }))
     unreadTotal.value = 0
-    await post()
+    await post('read')
+  }
+
+  /** Take one row out of this person's list. Clearing it is reading it. */
+  async function clear(id: string): Promise<void> {
+    if (items.value.some((n) => n.id === id && !n.read)) unreadTotal.value = Math.max(0, unreadTotal.value - 1)
+    items.value = items.value.filter((n) => n.id !== id)
+    await post('clear', { ids: [id] })
+  }
+
+  /**
+   * Empty this person's list, up to the newest row on screen. A row that
+   * arrived while the button was being reached for is newer than that, so it
+   * stays, rather than being cleared before anybody saw it.
+   */
+  async function clearAll(): Promise<void> {
+    const newest = items.value[0]?.createdAt
+    if (!newest) return
+    items.value = []
+    await post('clear', { before: newest })
+    // Rows past the loaded page, or newer than the cut, are the server's to
+    // report, so the list and the badge are read back rather than guessed.
+    await load()
   }
 
   /** The OS-level notification, when the person has allowed them. */
@@ -160,12 +188,16 @@ export const useNotificationsStore = defineStore('notifications', () => {
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
     const socket = new WebSocket(`${protocol}//${location.host}/ws/notifications`)
     ws = socket
+    // Every frame is about a notification, and the daemon is the one that
+    // knows what this person's list now holds, so any of them means re-read.
     socket.onmessage = () => reloadSoon()
     // Anything missed while the socket was down is picked up on reconnect.
     socket.onopen = () => reloadSoon()
-    socket.onclose = () => {
+    socket.onclose = (event) => {
       if (ws === socket) ws = null
-      if (wanted) setTimeout(connect, 3000)
+      // 4001 is the daemon asking a long-lived socket to sign in again, which
+      // is routine, so the tab goes straight back rather than after a pause.
+      if (wanted) setTimeout(connect, event.code === REAUTH_CLOSE_CODE ? 0 : 3000)
     }
   }
 
@@ -189,6 +221,8 @@ export const useNotificationsStore = defineStore('notifications', () => {
     load,
     markRead,
     markAllRead,
+    clear,
+    clearAll,
     enableDesktopNotifications,
     setOpener,
     connect,

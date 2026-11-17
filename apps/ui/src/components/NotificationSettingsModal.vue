@@ -12,21 +12,26 @@
         browser, so allowing it here says nothing about your phone.
       </p>
 
-      <NbButton v-if="permission === 'default'" variant="tertiary" icon="bell" @click="askForDesktop">
-        Allow notifications on this device
-      </NbButton>
-      <!-- Callout rather than inline: these are standing facts about the
-           browser, and dismissing one would not make it untrue. -->
-      <NbBanner v-else-if="permission === 'granted'" status="success" variant="callout">
-        Allowed on this device.
-      </NbBanner>
-      <NbBanner v-else-if="permission === 'denied'" status="info" variant="callout">
-        Blocked on this device. Browsers only ask once, so turning it back on means changing the site permission in the
-        address bar.
-      </NbBanner>
-      <NbBanner v-else status="info" variant="callout">
-        This browser does not support desktop notifications, or only allows them on a secure (https) address.
-      </NbBanner>
+      <!-- The walkthrough's last step points here. A wrapper rather than the
+           button, so the step still has something to point at whichever of
+           the four answers the browser gives. -->
+      <div v-nb-tour-step="'notify-device'" class="notify__device">
+        <NbButton v-if="permission === 'default'" variant="tertiary" icon="bell" @click="askForDesktop">
+          Allow notifications on this device
+        </NbButton>
+        <!-- Callout rather than inline: these are standing facts about the
+             browser, and dismissing one would not make it untrue. -->
+        <NbBanner v-else-if="permission === 'granted'" status="success" variant="callout">
+          Allowed on this device.
+        </NbBanner>
+        <NbBanner v-else-if="permission === 'denied'" status="info" variant="callout">
+          Blocked on this device. Browsers only ask once, so turning it back on means changing the site permission in
+          the address bar.
+        </NbBanner>
+        <NbBanner v-else status="info" variant="callout">
+          This browser does not support desktop notifications, or only allows them on a secure (https) address.
+        </NbBanner>
+      </div>
     </div>
   </NbModal>
 </template>
@@ -70,6 +75,15 @@ async function askForDesktop(): Promise<void> {
   flex-direction: column;
   align-items: flex-start;
   gap: var(--nb-spacing-16);
+}
+
+// The wrapper spans the dialog and lays its one child out exactly as the
+// dialog did before the wrapper existed.
+.notify__device {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  align-self: stretch;
 }
 
 .notify__heading {

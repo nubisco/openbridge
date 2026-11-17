@@ -589,7 +589,7 @@ Disconnects an application, cutting every sign-in it holds, refresh tokens inclu
 
 ### `GET /api/notifications`
 
-The newest rows for the person asking, newest first, with their read state. `limit` defaults to 50. `unread` counts every unread row the daemon holds, not only the ones returned. `kind` is one of `device.offline`, `device.online`, `plugin.failed`, `update.openbridge` or `update.plugin`. `target` says where the row leads (`device`, `plugin`, `settings` or `config`), and is `null` when it leads nowhere.
+The newest rows for the person asking, newest first, with their read state. Rows that person has cleared are left out. `limit` defaults to 50. `unread` counts every unread row the person still has, not only the ones returned. `kind` is one of `device.offline`, `device.online`, `plugin.failed`, `update.openbridge` or `update.plugin`. `target` says where the row leads (`device`, `plugin`, `settings` or `config`), and is `null` when it leads nowhere.
 
 ```json
 {
@@ -612,6 +612,10 @@ The newest rows for the person asking, newest first, with their read state. `lim
 ### `POST /api/notifications/read`
 
 Marks rows read for the person asking. Send `{ "ids": ["3f6b2c1e-8a4d-4f0e-9c1a-2b7d5e8f0a13"] }` for specific rows, or an empty body for all of them. Returns `{ "unread": 0 }`.
+
+### `POST /api/notifications/clear`
+
+Takes rows out of the list of the person asking, and marks them read. Nobody else's list changes. Send `{ "ids": [...] }` for specific rows, `{ "before": "2026-11-05T10:00:00.000Z" }` for every row created at or before that instant, or an empty body for all of them. The UI's **Clear all** sends `before` with the newest row it shows, so a row that arrived in the meantime is not cleared unseen. A `before` that is not a date is refused with `400`. Returns `{ "unread": 0 }`, the person's unread count afterwards.
 
 ---
 
@@ -681,7 +685,20 @@ There is no filtering at the WebSocket level — the client receives all entries
 
 ### `WS /ws/notifications`
 
-Sends `{ "type": "changed" }` whenever a row is added, or when the same person reads one in another tab. Re-read `GET /api/notifications` when it arrives.
+Says what changed, never the row. A frame is sent when a row is added (to everybody), and when the same person reads or clears rows in another tab (to that person only). Re-read `GET /api/notifications` when one arrives, and once whenever the socket (re)connects, since nothing is replayed.
+
+```json
+{
+  "verb": "notification.created",
+  "entity": "notification",
+  "id": "3f6b2c1e-8a4d-4f0e-9c1a-2b7d5e8f0a13",
+  "actor": "bridge"
+}
+```
+
+`verb` is `notification.created`, `notification.read` or `notification.cleared`. `id` is the row when one row changed, and `null` when several did. `actor` is `bridge` for a new row and `person` for reading and clearing.
+
+The socket is refused (closed with `1008`) when the browser's `Origin` is not the host the request was sent to, or the `X-Forwarded-Host` a proxy set. With sign-in on, a socket older than 30 minutes is closed with `4001` the next time something would be sent on it: reconnect, which checks the session again.
 
 ---
 
