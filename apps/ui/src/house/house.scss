@@ -130,6 +130,14 @@
   pointer-events: none;
   text-transform: uppercase;
 }
+// Over furniture and pipes in the plan view: a halo in the floor's colour
+// keeps the name readable on whatever is under it.
+.hv-rlabel-top {
+  fill: rgba(78, 62, 42, 0.75);
+  stroke: rgba(240, 228, 206, 0.85);
+  stroke-linejoin: round;
+  paint-order: stroke;
+}
 .hv-wall {
   fill: rgba(246, 242, 234, 0.82);
   stroke: rgba(120, 108, 92, 0.45);
