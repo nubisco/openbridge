@@ -1,3 +1,10 @@
+## [1.27.2](https://github.com/nubisco/openbridge/compare/v1.27.1...v1.27.2) (2026-11-18)
+
+
+### Performance Improvements
+
+* **daemon:** energy charts no longer freeze the bridge, and metrics stop forking ([#40](https://github.com/nubisco/openbridge/issues/40)) ([437e8b9](https://github.com/nubisco/openbridge/commit/437e8b973a210dfdfb41287bfc6465beee30364e))
+
 ## [1.27.1](https://github.com/nubisco/openbridge/compare/v1.27.0...v1.27.1) (2026-11-17)
 
 
