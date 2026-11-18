@@ -16,6 +16,7 @@ import { Logger } from '@nubisco/openbridge-logger'
 import type { LogEntry } from '@nubisco/openbridge-logger'
 import type { HomebridgeAPI } from '@nubisco/openbridge-compatibility-homebridge'
 import { startMetrics, onMetrics, getHistory } from './metrics.js'
+import { energyBuckets, type EnergySample } from './energy-history.js'
 import { loadAuthConfig, registerAuthRoutes } from './auth.js'
 import {
   controlDevice,
@@ -909,72 +910,14 @@ export async function createServer(
     const historyDir = join(OPENBRIDGE_HOME, 'energy-history')
     const filePath = join(historyDir, `${deviceId}.json`)
 
-    let samples: Array<{ t: string; e: number }> = []
+    let samples: EnergySample[] = []
     try {
       samples = JSON.parse(readFileSync(filePath, 'utf8'))
     } catch {
       return { period, date: date ?? new Date().toISOString().slice(0, 10), buckets: [] }
     }
 
-    const ref = date ? new Date(date) : new Date()
-
-    if (period === 'day') {
-      // 24 hourly buckets for ref day
-      const dayStr = ref.toISOString().slice(0, 10)
-      const buckets = Array.from({ length: 24 }, (_, h) => {
-        const label = `${String(h).padStart(2, '0')}:00`
-        const start = new Date(`${dayStr}T${String(h).padStart(2, '0')}:00:00Z`)
-        const end = new Date(
-          `${dayStr}T${String(h + 1).padStart(2, '0') === '24' ? '23:59:59' : String(h + 1).padStart(2, '0') + ':00:00'}Z`,
-        )
-        const inWindow = samples.filter((s) => s.t >= start.toISOString() && s.t < end.toISOString())
-        if (inWindow.length < 2) return { label, kwh: null }
-        const kwh = inWindow[inWindow.length - 1].e - inWindow[0].e
-        return { label, kwh: Math.max(0, Math.round(kwh * 100) / 100) }
-      })
-      const totalKwh = buckets.reduce((sum, b) => sum + (b.kwh ?? 0), 0)
-      return { period, date: dayStr, buckets, totalKwh: Math.round(totalKwh * 100) / 100 }
-    }
-
-    if (period === 'month') {
-      // Daily buckets for ref month
-      const year = ref.getFullYear()
-      const month = ref.getMonth()
-      const daysInMonth = new Date(year, month + 1, 0).getDate()
-      const monthStr = `${year}-${String(month + 1).padStart(2, '0')}`
-      const buckets = Array.from({ length: daysInMonth }, (_, d) => {
-        const dayStr = `${monthStr}-${String(d + 1).padStart(2, '0')}`
-        const start = new Date(`${dayStr}T00:00:00Z`)
-        const end = new Date(`${dayStr}T23:59:59Z`)
-        const inWindow = samples.filter((s) => s.t >= start.toISOString() && s.t <= end.toISOString())
-        if (inWindow.length < 2) return { label: String(d + 1), kwh: null }
-        const kwh = inWindow[inWindow.length - 1].e - inWindow[0].e
-        return { label: String(d + 1), kwh: Math.max(0, Math.round(kwh * 100) / 100) }
-      })
-      const totalKwh = buckets.reduce((sum, b) => sum + (b.kwh ?? 0), 0)
-      return { period, date: monthStr, buckets, totalKwh: Math.round(totalKwh * 100) / 100 }
-    }
-
-    // period === 'year'
-    const year = ref.getFullYear()
-    const buckets = Array.from({ length: 12 }, (_, m) => {
-      const monthStr = `${year}-${String(m + 1).padStart(2, '0')}`
-      const start = new Date(`${monthStr}-01T00:00:00Z`)
-      const end = new Date(year, m + 1, 0, 23, 59, 59)
-      const inWindow = samples.filter((s) => s.t >= start.toISOString() && s.t <= end.toISOString())
-      if (inWindow.length < 2)
-        return {
-          label: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][m],
-          kwh: null,
-        }
-      const kwh = inWindow[inWindow.length - 1].e - inWindow[0].e
-      return {
-        label: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][m],
-        kwh: Math.max(0, Math.round(kwh * 100) / 100),
-      }
-    })
-    const totalKwh = buckets.reduce((sum, b) => sum + (b.kwh ?? 0), 0)
-    return { period, date: String(year), buckets, totalKwh: Math.round(totalKwh * 100) / 100 }
+    return energyBuckets(samples, period, date)
   })
 
   app.post('/api/plugins/:id/disabled', async (req) => {

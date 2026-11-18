@@ -2,7 +2,7 @@ import { resolve, join, sep, delimiter } from 'path'
 import { createRequire } from 'module'
 import { fileURLToPath } from 'url'
 import { dirname } from 'path'
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs'
+import { existsSync, mkdirSync, readFileSync } from 'fs'
 import os from 'os'
 import { PluginRegistry, PluginLifecycle, loadPluginsFromDirectory, loadPlugin } from '@nubisco/openbridge-core'
 import type { PluginContext, Plugin, DeviceDescriptor, DeviceEventInput, VideoSource } from '@nubisco/openbridge-core'
@@ -23,6 +23,7 @@ import { HomeKitServiceTypes } from './homekit-service-type.js'
 import { HouseStore } from './house.js'
 import { HomebridgeAPI, loadHomebridgePlugin, serializeAccessory } from '@nubisco/openbridge-compatibility-homebridge'
 import { packageAuthor } from './package-author.js'
+import { appendEnergySample } from './energy-history.js'
 
 const log = Logger.create('system')
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -886,22 +887,14 @@ export class Daemon {
         const energy = instance.telemetry?.[device.id]?.totalForwardEnergy
         if (energy === undefined || energy === null) continue
 
-        const filePath = join(historyDir, `${device.id}.json`)
-        let samples: Array<{ t: string; e: number }> = []
         try {
-          samples = JSON.parse(readFileSync(filePath, 'utf8'))
-        } catch {
-          /* start fresh */
+          appendEnergySample(join(historyDir, `${device.id}.json`), {
+            t: new Date().toISOString(),
+            e: Number(energy),
+          })
+        } catch (err) {
+          log.warn(`Failed to record energy for ${device.id}: ${err}`)
         }
-
-        const now = new Date().toISOString()
-        samples.push({ t: now, e: Number(energy) })
-
-        // Keep only 2 years of 5-minute samples ≈ 210k entries max
-        const cutoff = new Date(Date.now() - 2 * 365 * 24 * 60 * 60 * 1000).toISOString()
-        samples = samples.filter((s) => s.t >= cutoff)
-
-        writeFileSync(filePath, JSON.stringify(samples))
       }
     }
   }
