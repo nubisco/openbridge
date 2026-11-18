@@ -166,8 +166,11 @@ function marker(
  * viewer keeps its place, and one behind it rises on a longer stem until it
  * is clear, so every badge stays readable and still points at its spot.
  */
-function separate(marks: Array<{ depth: number; svg: string }>, unit: number): void {
-  type Box = { x0: number; y0: number; x1: number; y1: number }
+type Box = { x0: number; y0: number; x1: number; y1: number }
+const overlaps = (a: Box, b: Box) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1
+
+/** Returns where each badge ended up on screen, so the room names can keep clear of them. */
+function separate(marks: Array<{ depth: number; svg: string }>, unit: number): Box[] {
   const boxes: Box[] = []
   const at = (svg: string) => {
     const m = /^<g class="hv-dev[^>]*transform="translate\(([-\d.]+),([-\d.]+)\)/.exec(svg)
@@ -186,7 +189,7 @@ function separate(marks: Array<{ depth: number; svg: string }>, unit: number): v
     let lift = 0
     for (let tries = 0; tries < 12; tries++) {
       const b = { x0: x - w / 2, y0: y - lift - h / 2, x1: x + w / 2, y1: y - lift + h / 2 }
-      const hit = boxes.find((q) => b.x0 < q.x1 && q.x0 < b.x1 && b.y0 < q.y1 && q.y0 < b.y1)
+      const hit = boxes.find((q) => overlaps(b, q))
       if (!hit) {
         boxes.push(b)
         break
@@ -201,7 +204,56 @@ function separate(marks: Array<{ depth: number; svg: string }>, unit: number): v
       )
     }
   }
+  return boxes
 }
+
+/**
+ * Room names in the plan view, laid over the furniture and pipes so they stay
+ * readable. A name that would sit on a badge, a piece of furniture or another
+ * name moves to the nearest clear spot in its room. If there is none it stays
+ * in the middle.
+ */
+function placeRoomNames(names: RoomName[], taken: Box[]): string {
+  const placed: Box[] = []
+  let out = ''
+  for (const n of names) {
+    const w = n.text.length * n.fs * 0.72
+    const h = n.fs * 1.2
+    const box = (cx: number, cy: number): Box => ({ x0: cx - w / 2, y0: cy - h / 2, x1: cx + w / 2, y1: cy + h / 2 })
+    const inside = (b: Box) => b.x0 >= n.area.x0 && b.x1 <= n.area.x1 && b.y0 >= n.area.y0 && b.y1 <= n.area.y1
+    const clear = (b: Box) => !taken.some((q) => overlaps(b, q)) && !placed.some((q) => overlaps(b, q))
+    const step = h * 0.5
+    let at: [number, number] = [n.x, n.y]
+    search: for (let i = 0; i <= 24; i++) {
+      // Nearest first: straight up or down, then a little to either side.
+      for (const [dx, dy] of i === 0
+        ? [[0, 0]]
+        : [
+            [0, -i],
+            [0, i],
+            [-i, 0],
+            [i, 0],
+            [-i, -i],
+            [i, -i],
+            [-i, i],
+            [i, i],
+          ]) {
+        const cx = n.x + dx * step * 1.5
+        const cy = n.y + dy * step
+        const b = box(cx, cy)
+        if ((i === 0 || inside(b)) && clear(b)) {
+          at = [cx, cy]
+          break search
+        }
+      }
+    }
+    placed.push(box(at[0], at[1]))
+    out += `<text class="hv-rlabel hv-rlabel-top" x="${r1(at[0])}" y="${r1(at[1])}" font-size="${r1(n.fs)}" stroke-width="${(n.fs * 0.3).toFixed(2)}" dy="${r1(n.fs * 0.35)}">${esc(n.text)}</text>`
+  }
+  return out
+}
+
+type RoomName = { text: string; x: number; y: number; fs: number; area: Box }
 
 function poly(o: SceneOptions, pts: Array<[number, number, number]>): string {
   return pts
@@ -810,6 +862,10 @@ export function renderFloor(
   const roomOf = (p: HousePlacement) => roomAt(floor, p.x, p.y)
   const readings = o.overlay === 'none' ? new Map<string, number>() : roomReadings(floor, devices, o.overlay)
   let badges = ''
+  // In the plan view the names go on top of everything but the badges.
+  const names: RoomName[] = []
+  // What a name should not sit on, besides the badges: the furniture.
+  const furnitureBoxes: Box[] = []
   // The lights that are on, each with the room it lights.
   const lit = placed
     .filter(({ d }) => d.kind === 'light' && d.on && d.reachable)
@@ -891,7 +947,12 @@ export function renderFloor(
       const name = r.name
       const c = project(o.mode, q.x + q.w / 2, q.y + q.h / 2)
       const fs = Math.min(11 * o.unit, (q.w * S * 0.86) / Math.max(1, name.length * 0.72), q.h * S * 0.3)
-      base += `<text class="hv-rlabel" transform="translate(${r1(c[0])},${r1(c[1])}) ${iso ? ISO_FLOOR_MATRIX : ''}" font-size="${r1(fs)}" dy="${r1(fs * 0.35)}">${esc(name)}</text>`
+      if (!iso) {
+        const [x0, y0] = project(o.mode, q.x, q.y)
+        const [x1, y1] = project(o.mode, q.x + q.w, q.y + q.h)
+        names.push({ text: name, x: c[0], y: c[1], fs, area: { x0, y0, x1, y1 } })
+      } else
+        base += `<text class="hv-rlabel" transform="translate(${r1(c[0])},${r1(c[1])}) ${iso ? ISO_FLOOR_MATRIX : ''}" font-size="${r1(fs)}" dy="${r1(fs * 0.35)}">${esc(name)}</text>`
     }
   }
 
@@ -986,6 +1047,11 @@ export function renderFloor(
     if (f.kind === 'rug') {
       rugs += furniturePiece(o, floor, f)
       continue
+    }
+    if (!iso) {
+      const [x0, y0] = project(o.mode, f.x, f.y)
+      const [x1, y1] = project(o.mode, f.x + f.w, f.y + f.d)
+      furnitureBoxes.push({ x0, y0, x1, y1 })
     }
     items.push({
       depth: f.x + f.w / 2 + f.y + f.d / 2,
@@ -1463,9 +1529,10 @@ export function renderFloor(
 
   items.sort((a, b) => a.depth - b.depth)
   marks.sort((a, b) => a.depth - b.depth)
-  separate(marks, o.unit)
+  const taken = separate(marks, o.unit)
+  const roomNames = names.length ? placeRoomNames(names, [...taken, ...furnitureBoxes]) : ''
   // With an overlay on, the devices step back and the rooms' readings lead.
   const markup = marks.map((i) => i.svg).join('')
   const top = o.overlay === 'none' ? markup : `<g class="hv-dimmed">${markup}</g>${badges}`
-  return `<defs>${defs}</defs>${base}${water}${glow}${pipes}${rugs ? `<g class="hv-rugs" pointer-events="none">${rugs}</g>` : ''}${items.map((i) => i.svg).join('')}${top}`
+  return `<defs>${defs}</defs>${base}${water}${glow}${pipes}${rugs ? `<g class="hv-rugs" pointer-events="none">${rugs}</g>` : ''}${items.map((i) => i.svg).join('')}${roomNames}${top}`
 }
