@@ -1,3 +1,10 @@
+## [1.27.3](https://github.com/nubisco/openbridge/compare/v1.27.2...v1.27.3) (2026-11-18)
+
+
+### Performance Improvements
+
+* **house:** draw the plan untracked, so a device refresh no longer blocks the page ([#41](https://github.com/nubisco/openbridge/issues/41)) ([3cd6976](https://github.com/nubisco/openbridge/commit/3cd69768a002db757231759b795966178e886044))
+
 ## [1.27.2](https://github.com/nubisco/openbridge/compare/v1.27.1...v1.27.2) (2026-11-18)
 
 
