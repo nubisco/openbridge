@@ -1,5 +1,6 @@
 import os from 'os'
 import si from 'systeminformation'
+import { readCpuTemperature, readCpuTimes, readDefaultInterfaceBytes } from './system-readings.js'
 
 export interface MetricsSnapshot {
   t: number // unix ms
@@ -22,21 +23,56 @@ export function onMetrics(fn: Listener): () => void {
   return () => listeners.delete(fn)
 }
 
+let lastCpu: { busy: number; total: number } | undefined
+
+/** Percentage of CPU time spent busy since the previous tick, all cores together. */
+async function cpuLoad(): Promise<number> {
+  const times = readCpuTimes()
+  if (!times) {
+    const load = await si.currentLoad().catch(() => ({ currentLoad: 0 }))
+    return load.currentLoad ?? 0
+  }
+  const prev = lastCpu
+  lastCpu = times
+  const total = prev ? times.total - prev.total : 0
+  return prev && total > 0 ? (100 * (times.busy - prev.busy)) / total : 0
+}
+
+let lastNet: { rx: number; tx: number; at: number } | undefined
+
+/** Bytes per second on the default interface since the previous tick. */
+async function networkRates(): Promise<{ rx: number; tx: number }> {
+  const bytes = readDefaultInterfaceBytes()
+  if (!bytes) {
+    const net = await si.networkStats().catch(() => [] as any[])
+    return { rx: net[0]?.rx_sec ?? 0, tx: net[0]?.tx_sec ?? 0 }
+  }
+  const at = Date.now()
+  const prev = lastNet
+  lastNet = { ...bytes, at }
+  const seconds = prev ? (at - prev.at) / 1000 : 0
+  if (!prev || seconds <= 0) return { rx: 0, tx: 0 }
+  return { rx: (bytes.rx - prev.rx) / seconds, tx: (bytes.tx - prev.tx) / seconds }
+}
+
+async function cpuTemperature(): Promise<number> {
+  const direct = readCpuTemperature()
+  if (direct !== undefined) return direct
+  const temp = await si.cpuTemperature().catch(() => ({ main: -1 }))
+  return temp.main ?? -1
+}
+
 async function collect(): Promise<MetricsSnapshot> {
-  const [load, temp, net] = await Promise.all([
-    si.currentLoad().catch(() => ({ currentLoad: 0 })),
-    si.cpuTemperature().catch(() => ({ main: -1 })),
-    si.networkStats().catch(() => [] as any[]),
-  ])
+  const [load, temp, net] = await Promise.all([cpuLoad(), cpuTemperature(), networkRates()])
 
   const snap: MetricsSnapshot = {
     t: Date.now(),
-    cpu: Math.round(load.currentLoad ?? 0),
-    cpuTemp: Math.round(temp.main && temp.main > 0 ? temp.main : -1),
+    cpu: Math.round(load),
+    cpuTemp: Math.round(temp > 0 ? temp : -1),
     memTotal: os.totalmem(),
     memFree: os.freemem(),
-    netRxSec: Math.max(0, Math.round(net[0]?.rx_sec ?? 0)),
-    netTxSec: Math.max(0, Math.round(net[0]?.tx_sec ?? 0)),
+    netRxSec: Math.max(0, Math.round(net.rx)),
+    netTxSec: Math.max(0, Math.round(net.tx)),
   }
 
   history.push(snap)
