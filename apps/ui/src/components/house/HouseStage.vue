@@ -124,7 +124,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, toRaw, watch } from 'vue'
 import { usePhoneLayout } from '@nubisco/ui'
 import type { HouseFloor, HousePlan } from '@/api'
 import { CELLS_PER_M, clamp, drawnBounds, project, r1, rotatePlan, S, type Point } from '@/house/geometry'
@@ -187,8 +187,17 @@ function turn(dir: 1 | -1) {
     /* remembered for this visit only */
   }
 }
-/** The plan as drawn: turned. Ids and refs are the plan's own. */
-const viewPlan = computed(() => rotatePlan(props.plan, turns.value))
+/**
+ * The plan as drawn: turned. Ids and refs are the plan's own.
+ *
+ * Drawn from the raw plan, not the reactive one. Routing a heating circuit
+ * looks every grid cell up against every room, and through Vue's proxy each
+ * of those reads is tracked: on a real house that made every 3-second device
+ * refresh cost 0.2 to 1.2 s of blocked page, against about 60 ms raw. The
+ * plan is only ever replaced whole (loaded, saved), never edited in place,
+ * so depending on the prop itself is enough to redraw when it changes.
+ */
+const viewPlan = computed(() => rotatePlan(toRaw(props.plan), turns.value))
 
 const zoom = ref(1)
 /** Pan, in viewBox units. */
