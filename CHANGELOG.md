@@ -1,3 +1,10 @@
+## [1.27.4](https://github.com/nubisco/openbridge/compare/v1.27.3...v1.27.4) (2026-11-18)
+
+
+### Bug Fixes
+
+* **house:** room names in the plan view stay readable ([#42](https://github.com/nubisco/openbridge/issues/42)) ([0284958](https://github.com/nubisco/openbridge/commit/02849585a395a739c07fbfacf97ac9cb821d668c))
+
 ## [1.27.3](https://github.com/nubisco/openbridge/compare/v1.27.2...v1.27.3) (2026-11-18)
 
 
