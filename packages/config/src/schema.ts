@@ -19,8 +19,18 @@ export const BridgeConfigSchema = z.object({
   logLevel: z.enum(['debug', 'info', 'warn', 'error']).default('info'),
 })
 
+/**
+ * What the daemon tells Nubisco about itself. One anonymous install heartbeat
+ * per start and per day: a random install id, the version, the platform and
+ * the install method. Nothing else, and off with one switch.
+ */
+export const TelemetryConfigSchema = z.object({
+  installHeartbeat: z.boolean().default(true),
+})
+
 export const OpenBridgeConfigSchema = z.object({
   bridge: BridgeConfigSchema.default({}),
+  telemetry: TelemetryConfigSchema.default({}),
   plugins: z
     .array(
       z.object({
@@ -37,5 +47,6 @@ export const OpenBridgeConfigSchema = z.object({
 
 export type OpenBridgeConfig = z.infer<typeof OpenBridgeConfigSchema>
 export type BridgeConfig = z.infer<typeof BridgeConfigSchema>
+export type TelemetryConfig = z.infer<typeof TelemetryConfigSchema>
 export type PluginEntry = OpenBridgeConfig['plugins'][number]
 export type PlatformConfig = z.infer<typeof PlatformConfigSchema>

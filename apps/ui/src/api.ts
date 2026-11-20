@@ -121,6 +121,11 @@ export interface SystemInfo {
   uptimeProcess: number
 }
 
+/** The anonymous install heartbeat switch. Mirrors the daemon's telemetry config. */
+export interface TelemetryConfig {
+  installHeartbeat: boolean
+}
+
 export interface BridgeConfig {
   name: string
   port: number
@@ -669,6 +674,11 @@ export const api = {
         if (!r.ok) throw new Error(`Restart failed: ${r.status}`)
         return r.json()
       }),
+  },
+  telemetry: {
+    get: () => get<TelemetryConfig>('/telemetry'),
+    set: (installHeartbeat: boolean) =>
+      sendJson<{ saved: true; installHeartbeat: boolean }>('POST', '/telemetry', { installHeartbeat }),
   },
   updates: {
     check: () => get<UpdateStatus>('/updates/check'),
