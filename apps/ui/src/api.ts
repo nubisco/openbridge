@@ -1,3 +1,4 @@
+import type { Plan } from '@house-model/v2'
 const BASE = '/api'
 
 export async function get<T>(path: string): Promise<T> {
@@ -242,9 +243,11 @@ export interface DeviceRoom {
   floor: { id: string; name: string; level: number }
 }
 
-// ─── House plan (mirrors apps/daemon/src/house.ts) ───────────────────────────
-// Geometry is in grid cells of `grid` metres. Room edges sit on cell lines,
-// devices on half cells.
+// ─── House plan ─────────────────────────────────────────────────────────────
+// The server stores plan version 2 (millimetres, walls as elements). The
+// editor and views below still draw version 1, in grid cells of `grid`
+// metres, through the adapter in @house-model/convert. These types mirror
+// apps/daemon/src/house-model/v1.ts.
 
 export type HouseRoomKind = 'room' | 'outdoor' | 'paved' | 'pool'
 
@@ -359,8 +362,11 @@ export interface HousePlan {
   floors: HouseFloor[]
 }
 
+/** The plan as stored: version 2, in millimetres (apps/daemon/src/house-model/v2.ts). */
+export type HouseModel = Plan
+
 export interface StoredHouse {
-  plan: HousePlan | null
+  plan: HouseModel | null
   rev: number
   updatedAt: string | null
 }

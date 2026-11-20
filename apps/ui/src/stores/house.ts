@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { api, type HousePlan } from '@/api'
+import { toV1 } from '@house-model/convert'
+import { api, type HouseModel, type HousePlan, type StoredHouse } from '@/api'
 import { liveDevices, type LiveDevice, type NativeDevice } from '@/house/live'
 import { useDaemonStore } from './daemon'
 
@@ -11,17 +12,24 @@ import { useDaemonStore } from './daemon'
  * the same reading as the plan beside it.
  */
 export const useHouseStore = defineStore('house', () => {
+  /** The plan as stored, version 2. */
+  const model = ref<HouseModel | null>(null)
+  /** The same plan in cells, which the editor and views still draw. */
   const plan = ref<HousePlan | null>(null)
   const rev = ref(0)
+
+  function take(state: StoredHouse): void {
+    model.value = state.plan
+    plan.value = state.plan ? (toV1(state.plan) as HousePlan) : null
+    rev.value = state.rev
+  }
   const loaded = ref(false)
 
   /** A plan with at least one room drawn. An empty plan is not a house yet. */
   const hasPlan = computed(() => !!plan.value?.floors.some((f) => f.rooms.length > 0))
 
   async function load(): Promise<void> {
-    const res = await api.house.get()
-    plan.value = res.plan
-    rev.value = res.rev
+    take(await api.house.get())
     loaded.value = true
   }
 
@@ -41,10 +49,10 @@ export const useHouseStore = defineStore('house', () => {
    * and let them redo the change on top of it.
    */
   async function save(next: HousePlan | null): Promise<'saved' | 'conflict'> {
+    // Sent in cells. The server converts it and keeps from the stored plan
+    // what cells cannot say (wall thickness, a door's frame, curtains).
     const res = await api.house.save(next, rev.value)
-    const state = res.ok ? res.house : res.conflict
-    plan.value = state.plan
-    rev.value = state.rev
+    take(res.ok ? res.house : res.conflict)
     return res.ok ? 'saved' : 'conflict'
   }
 
@@ -67,5 +75,5 @@ export const useHouseStore = defineStore('house', () => {
     }
   }
 
-  return { plan, rev, loaded, hasPlan, load, ensure, save, devices, byRef, poll }
+  return { model, plan, rev, loaded, hasPlan, load, ensure, save, devices, byRef, poll }
 })

@@ -23,6 +23,7 @@ import type { DeviceObservation, ObservationStore } from '../observations.js'
 import { DeviceSeries, type Point } from '../timeseries.js'
 import type { HomeKitServiceTypes } from '../homekit-service-type.js'
 import { roomRects, type DeviceRoom, type HouseStore } from '../house.js'
+import { toV1 } from '../house-model/convert.js'
 
 export type ControlHandler = (value: unknown) => void | Promise<void>
 
@@ -306,8 +307,9 @@ export function setCharacteristic(
  */
 export function houseView(ctx: BridgeContext) {
   const stored = ctx.house?.get()
-  const plan = stored?.plan
-  if (!plan) return { drawn: false as const }
+  if (!stored?.plan) return { drawn: false as const }
+  // Read through the version 1 view: rooms here are still rectangles of cells.
+  const plan = toV1(stored.plan)
   const devices = new Map(
     listDevices(ctx).map((d) => [`device:${d.id}`, { id: d.id, name: d.name, type: d.homekitType ?? d.widgetType }]),
   )
