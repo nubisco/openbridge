@@ -449,14 +449,16 @@
 }
 
 // Editor
+// The blueprint's lines keep their width on screen as it zooms, as in a
+// drawing program: --hv-zoom is the editor's zoom, 1 at the fitted view.
 .hv-egl {
   fill: none;
   stroke: rgba(120, 180, 255, 0.16);
-  stroke-width: 1;
+  stroke-width: calc(1px / var(--hv-zoom, 1));
 }
 .hv-eplot {
   stroke: rgba(120, 180, 255, 0.4);
-  stroke-width: 1.5;
+  stroke-width: calc(1.5px / var(--hv-zoom, 1));
 }
 .hv-eroom rect {
   fill: rgba(110, 165, 255, 0.14);
@@ -465,7 +467,7 @@
 .hv-eroom .hv-eedge {
   fill: none;
   stroke: rgba(140, 195, 255, 0.35);
-  stroke-width: 1;
+  stroke-width: calc(1px / var(--hv-zoom, 1));
   pointer-events: none;
 }
 .hv-tool-select .hv-eroom rect {
@@ -476,14 +478,14 @@
 }
 .hv-eroom.hv-k-outdoor .hv-eedge {
   stroke: rgba(110, 230, 170, 0.5);
-  stroke-dasharray: 5 5;
+  stroke-dasharray: calc(5px / var(--hv-zoom, 1)) calc(5px / var(--hv-zoom, 1));
 }
 .hv-eroom.hv-k-paved rect {
   fill: rgba(220, 225, 235, 0.12);
 }
 .hv-eroom.hv-k-paved .hv-eedge {
   stroke: rgba(225, 230, 240, 0.6);
-  stroke-dasharray: 2 4;
+  stroke-dasharray: calc(2px / var(--hv-zoom, 1)) calc(4px / var(--hv-zoom, 1));
 }
 .hv-eroom.hv-k-pool rect {
   fill: rgba(40, 170, 255, 0.35);
@@ -496,7 +498,7 @@
 }
 .hv-eroom.hv-sel .hv-eedge {
   stroke: #3ccfc0;
-  stroke-width: 2;
+  stroke-width: calc(2px / var(--hv-zoom, 1));
 }
 .hv-eroom text {
   fill: #dcebff;
@@ -510,13 +512,13 @@
 .hv-eghost {
   fill: none;
   stroke: rgba(255, 255, 255, 0.22);
-  stroke-dasharray: 3 5;
+  stroke-dasharray: calc(3px / var(--hv-zoom, 1)) calc(5px / var(--hv-zoom, 1));
   pointer-events: none;
 }
 .hv-edraft {
   fill: rgba(60, 207, 192, 0.2);
   stroke: #3ccfc0;
-  stroke-dasharray: 5 4;
+  stroke-dasharray: calc(5px / var(--hv-zoom, 1)) calc(4px / var(--hv-zoom, 1));
   pointer-events: none;
 }
 .hv-edraft-label {
@@ -528,23 +530,23 @@
 }
 .hv-ewall {
   stroke: #bfe2ff;
-  stroke-width: 5;
+  stroke-width: calc(5px / var(--hv-zoom, 1));
   stroke-linecap: square;
   pointer-events: none;
 }
 .hv-ewin {
   stroke: #5fe0ff;
-  stroke-width: 3;
+  stroke-width: calc(3px / var(--hv-zoom, 1));
   pointer-events: none;
 }
 .hv-ewinb {
   stroke: #0b1c3a;
-  stroke-width: 7;
+  stroke-width: calc(7px / var(--hv-zoom, 1));
   pointer-events: none;
 }
 .hv-edoor {
   stroke: #3ccfc0;
-  stroke-width: 1.6;
+  stroke-width: calc(1.6px / var(--hv-zoom, 1));
   fill: none;
   pointer-events: none;
 }
@@ -555,17 +557,17 @@
 .hv-erad {
   fill: rgba(255, 170, 120, 0.25);
   stroke: #ffb38a;
-  stroke-width: 1.5;
+  stroke-width: calc(1.5px / var(--hv-zoom, 1));
   pointer-events: none;
 }
 .hv-erad.hv-sel {
   stroke: #fff;
-  stroke-width: 2.5;
+  stroke-width: calc(2.5px / var(--hv-zoom, 1));
 }
 .hv-eopen {
   stroke: #bfe2ff;
-  stroke-width: 1.5;
-  stroke-dasharray: 4 5;
+  stroke-width: calc(1.5px / var(--hv-zoom, 1));
+  stroke-dasharray: calc(4px / var(--hv-zoom, 1)) calc(5px / var(--hv-zoom, 1));
   opacity: 0.7;
   pointer-events: none;
 }
@@ -573,12 +575,12 @@
 .hv-eopen.hv-sel,
 .hv-edoor.hv-sel {
   stroke: #fff;
-  stroke-width: 3.5;
+  stroke-width: calc(3.5px / var(--hv-zoom, 1));
 }
 .hv-eh {
   fill: #fff;
   stroke: #3ccfc0;
-  stroke-width: 2;
+  stroke-width: calc(2px / var(--hv-zoom, 1));
   cursor: nwse-resize;
 }
 .hv-eh.hv-alt {
@@ -593,24 +595,24 @@
 // The grab line over a door or window: invisible, wider than a finger.
 .hv-ehit {
   stroke: transparent;
-  stroke-width: 16;
+  stroke-width: calc(16px / var(--hv-zoom, 1));
   pointer-events: stroke;
   cursor: move;
 }
 .hv-edev circle {
   fill: #0a1830;
   stroke: #9fd0ff;
-  stroke-width: 1.5;
+  stroke-width: calc(1.5px / var(--hv-zoom, 1));
   cursor: grab;
 }
 .hv-edev.hv-sel circle {
   stroke: #3ccfc0;
-  stroke-width: 2.5;
+  stroke-width: calc(2.5px / var(--hv-zoom, 1));
   fill: #0f3a3a;
 }
 .hv-edev.hv-missing circle {
   stroke: #ff6b5e;
-  stroke-dasharray: 3 3;
+  stroke-dasharray: calc(3px / var(--hv-zoom, 1)) calc(3px / var(--hv-zoom, 1));
 }
 .hv-edev text {
   fill: #e6f1ff;
@@ -691,13 +693,13 @@
 .hv-efurn rect {
   fill: rgba(255, 255, 255, 0.12);
   stroke: #e3eefa;
-  stroke-width: 1.2;
-  stroke-dasharray: 4 3;
+  stroke-width: calc(1.2px / var(--hv-zoom, 1));
+  stroke-dasharray: calc(4px / var(--hv-zoom, 1)) calc(3px / var(--hv-zoom, 1));
   cursor: move;
 }
 .hv-efurn.hv-sel rect {
   stroke: #fff;
-  stroke-width: 2;
+  stroke-width: calc(2px / var(--hv-zoom, 1));
   stroke-dasharray: none;
   fill: rgba(255, 255, 255, 0.22);
 }

@@ -44,11 +44,16 @@
         </NbButton>
       </div>
 
-      <div class="house-editor__canvas hv-stage-bg">
+      <div
+        ref="canvasEl"
+        class="house-editor__canvas hv-stage-bg"
+        :style="phone ? { aspectRatio: phoneAspect } : undefined"
+      >
         <svg
           ref="svgEl"
           class="house-editor__svg"
-          :class="`hv-tool-${tool}`"
+          :class="[`hv-tool-${tool}`, { 'is-panning': spaceHeld || panning }]"
+          :style="{ '--hv-zoom': zoom }"
           :viewBox="viewBox"
           role="application"
           aria-label="Blueprint editor"
@@ -56,8 +61,58 @@
           @pointermove="onMove"
           @pointerup="onUp"
           @pointercancel="onUp"
+          @pointerleave="cursor = null"
+          @wheel="onWheel"
           v-html="markup"
         />
+        <!-- Rulers in metres along the top and the left, measuring from the plot's corner. -->
+        <HouseRuler
+          class="house-editor__ruler house-editor__ruler--x"
+          axis="x"
+          :px-per-m="view.pxPerM"
+          :origin="view.ox - RULER_SIZE"
+          :length="Math.max(0, view.w - RULER_SIZE)"
+          :cursor="cursor ? cursor[0] - RULER_SIZE : null"
+        />
+        <HouseRuler
+          class="house-editor__ruler house-editor__ruler--y"
+          axis="y"
+          :px-per-m="view.pxPerM"
+          :origin="view.oy - RULER_SIZE"
+          :length="Math.max(0, view.h - RULER_SIZE)"
+          :cursor="cursor ? cursor[1] - RULER_SIZE : null"
+        />
+        <div class="house-editor__ruler-corner" aria-hidden="true">m</div>
+        <div class="house-editor__zoom" role="group" aria-label="Zoom" data-nb-appearance="rounded">
+          <NbButton
+            v-nb-tooltip="{ body: `Zoom in (${mod} +, or ${mod} and scroll)`, position: 'left', aria: 'none' }"
+            size="sm"
+            variant="ghost"
+            icon="magnifying-glass-plus"
+            aria-label="Zoom in"
+            :disabled="zoom >= MAX_ZOOM"
+            @click="zoomBy(1.4)"
+          />
+          <NbButton
+            v-nb-tooltip="{ body: `Zoom out (${mod} −)`, position: 'left', aria: 'none' }"
+            size="sm"
+            variant="ghost"
+            icon="magnifying-glass-minus"
+            aria-label="Zoom out"
+            :disabled="zoom <= MIN_ZOOM"
+            @click="zoomBy(1 / 1.4)"
+          />
+          <NbButton
+            v-nb-tooltip="{ body: `Fit the plot (${mod} 0)`, position: 'left', aria: 'none' }"
+            size="sm"
+            variant="ghost"
+            icon="frame-corners"
+            aria-label="Fit the plot"
+            :disabled="zoom === 1 && !center"
+            @click="resetView"
+          />
+          <span class="house-editor__zoom-level" aria-live="polite">{{ Math.round(zoom * 100) }}%</span>
+        </div>
       </div>
       <div class="house-editor__help" data-nb-appearance="rounded">
         <NbMessage variant="helper">{{ help }}</NbMessage>
@@ -398,6 +453,8 @@
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useConfirm, usePhoneLayout, useToast } from '@nubisco/ui'
 import { useInspectorStore } from '@/stores/inspector'
+import HouseRuler from '@/components/house/HouseRuler.vue'
+import { RULER_SIZE } from '@/house/ruler'
 import type {
   HouseFloor,
   HouseFurniture,
@@ -603,10 +660,137 @@ const minPlot = computed(() => {
   }
 })
 
-const viewBox = computed(() => {
+// ─── Zoom and pan ───────────────────────────────────────────────────────────
+// Only the blueprint zooms: the viewBox narrows onto the plan, and the tools
+// and panels around it keep their size. As in a design tool, scrolling pans,
+// and a pinch, or scrolling with Ctrl or Cmd held, zooms about the pointer.
+
+const MIN_ZOOM = 0.5
+const MAX_ZOOM = 40
+const mod = /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl'
+const zoom = ref(1)
+/** The point at the middle of the view, in stage units. Unset, the plot's middle. */
+const center = ref<[number, number] | null>(null)
+/** The canvas's size in pixels. The blueprint fills it, under the rulers and tools. */
+const canvasSize = ref({ w: 0, h: 0 })
+/**
+ * What zoom 1 shows: the plot with half a metre round it, fitted between the
+ * rulers, the toolbar, the zoom buttons and the hint, and the canvas round
+ * that, so a zoomed plan runs to every edge.
+ */
+const home = computed(() => {
   const pad = 0.5 * CELLS_PER_M * S
-  return `${-pad} ${-pad} ${props.plan.plot.w * S + 2 * pad} ${props.plan.plot.h * S + 2 * pad}`
+  const plot = { x: -pad, y: -pad, w: props.plan.plot.w * S + 2 * pad, h: props.plan.plot.h * S + 2 * pad }
+  const { w: W, h: H } = canvasSize.value
+  if (!W || !H) return plot
+  // Clear of the rulers and of what floats over the canvas, in pixels.
+  const inset = phone.value
+    ? { t: RULER_SIZE + 8, r: 8, b: 52, l: RULER_SIZE + 8 }
+    : { t: RULER_SIZE + 64, r: 64, b: 60, l: RULER_SIZE + 16 }
+  const iw = Math.max(1, W - inset.l - inset.r)
+  const ih = Math.max(1, H - inset.t - inset.b)
+  const k = Math.min(iw / plot.w, ih / plot.h)
+  return {
+    x: plot.x - (inset.l + (iw - plot.w * k) / 2) / k,
+    y: plot.y - (inset.t + (ih - plot.h * k) / 2) / k,
+    w: W / k,
+    h: H / k,
+  }
 })
+/** On a phone the canvas takes the plot's shape, so the plan fills its width. */
+const phoneAspect = computed(() => `${props.plan.plot.w + 1} / ${props.plan.plot.h + 1}`)
+const viewBox = computed(() => {
+  const b = home.value
+  const c = center.value ?? [b.x + b.w / 2, b.y + b.h / 2]
+  const w = b.w / zoom.value
+  const h = b.h / zoom.value
+  return `${c[0] - w / 2} ${c[1] - h / 2} ${w} ${h}`
+})
+
+/** A screen point in stage units. */
+function toStage(clientX: number, clientY: number): [number, number] | null {
+  const m = svgEl.value?.getScreenCTM()
+  if (!m) return null
+  const p = new DOMPoint(clientX, clientY).matrixTransform(m.inverse())
+  return [p.x, p.y]
+}
+
+/** Zoom by a factor, keeping the point under `at` (a screen point) where it is. */
+function zoomBy(f: number, at?: { clientX: number; clientY: number }) {
+  const next = clamp(zoom.value * f, MIN_ZOOM, MAX_ZOOM)
+  const k = next / zoom.value
+  if (k === 1) return
+  const b = home.value
+  const c = center.value ?? [b.x + b.w / 2, b.y + b.h / 2]
+  const p = (at && toStage(at.clientX, at.clientY)) ?? c
+  center.value = [p[0] - (p[0] - c[0]) / k, p[1] - (p[1] - c[1]) / k]
+  zoom.value = next
+}
+
+/** Move the plan by a distance in screen pixels. */
+function panBy(dx: number, dy: number) {
+  const k = svgEl.value?.getScreenCTM()?.a
+  if (!k) return
+  const b = home.value
+  const c = center.value ?? [b.x + b.w / 2, b.y + b.h / 2]
+  center.value = [c[0] - dx / k, c[1] - dy / k]
+}
+
+function resetView() {
+  zoom.value = 1
+  center.value = null
+}
+
+function onWheel(e: WheelEvent) {
+  e.preventDefault()
+  // Lines and pages, from some mice, in pixels.
+  const unitPx = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1
+  const dx = e.deltaX * unitPx
+  const dy = e.deltaY * unitPx
+  // A trackpad pinch arrives as a wheel with ctrlKey, in small steps. A mouse
+  // wheel's notch is about 100 pixels, held here to half a notch's worth.
+  if (e.ctrlKey || e.metaKey) zoomBy(Math.exp(-clamp(dy, -40, 40) * 0.01), e)
+  else if (e.shiftKey && !dx) panBy(-dy, 0)
+  else panBy(-dx, -dy)
+}
+
+// Space held, or the middle button, drags the plan. So do two fingers, which
+// also pinch.
+const spaceHeld = ref(false)
+const panning = ref(false)
+let panFrom: [number, number] = [0, 0]
+const touches = new Map<number, [number, number]>()
+let pinch: { dist: number; zoom: number; mid: [number, number] } | null = null
+
+function typing(t: EventTarget | null) {
+  return t instanceof HTMLElement && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))
+}
+function onKeyDown(e: KeyboardEvent) {
+  if (typing(e.target)) return
+  // Space presses a focused button, so it pans only over the page or the canvas.
+  if (e.code === 'Space') {
+    const t = e.target
+    if (t !== document.body && !(t instanceof Node && canvasEl.value?.contains(t))) return
+    spaceHeld.value = true
+    e.preventDefault()
+    return
+  }
+  if (!(e.ctrlKey || e.metaKey) || e.altKey) return
+  if (e.key === '=' || e.key === '+') zoomBy(1.4)
+  else if (e.key === '-') zoomBy(1 / 1.4)
+  else if (e.key === '0') resetView()
+  else return
+  e.preventDefault()
+}
+function onKeyUp(e: KeyboardEvent) {
+  if (e.code === 'Space') spaceHeld.value = false
+}
+
+/** Where the pointer is over the canvas, in pixels from its corner, for the rulers. */
+const cursor = ref<[number, number] | null>(null)
+const canvasEl = ref<HTMLElement | null>(null)
+/** How the plan sits on the canvas: metre 0 and the scale, for the rulers. */
+const view = ref({ pxPerM: 0, ox: 0, oy: 0, w: 0, h: 0 })
 
 const markup = computed(() =>
   renderEditor(props.plan, floor.value, props.devices, {
@@ -617,6 +801,7 @@ const markup = computed(() =>
     selectedFurniture: selFurniture.value,
     draft: draft.value,
     unit: unit.value,
+    zoom: zoom.value,
     showHandles: tool.value === 'select',
   }),
 )
@@ -976,6 +1161,9 @@ function toGrid(e: { clientX: number; clientY: number }) {
 function measureUnit() {
   const m = svgEl.value?.getScreenCTM()
   unit.value = m && m.a ? 1 / m.a : 1
+  const box = canvasEl.value?.getBoundingClientRect()
+  if (m && box)
+    view.value = { pxPerM: m.a * S * CELLS_PER_M, ox: m.e - box.left, oy: m.f - box.top, w: box.width, h: box.height }
 }
 
 function placeAt(ref: string, p: { x: number; y: number }) {
@@ -987,7 +1175,39 @@ function placeAt(ref: string, p: { x: number; y: number }) {
   selRef.value = ref
 }
 
+function capture(e: PointerEvent) {
+  try {
+    svgEl.value?.setPointerCapture(e.pointerId)
+  } catch {
+    /* a synthetic pointer has nothing to capture */
+  }
+}
+
 function onDown(e: PointerEvent) {
+  if (e.pointerType === 'touch') {
+    touches.set(e.pointerId, [e.clientX, e.clientY])
+    if (touches.size === 2) {
+      // A second finger: the plan is being zoomed or moved, not drawn on.
+      drag = null
+      draft.value = null
+      const [a, b] = [...touches.values()]
+      pinch = {
+        dist: Math.hypot(a[0] - b[0], a[1] - b[1]),
+        zoom: zoom.value,
+        mid: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2],
+      }
+      capture(e)
+      return
+    }
+    if (touches.size > 2) return
+  }
+  if (e.button === 1 || spaceHeld.value) {
+    e.preventDefault()
+    panning.value = true
+    panFrom = [e.clientX, e.clientY]
+    capture(e)
+    return
+  }
   const p = toGrid(e)
   const pw = props.plan.plot.w
   const ph = props.plan.plot.h
@@ -1077,15 +1297,29 @@ function onDown(e: PointerEvent) {
   }
   if (drag) {
     e.preventDefault()
-    try {
-      svgEl.value?.setPointerCapture(e.pointerId)
-    } catch {
-      /* a synthetic pointer has nothing to capture */
-    }
+    capture(e)
   }
 }
 
 function onMove(e: PointerEvent) {
+  const box = canvasEl.value?.getBoundingClientRect()
+  if (box && e.pointerType !== 'touch') cursor.value = [e.clientX - box.left, e.clientY - box.top]
+  if (touches.has(e.pointerId)) touches.set(e.pointerId, [e.clientX, e.clientY])
+  if (pinch) {
+    if (touches.size !== 2) return
+    const [a, b] = [...touches.values()]
+    const mid: [number, number] = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]
+    panBy(mid[0] - pinch.mid[0], mid[1] - pinch.mid[1])
+    pinch.mid = mid
+    const want = (pinch.zoom * Math.hypot(a[0] - b[0], a[1] - b[1])) / pinch.dist
+    zoomBy(want / zoom.value, { clientX: mid[0], clientY: mid[1] })
+    return
+  }
+  if (panning.value) {
+    panBy(e.clientX - panFrom[0], e.clientY - panFrom[1])
+    panFrom = [e.clientX, e.clientY]
+    return
+  }
   if (!drag) return
   const p = toGrid(e)
   const pw = props.plan.plot.w
@@ -1161,7 +1395,17 @@ function onMove(e: PointerEvent) {
   }
 }
 
-function onUp() {
+function onUp(e?: PointerEvent) {
+  if (e) touches.delete(e.pointerId)
+  if (pinch) {
+    // The pinch ends with its last finger, so the one left does not draw.
+    if (!touches.size) pinch = null
+    return
+  }
+  if (panning.value) {
+    panning.value = false
+    return
+  }
   if (drag?.type === 'fdraw') {
     const d = draft.value
     draft.value = null
@@ -1242,22 +1486,30 @@ function chipClick(ref: string) {
 let observer: ResizeObserver | null = null
 onMounted(() => {
   measureUnit()
-  observer = new ResizeObserver(() => measureUnit())
-  if (svgEl.value) observer.observe(svgEl.value)
+  observer = new ResizeObserver(() => {
+    const box = canvasEl.value?.getBoundingClientRect()
+    if (box) canvasSize.value = { w: box.width, h: box.height }
+    measureUnit()
+  })
+  if (canvasEl.value) observer.observe(canvasEl.value)
+  window.addEventListener('keydown', onKeyDown)
+  window.addEventListener('keyup', onKeyUp)
   // Start where the person can act: drawing on an empty plan, selecting on one with rooms.
   if (props.plan.floors.some((f) => f.rooms.length)) tool.value = 'select'
 })
 onBeforeUnmount(() => {
   observer?.disconnect()
   window.removeEventListener('pointermove', chipMove)
+  window.removeEventListener('keydown', onKeyDown)
+  window.removeEventListener('keyup', onKeyUp)
 })
-watch(
-  () => [props.plan.plot.w, props.plan.plot.h],
-  () => nextTick(measureUnit),
-)
+watch(viewBox, () => nextTick(measureUnit))
 </script>
 
 <style lang="scss" scoped>
+// The rulers' thickness, as RULER_SIZE in house/ruler.ts.
+$ruler: 20px;
+
 .house-editor {
   // The blueprint is the page: it fills the content area edge to edge, with
   // the tools floating over it.
@@ -1268,9 +1520,13 @@ watch(
   flex-direction: column;
 
   // On a phone the panels sit under the blueprint, and the page scrolls.
+  // Its own height, not the screen's: squeezed to the screen, the blueprint
+  // overflowed its row and the panels under it were drawn over it.
   &.is-phone {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     gap: var(--nb-spacing-16);
+    flex: none;
   }
 }
 
@@ -1283,6 +1539,7 @@ watch(
 
   .is-phone & {
     display: block;
+    min-height: auto;
   }
 }
 
@@ -1294,6 +1551,13 @@ watch(
   border-radius: calc(var(--nb-field-height-sm) / 2 + var(--nb-overlay-inset, var(--nb-spacing-4)));
   background: var(--nb-c-layer-1);
   border: 1px solid var(--nb-c-border);
+
+  // A row of tools wider than a phone scrolls sideways, not the page.
+  .is-phone & {
+    max-width: 100%;
+    overflow-x: auto;
+    box-sizing: border-box;
+  }
 }
 .house-editor__kind {
   width: 10rem;
@@ -1301,8 +1565,9 @@ watch(
 .house-editor__toolbar {
   position: absolute;
   z-index: 1;
-  top: var(--nb-spacing-12);
-  left: var(--nb-spacing-12);
+  // Inside the rulers.
+  top: calc(var(--nb-spacing-12) + #{$ruler});
+  left: calc(var(--nb-spacing-12) + #{$ruler});
   right: var(--nb-spacing-12);
   display: flex;
   flex-wrap: wrap;
@@ -1327,11 +1592,14 @@ watch(
 }
 
 .house-editor__canvas {
+  position: relative;
   flex: 1;
   min-height: 0;
   overflow: hidden;
 
   .is-phone & {
+    max-height: 74vh;
+
     border-radius: var(--nb-radius-md);
     border: 1px solid var(--nb-c-border);
   }
@@ -1341,15 +1609,8 @@ watch(
   width: 100%;
   height: 100%;
   display: block;
-  // Room for the toolbar above the plot and the hint below it. The blue is
-  // the canvas behind, so it still runs to every edge.
-  box-sizing: border-box;
-  padding: 64px 16px 60px;
-
-  .is-phone & {
-    height: auto;
-    max-height: 74vh;
-  }
+  // It fills the canvas. The room for the rulers, the toolbar and the hint
+  // is in the fitted view (see home), so a zoomed plan runs to every edge.
   touch-action: none;
   cursor: crosshair;
   user-select: none;
@@ -1358,11 +1619,77 @@ watch(
   &.hv-tool-select {
     cursor: default;
   }
+  &.is-panning {
+    cursor: grab;
+  }
+}
+
+.house-editor__ruler {
+  position: absolute;
+  z-index: 1;
+}
+.house-editor__ruler--x {
+  top: 0;
+  left: $ruler;
+}
+.house-editor__ruler--y {
+  top: $ruler;
+  left: 0;
+}
+.house-editor__ruler-corner {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  left: 0;
+  width: $ruler;
+  height: $ruler;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  background: var(--nb-c-layer-1);
+  border-right: 1px solid var(--nb-c-border);
+  border-bottom: 1px solid var(--nb-c-border);
+  color: var(--nb-c-text-muted);
+  font-family: var(--nb-font-family-mono);
+  font-size: 9px;
+  pointer-events: none;
+}
+
+.house-editor__zoom {
+  position: absolute;
+  z-index: 1;
+  right: var(--nb-spacing-8);
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--nb-spacing-2);
+  // Concentric with the pill buttons inside, as the view's own panels are.
+  padding: var(--nb-overlay-inset, var(--nb-spacing-4));
+  border-radius: calc(var(--nb-field-height-sm) / 2 + var(--nb-overlay-inset, var(--nb-spacing-4)));
+  background: var(--nb-c-layer-1);
+  border: 1px solid var(--nb-c-border);
+
+  .is-phone & {
+    top: auto;
+    bottom: var(--nb-spacing-8);
+    transform: none;
+    flex-direction: row;
+  }
+}
+.house-editor__zoom-level {
+  min-width: 3.2em;
+  padding: var(--nb-spacing-2) 0;
+  text-align: center;
+  color: var(--nb-c-text-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
 }
 
 .house-editor__help {
   position: absolute;
-  left: var(--nb-spacing-12);
+  left: calc(var(--nb-spacing-12) + #{$ruler});
   bottom: var(--nb-spacing-12);
   max-width: min(640px, calc(100% - 24px));
   // On a page surface, so it reads on the blueprint in light and dark.
