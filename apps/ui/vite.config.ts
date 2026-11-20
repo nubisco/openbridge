@@ -95,6 +95,8 @@ export default defineConfig({
   resolve: {
     alias: {
       '@/': fileURLToPath(new URL('./src/', import.meta.url)),
+      // The plan model is shared with the daemon, pure TypeScript with no Node.
+      '@house-model/': fileURLToPath(new URL('../daemon/src/house-model/', import.meta.url)),
     },
   },
   server: {

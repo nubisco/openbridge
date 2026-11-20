@@ -311,7 +311,7 @@ describe('HouseStore', () => {
 
     const again = new HouseStore(path)
     expect(again.get().rev).toBe(1)
-    expect(again.get().plan?.floors[1].rooms[0].name).toBe('Bedroom')
+    expect(again.get().plan?.storeys[1].spaces[0].name).toBe('Bedroom')
     expect(again.roomOf('device:lamp')?.name).toBe('Living room')
   })
 

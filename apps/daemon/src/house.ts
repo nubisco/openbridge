@@ -1,217 +1,57 @@
 /**
- * The house plan: floors, rooms and where each device physically is.
+ * The house plan: storeys, walls, rooms and where each device physically is.
  *
  * One JSON document per bridge, drawn by the person in the House view. It is
  * the bridge's source of rooms: a device's room is whichever room its
  * placement falls in, derived on read, so moving a room in the editor moves
  * every device in it without a second copy of the truth to update.
  *
- * Geometry is in grid cells, not metres. A cell is `grid` metres (0.5 today),
- * and every room edge sits on a cell line, which keeps wall derivation exact
- * integer arithmetic in the UI. A device sits on a half cell at most.
+ * Stored as plan version 2 (millimetres, walls as elements, see
+ * house-model/v2.ts and docs/design/house-bim.md). A version 1 plan, from the
+ * file of an older OpenBridge or a tab opened before the update, is still
+ * accepted and converted, keeping what version 1 cannot say from the plan it
+ * replaces.
  *
  * Writes are whole-document, guarded by a revision number: a tab that saves a
  * plan it read before another tab saved gets a 409 rather than silently
  * undoing the other tab's work.
  */
 
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs'
 import { dirname } from 'path'
 import { Logger } from '@nubisco/openbridge-logger'
+import { fromV1, toV1 } from './house-model/convert.js'
+import { PlanError, validatePlan } from './house-model/validate.js'
+import type { Plan } from './house-model/v2.js'
+import {
+  DEVICE_LOOKS,
+  FURNITURE_KINDS,
+  HOUSE_GRID,
+  HOUSE_V1,
+  LIGHT_MOUNTS,
+  overlaps,
+  roomRects,
+  touches,
+  type HouseFloor,
+  type HouseFurniture,
+  type HouseOpening,
+  type HousePlacement,
+  type HousePlan,
+  type HouseRadiator,
+  type HouseRect,
+  type HouseRoom,
+} from './house-model/v1.js'
+
+export * from './house-model/v1.js'
+export type { Plan } from './house-model/v2.js'
 
 const log = Logger.create('house')
 
-export const HOUSE_VERSION = 1
-/** Metres per grid cell. */
-export const HOUSE_GRID = 0.5
-
-/** `paved` is hard ground with no walls: a terrace, a path, the deck round a pool. */
-export type HouseRoomKind = 'room' | 'outdoor' | 'paved' | 'pool'
-
-export interface HouseRoom {
-  id: string
-  name: string
-  /** A `room` has walls. An outdoor zone and a pool are ground with no walls. */
-  kind: HouseRoomKind
-  x: number
-  y: number
-  w: number
-  h: number
-  /**
-   * More rectangles joined to the main one, for a room that is not a
-   * rectangle: an L is one part, a U is two. Each shares an edge with the
-   * shape before it and none overlap, so the room is one connected piece
-   * with no wall inside it.
-   */
-  parts?: HouseRect[]
-}
-
-export interface HouseRect {
-  x: number
-  y: number
-  w: number
-  h: number
-}
-
-/** Every rectangle a room is made of, main one first. */
-export function roomRects(r: HouseRoom): HouseRect[] {
-  return [{ x: r.x, y: r.y, w: r.w, h: r.h }, ...(r.parts ?? [])]
-}
-
-const overlaps = (a: HouseRect, b: HouseRect) =>
-  a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
-
-/** Two rectangles that do not overlap but share at least one cell of edge. */
-const touches = (a: HouseRect, b: HouseRect) => {
-  const alongX = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x)
-  const alongY = Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y)
-  return (
-    ((a.y + a.h === b.y || b.y + b.h === a.y) && alongX >= 1) ||
-    ((a.x + a.w === b.x || b.x + b.w === a.x) && alongY >= 1)
-  )
-}
-
-export interface HouseOpening {
-  id: string
-  /**
-   * `open` is a stretch with no wall at all: two rooms that run into each
-   * other, such as a kitchen open to the living room. `slider` is a sliding
-   * glass door: glass to door height, and a shutter can sit on it like on a
-   * window.
-   */
-  type: 'door' | 'window' | 'open' | 'slider'
-  /**
-   * Start of the opening, on a wall line. Along the wall it may sit on a half
-   * cell (a quarter metre), so a door can be centred on a wall of any length.
-   */
-  x: number
-  y: number
-  /** `h` runs along x, `v` along y. */
-  axis: 'h' | 'v'
-  /** Length in cells, in half cells. */
-  len: number
-  /** A door's hinge: the end at the lower x or y (`start`), or the other one. Default `start`. */
-  hinge?: 'start' | 'end'
-  /**
-   * The side a door swings into, as seen on the plan: `up` or `down` for a
-   * door in a wall running along x, `left` or `right` along y. Default
-   * `down` or `right`.
-   */
-  opens?: 'up' | 'down' | 'left' | 'right'
-  /** A door with a glass leaf, such as a French door. A shutter can sit on it like on a window. */
-  glass?: boolean
-}
-
-/** How a light hangs: from the ceiling, on a wall, or as a floor or table lamp. */
-export const LIGHT_MOUNTS = ['ceiling', 'wall', 'floor', 'table', 'pool'] as const
-/**
- * What a device is drawn as. The bridge sees a smart plug or a relay, and the
- * person knows it is the fridge, so they say so on the plan.
- */
-export const DEVICE_LOOKS = ['outlet', 'tv', 'fridge', 'washer', 'dehumidifier', 'vacuum', 'mower', 'tap'] as const
-
-export interface HousePlacement {
-  /** `device:<id>` for a native device, `accessory:<uuid>` for a HomeKit accessory. */
-  ref: string
-  x: number
-  y: number
-  /** A shutter or blind belongs to a window, and is drawn on it. */
-  opening?: string
-  /** The glow colour of a light that cannot report one (a relay driving a lamp). */
-  color?: string
-  /** Rooms a heating or cooling device's water circuit runs through, in order. */
-  circuitRooms?: string[]
-  /** A gate's width in cells. Drawn centred on (x, y). */
-  length?: number
-  /** Which way a gate or a TV runs: `h` along x, `v` along y. */
-  axis?: 'h' | 'v'
-  /** Where a light is mounted. */
-  mount?: (typeof LIGHT_MOUNTS)[number]
-  /** What the device is drawn as, when its type alone does not say. */
-  look?: (typeof DEVICE_LOOKS)[number]
-}
-
-/**
- * A radiator on a wall. It sits on a wall line like a door or window (whole
- * cells across the wall, half cells along it), and hangs on one side of it,
- * named the way a door's swing is. It is plumbing, not a device: a heating
- * circuit serving its room runs through it.
- */
-export interface HouseRadiator {
-  id: string
-  x: number
-  y: number
-  axis: 'h' | 'v'
-  /** Width in cells, in half cells. */
-  len: number
-  /** The side of the wall it hangs on: `up` or `down` along x, `left` or `right` along y. */
-  side: 'up' | 'down' | 'left' | 'right'
-}
-
-/** What a piece of furniture is. Drawn as plain shapes, so the plan never imposes a style. */
-export const FURNITURE_KINDS = [
-  'table',
-  'cabinet',
-  'island',
-  'bed',
-  'sofa',
-  'shelves',
-  'rug',
-  'bath',
-  'shower',
-  'toilet',
-  'basin',
-  'lounger',
-  'parasol',
-  'planter',
-  'pergola',
-] as const
-
-/**
- * A piece of furniture: a rectangle on the floor, in half cells (a quarter
- * metre), `w` along x and `d` along y. It is there to make the plan read as
- * the home, and so a lamp put on a table stands on it.
- */
-export interface HouseFurniture {
-  id: string
-  kind: (typeof FURNITURE_KINDS)[number]
-  x: number
-  y: number
-  w: number
-  d: number
-  /** Height in metres, when it is not the usual one for its kind. */
-  height?: number
-  /**
-   * The side its back is on (a bed's head, a sofa's back), when the person
-   * set it. Unset, it is the side nearest a wall.
-   */
-  back?: 'up' | 'down' | 'left' | 'right'
-}
-
-export interface HouseFloor {
-  id: string
-  name: string
-  /** 0 is the ground floor. Negative is a basement. */
-  level: number
-  rooms: HouseRoom[]
-  openings: HouseOpening[]
-  placements: HousePlacement[]
-  /** Absent on a plan saved before radiators existed. */
-  radiators?: HouseRadiator[]
-  /** Absent on a plan saved before furniture existed. */
-  furniture?: HouseFurniture[]
-}
-
-export interface HousePlan {
-  version: typeof HOUSE_VERSION
-  grid: number
-  /** The plot, in cells. The ground floor's ground. */
-  plot: { w: number; h: number }
-  floors: HouseFloor[]
-}
+/** The version a plan is stored in. */
+export const HOUSE_VERSION = 2
 
 export interface StoredHouse {
-  plan: HousePlan | null
+  plan: Plan | null
   /** Bumped on every save. 0 means nothing has been saved yet. */
   rev: number
   updatedAt: string | null
@@ -223,7 +63,9 @@ export interface DeviceRoom {
   floor: { id: string; name: string; level: number }
 }
 
-export class HouseValidationError extends Error {}
+/** A plan that does not hold together. One class for both versions, so callers catch one thing. */
+export const HouseValidationError = PlanError
+export type HouseValidationError = PlanError
 
 // ─── Validation ─────────────────────────────────────────────────────────────
 
@@ -242,7 +84,7 @@ const REF = /^(device|accessory):[^\s]{1,200}$/
 const COLOR = /^#[0-9a-fA-F]{6}$/
 
 function fail(path: string, message: string): never {
-  throw new HouseValidationError(`${path}: ${message}`)
+  throw new PlanError(`${path}: ${message}`)
 }
 
 function obj(v: unknown, path: string): Record<string, unknown> {
@@ -284,7 +126,7 @@ function name(v: unknown, path: string): string {
 }
 
 /**
- * Check a plan from the outside world and return a clean copy.
+ * Check a version 1 plan from the outside world and return a clean copy.
  *
  * Unknown fields are dropped rather than refused, so an older UI saving a
  * plan cannot fail on a field a newer one added, and nothing unexpected ends
@@ -292,7 +134,7 @@ function name(v: unknown, path: string): string {
  */
 export function validateHousePlan(raw: unknown): HousePlan {
   const p = obj(raw, 'plan')
-  if (p.version !== HOUSE_VERSION) fail('plan.version', `must be ${HOUSE_VERSION}`)
+  if (p.version !== HOUSE_V1) fail('plan.version', `must be ${HOUSE_V1}`)
   const plotRaw = obj(p.plot, 'plan.plot')
   const plot = { w: int(plotRaw.w, 'plan.plot.w', 1, LIMITS.plot), h: int(plotRaw.h, 'plan.plot.h', 1, LIMITS.plot) }
 
@@ -492,7 +334,7 @@ export function validateHousePlan(raw: unknown): HousePlan {
     ),
   )
 
-  return { version: HOUSE_VERSION, grid: HOUSE_GRID, plot, floors }
+  return { version: HOUSE_V1, grid: HOUSE_GRID, plot, floors }
 }
 
 // ─── Rooms of devices ───────────────────────────────────────────────────────
@@ -521,9 +363,11 @@ function contains(r: HouseRoom, x: number, y: number): boolean {
  * share goes to the room drawn first, which is stable. A shutter is in the
  * room behind its window: the one with walls, not the garden.
  */
-export function roomsByRef(plan: HousePlan | null): Map<string, DeviceRoom> {
+export function roomsByRef(stored: HousePlan | Plan | null): Map<string, DeviceRoom> {
   const out = new Map<string, DeviceRoom>()
-  if (!plan) return out
+  if (!stored) return out
+  // Version 2 is read through its version 1 view until rooms of any shape need more.
+  const plan = stored.version === HOUSE_V1 ? stored : toV1(stored)
   for (const f of plan.floors) {
     const floor = { id: f.id, name: f.name, level: f.level }
     for (const pl of f.placements) {
@@ -557,14 +401,24 @@ export class HouseStore {
   private load(): void {
     try {
       if (!existsSync(this.path)) return
-      const raw = JSON.parse(readFileSync(this.path, 'utf8')) as Partial<StoredHouse>
-      const plan = raw.plan ? validateHousePlan(raw.plan) : null
-      this.state = {
-        plan,
-        rev: typeof raw.rev === 'number' && raw.rev >= 0 ? raw.rev : 0,
-        updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : null,
+      const raw = JSON.parse(readFileSync(this.path, 'utf8')) as Partial<StoredHouse> & { plan?: unknown }
+      const rev = typeof raw.rev === 'number' && raw.rev >= 0 ? raw.rev : 0
+      const updatedAt = typeof raw.updatedAt === 'string' ? raw.updatedAt : null
+      const version = (raw.plan as { version?: unknown } | null | undefined)?.version
+      if (raw.plan && version === HOUSE_V1) {
+        // Converted once, with the version 1 file kept beside it the first
+        // time, so going back to an older OpenBridge loses nothing.
+        const { plan, dropped } = fromV1(validateHousePlan(raw.plan))
+        const backup = `${this.path}.v1.json`
+        if (!existsSync(backup)) copyFileSync(this.path, backup)
+        this.state = { plan: validatePlan(plan), rev, updatedAt }
+        this.save()
+        log.info(`Converted the house plan to version 2. The version 1 file is kept as ${backup}.`)
+        if (dropped.length) log.warn(`Left out openings that sat on no wall: ${dropped.join(', ')}`)
+      } else {
+        this.state = { plan: raw.plan ? validatePlan(raw.plan) : null, rev, updatedAt }
       }
-      this.rooms = roomsByRef(plan)
+      this.rooms = roomsByRef(this.state.plan)
     } catch (err) {
       // The file is left where it is, so the plan can still be recovered by
       // hand. The next save replaces it.
@@ -594,8 +448,8 @@ export class HouseStore {
     if (baseRev !== this.state.rev) {
       throw new HouseConflictError('The house plan was changed elsewhere. Reload it before saving.')
     }
-    const plan = raw === null ? null : validateHousePlan(raw)
     const previous = this.state
+    const plan = raw === null ? null : this.accept(raw, previous.plan)
     this.state = { plan, rev: previous.rev + 1, updatedAt: new Date().toISOString() }
     try {
       this.save()
@@ -605,6 +459,17 @@ export class HouseStore {
     }
     this.rooms = roomsByRef(plan)
     return this.state
+  }
+
+  /**
+   * A plan of either version, as version 2. A version 1 plan comes from the
+   * editor that still draws in cells (or a tab opened before the update), so
+   * what it cannot say is kept from the plan it replaces.
+   */
+  private accept(raw: unknown, previous: Plan | null): Plan {
+    const version = (raw as { version?: unknown } | null)?.version
+    if (version === HOUSE_V1) return validatePlan(fromV1(validateHousePlan(raw), previous).plan)
+    return validatePlan(raw)
   }
 
   /** The room a device is placed in, if it is on the plan. */
