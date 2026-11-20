@@ -1,3 +1,10 @@
+# [1.29.0](https://github.com/nubisco/openbridge/compare/v1.28.0...v1.29.0) (2026-11-20)
+
+
+### Features
+
+* **daemon:** anonymous install heartbeat to downloads.nubisco.io, with a switch in Settings ([#44](https://github.com/nubisco/openbridge/issues/44)) ([c79eb82](https://github.com/nubisco/openbridge/commit/c79eb82a6c25aaa49f1ac9135bc8cf26cdf3c53b))
+
 # [1.28.0](https://github.com/nubisco/openbridge/compare/v1.27.4...v1.28.0) (2026-11-20)
 
 
