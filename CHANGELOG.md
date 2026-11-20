@@ -1,3 +1,10 @@
+# [1.30.0](https://github.com/nubisco/openbridge/compare/v1.29.0...v1.30.0) (2026-11-20)
+
+
+### Features
+
+* **house:** store the plan as a building model in millimetres (plan version 2) ([#45](https://github.com/nubisco/openbridge/issues/45)) ([ca4a427](https://github.com/nubisco/openbridge/commit/ca4a427029a71021a6308e43d0a9d53302ec6f4b))
+
 # [1.29.0](https://github.com/nubisco/openbridge/compare/v1.28.0...v1.29.0) (2026-11-20)
 
 
