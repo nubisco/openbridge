@@ -727,6 +727,8 @@ export interface EditorDrawOptions {
   draft: Pick<HouseRoom, 'x' | 'y' | 'w' | 'h'> | null
   /** Screen pixels per editor unit, so labels and handles keep their size. */
   unit: number
+  /** How far the blueprint is zoomed in, 1 at the fitted view. Markers and handles keep their size on screen. */
+  zoom?: number
   showHandles: boolean
 }
 
@@ -774,7 +776,10 @@ export function renderEditor(
   const pw = plan.plot.w
   const ph = plan.plot.h
   const U = o.unit
-  const fs = Math.max(11, 11 * U)
+  // The size a marker or handle has at the fitted view, held on screen as it zooms.
+  const Z = o.zoom ?? 1
+  const fit = (min: number, k: number) => Math.max(min, k * U * Z) / Z
+  const fs = fit(11, 11)
   const M = CELLS_PER_M * S
   let h =
     `<defs><pattern id="hv-egrid" width="${M}" height="${M}" patternUnits="userSpaceOnUse"><path class="hv-egl" d="M${M} 0H0V${M}"/></pattern></defs>` +
@@ -870,7 +875,7 @@ export function renderEditor(
       `<rect class="hv-erad${sel}" x="${r1(x0 * S)}" y="${r1(y0 * S)}" width="${r1(rw * S)}" height="${r1(rh * S)}"/>` +
       `<line class="hv-ehit" data-radiator="${esc(r.id)}" ${c}/>`
   }
-  const rr = Math.max(11, 11 * U)
+  const rr = fit(11, 11)
   for (const p of floor.placements) {
     const d = devices.get(p.ref)
     let x = p.x
@@ -895,7 +900,7 @@ export function renderEditor(
       ['end', so.axis === 'h' ? so.x + so.len : so.x, so.axis === 'v' ? so.y + so.len : so.y],
     ]
     for (const [end, x, y] of ends) {
-      h += `<circle class="hv-eh hv-eoh-${so.axis}" data-ohandle="${end}" cx="${x * S}" cy="${y * S}" r="${r1(Math.max(6, 8 * U))}"/>`
+      h += `<circle class="hv-eh hv-eoh-${so.axis}" data-ohandle="${end}" cx="${x * S}" cy="${y * S}" r="${r1(fit(6, 8))}"/>`
     }
   }
   const sr = (floor.radiators ?? []).find((x) => x.id === o.selectedRadiator)
@@ -905,7 +910,7 @@ export function renderEditor(
       ['end', sr.axis === 'h' ? sr.x + sr.len : sr.x, sr.axis === 'v' ? sr.y + sr.len : sr.y],
     ]
     for (const [end, x, y] of ends) {
-      h += `<circle class="hv-eh hv-eoh-${sr.axis}" data-rhandle="${end}" cx="${x * S}" cy="${y * S}" r="${r1(Math.max(6, 8 * U))}"/>`
+      h += `<circle class="hv-eh hv-eoh-${sr.axis}" data-rhandle="${end}" cx="${x * S}" cy="${y * S}" r="${r1(fit(6, 8))}"/>`
     }
   }
   const sf = (floor.furniture ?? []).find((x) => x.id === o.selectedFurniture)
@@ -917,7 +922,7 @@ export function renderEditor(
       ['sw', sf.x, sf.y + sf.d],
     ]
     for (const [c, x, y] of corners) {
-      h += `<circle class="hv-eh${c === 'ne' || c === 'sw' ? ' hv-alt' : ''}" data-fhandle="${c}" cx="${x * S}" cy="${y * S}" r="${r1(Math.max(6, 8 * U))}"/>`
+      h += `<circle class="hv-eh${c === 'ne' || c === 'sw' ? ' hv-alt' : ''}" data-fhandle="${c}" cx="${x * S}" cy="${y * S}" r="${r1(fit(6, 8))}"/>`
     }
   }
   const sel = floor.rooms.find((r) => r.id === o.selectedRoom)
@@ -932,7 +937,7 @@ export function renderEditor(
         ['sw', q.x, q.y + q.h],
       ]
       for (const [c, x, y] of corners) {
-        h += `<circle class="hv-eh${c === 'ne' || c === 'sw' ? ' hv-alt' : ''}" data-handle="${i}:${c}" cx="${x * S}" cy="${y * S}" r="${r1(Math.max(7, 9 * U))}"/>`
+        h += `<circle class="hv-eh${c === 'ne' || c === 'sw' ? ' hv-alt' : ''}" data-handle="${i}:${c}" cx="${x * S}" cy="${y * S}" r="${r1(fit(7, 9))}"/>`
       }
     })
   }
