@@ -1,3 +1,10 @@
+# [1.28.0](https://github.com/nubisco/openbridge/compare/v1.27.4...v1.28.0) (2026-11-20)
+
+
+### Features
+
+* **house:** zoom the blueprint, with rulers in metres ([#43](https://github.com/nubisco/openbridge/issues/43)) ([b21414a](https://github.com/nubisco/openbridge/commit/b21414aa0a7630ec5ab45ca5a39772afe6e2197b))
+
 ## [1.27.4](https://github.com/nubisco/openbridge/compare/v1.27.3...v1.27.4) (2026-11-18)
 
 
