@@ -35,7 +35,10 @@ You can edit this file by hand, through the UI Settings page, or via the config 
       "anyPlatformConfig": "here"
     }
   ],
-  "localPluginSources": []
+  "localPluginSources": [],
+  "telemetry": {
+    "installHeartbeat": true
+  }
 }
 ```
 
@@ -158,6 +161,16 @@ This is useful for:
 
 ---
 
+## `telemetry`
+
+| Field              | Type      | Default | Required | Description                                                                                                           |
+| ------------------ | --------- | ------- | -------- | --------------------------------------------------------------------------------------------------------------------- |
+| `installHeartbeat` | `boolean` | `true`  | No       | Send the [anonymous install heartbeat](/guide/installation#anonymous-install-heartbeat) once per start and once a day |
+
+The heartbeat carries a random install id, the version, the platform and the install method, and nothing else. Unlike the rest of this file, a change to `installHeartbeat` applies without a restart: the daemon reads it before every send.
+
+---
+
 ## Storage paths
 
 OpenBridge uses these paths on disk. All are relative to your home directory:
@@ -168,6 +181,7 @@ OpenBridge uses these paths on disk. All are relative to your home directory:
 | `~/.openbridge/plugins/openbridge/` | Native OpenBridge plugins (auto-scanned)     |
 | `~/.openbridge/plugins/homebridge/` | Homebridge npm packages (`npm install` here) |
 | `~/.openbridge/hap-storage/`        | HAP pairing data — do not delete             |
+| `~/.openbridge/install.json`        | Random install id for the heartbeat          |
 
 > **Warning:** Deleting `~/.openbridge/hap-storage/` clears HomeKit pairing data. If you do this, you must remove the bridge from the Apple Home app and re-pair. All your automations and room assignments will be lost.
 

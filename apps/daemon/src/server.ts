@@ -1007,6 +1007,35 @@ export async function createServer(
     return { saved: true, bridge: cfg.bridge }
   })
 
+  // ─── Telemetry (the anonymous install heartbeat) ──────────────────────────
+  // One switch. The daemon reads it before every send, so a change here
+  // applies at once and no restart is needed.
+  app.get('/api/telemetry', async () => {
+    try {
+      const cfg = JSON.parse(readFileSync(configPath, 'utf8'))
+      return { installHeartbeat: cfg.telemetry?.installHeartbeat !== false }
+    } catch {
+      return { installHeartbeat: true }
+    }
+  })
+
+  app.post('/api/telemetry', async (req) => {
+    const { installHeartbeat } = (req.body ?? {}) as { installHeartbeat?: unknown }
+    if (typeof installHeartbeat !== 'boolean') {
+      throw { statusCode: 400, message: 'installHeartbeat must be a boolean' }
+    }
+    let cfg: any = {}
+    try {
+      cfg = JSON.parse(readFileSync(configPath, 'utf8'))
+    } catch {
+      /* start fresh */
+    }
+    cfg.telemetry = { ...(cfg.telemetry ?? {}), installHeartbeat }
+    writeFileSync(configPath, JSON.stringify(cfg, null, 2), 'utf8')
+    log.info(`Install heartbeat ${installHeartbeat ? 'on' : 'off'}`)
+    return { saved: true, installHeartbeat }
+  })
+
   // ─── Config file editor ────────────────────────────────────────────────────
   const configPath = resolve(os.homedir(), '.openbridge', 'config.json')
 

@@ -178,6 +178,30 @@
              to and offering it invites an unnecessary restart. -->
         <NbButton v-if="updateStarted" variant="tertiary" @click="rollbackUpdate">Roll back</NbButton>
       </div>
+
+      <!-- The install heartbeat sits with updates because it is the same
+           conversation with Nubisco: what this install is and which version it
+           runs. It applies as soon as it is switched, so it has no Save. -->
+      <NbGrid dir="col" gap="md" class="settings__fields settings__telemetry">
+        <NbField
+          control="fit"
+          label-for="settings-heartbeat-input"
+          hint="Once a day, OpenBridge tells Nubisco that this install is running: a random install id, the version, the platform and how it was installed. Nothing else, and never anything about your home."
+        >
+          <template #label>
+            <label class="type-label" for="settings-heartbeat-input">Anonymous install heartbeat</label>
+          </template>
+          <NbSwitch
+            id="settings-heartbeat"
+            name="settings-heartbeat"
+            variant="primary"
+            :model-value="telemetry.installHeartbeat"
+            :disabled="savingTelemetry"
+            @update:model-value="setHeartbeat($event === true)"
+          />
+        </NbField>
+        <NbMessage v-if="telemetryError" variant="error">{{ telemetryError }}</NbMessage>
+      </NbGrid>
     </section>
 
     <AgentAccessPanel v-else-if="tab === 'agents'" />
@@ -214,7 +238,7 @@
 import { computed, ref, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useShellSlot, useTheme, type TTheme } from '@nubisco/ui'
-import { api, type BridgeConfig, type UpdateStatus } from '@/api'
+import { api, type BridgeConfig, type TelemetryConfig, type UpdateStatus } from '@/api'
 import { useAuth } from '@/composables/useAuth'
 import { useLayoutStore } from '@/stores/layout'
 import AgentAccessPanel from '@/components/AgentAccessPanel.vue'
@@ -378,6 +402,27 @@ async function rollbackUpdate() {
   }
 }
 
+// ─── Install heartbeat ───────────────────────────────────────────────────────
+const telemetry = ref<TelemetryConfig>({ installHeartbeat: true })
+const savingTelemetry = ref(false)
+const telemetryError = ref<string | null>(null)
+
+async function setHeartbeat(on: boolean) {
+  if (savingTelemetry.value) return
+  savingTelemetry.value = true
+  telemetryError.value = null
+  const before = telemetry.value.installHeartbeat
+  telemetry.value = { installHeartbeat: on }
+  try {
+    await api.telemetry.set(on)
+  } catch (e) {
+    telemetry.value = { installHeartbeat: before }
+    telemetryError.value = e instanceof Error ? e.message : String(e)
+  } finally {
+    savingTelemetry.value = false
+  }
+}
+
 const bridge = ref<BridgeConfig>({
   name: 'OpenBridge',
   port: 8582,
@@ -403,6 +448,11 @@ onMounted(async () => {
     }
   } catch {
     /* use defaults */
+  }
+  try {
+    telemetry.value = await api.telemetry.get()
+  } catch {
+    /* the daemon's default is on */
   }
   checkUpdate()
 })
@@ -562,6 +612,12 @@ function generatePin() {
      the space into the template does not survive Prettier reformatting the tag. */
   &__command {
     margin-inline-start: var(--nb-spacing-4);
+  }
+
+  // Under the update status, with room above so the switch reads as its own
+  // row rather than part of the update's action line.
+  &__telemetry {
+    margin-block-start: var(--nb-spacing-8);
   }
 
   &__steps {

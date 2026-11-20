@@ -177,6 +177,9 @@ After saving, the UI shows a banner prompting you to restart the daemon. Bridge 
 **Restart Daemon button:**
 Calls `POST /api/daemon/restart`. The daemon process restarts, all plugins go through their full lifecycle again, and the UI reconnects automatically once the daemon is back.
 
+**Updates tab:**
+Shows the running version against the newest one on npm and, where the install can update itself, installs it. The same tab holds the **Anonymous install heartbeat** switch: once a day the daemon tells Nubisco that this install is running (a random install id, the version, the platform and the install method, nothing else). Switching it off applies at once. See [Anonymous install heartbeat](/guide/installation#anonymous-install-heartbeat) for exactly what is sent.
+
 ---
 
 ## Notifications

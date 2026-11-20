@@ -327,6 +327,36 @@ Updates one or more fields in the `bridge` config. Partial updates are supported
 
 ---
 
+### `GET /api/telemetry`
+
+Whether the [anonymous install heartbeat](/guide/installation#anonymous-install-heartbeat) is on.
+
+**Response:**
+
+```json
+{ "installHeartbeat": true }
+```
+
+---
+
+### `POST /api/telemetry`
+
+Turns the heartbeat on or off. Applies at once, without a restart.
+
+**Request body:**
+
+```json
+{ "installHeartbeat": false }
+```
+
+**Response:**
+
+```json
+{ "saved": true, "installHeartbeat": false }
+```
+
+---
+
 ## Marketplace
 
 ### `GET /api/marketplace/search`

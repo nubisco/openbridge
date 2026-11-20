@@ -24,6 +24,9 @@ import { HouseStore } from './house.js'
 import { HomebridgeAPI, loadHomebridgePlugin, serializeAccessory } from '@nubisco/openbridge-compatibility-homebridge'
 import { packageAuthor } from './package-author.js'
 import { appendEnergySample } from './energy-history.js'
+import { startInstallHeartbeat } from './heartbeat.js'
+import { detectInstall } from './updater.js'
+import { OPENBRIDGE_VERSION } from './version.js'
 
 const log = Logger.create('system')
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -451,6 +454,25 @@ export class Daemon {
       this.house,
     )
     await server.listen({ port, host: '0.0.0.0' })
+
+    // ── Install heartbeat ─────────────────────────────────────────────────────
+    // Anonymous, one per start and one a day, so Nubisco can count active
+    // installs. The setting is read from config.json on every send, so the
+    // switch in Settings applies without a restart. Fire and forget: nothing
+    // here can delay or fail startup.
+    startInstallHeartbeat({
+      home: OPENBRIDGE_HOME,
+      version: OPENBRIDGE_VERSION,
+      installMethod: detectInstall().method,
+      isEnabled: () => {
+        try {
+          const raw = JSON.parse(readFileSync(configPath, 'utf8')) as { telemetry?: { installHeartbeat?: unknown } }
+          return raw.telemetry?.installHeartbeat !== false
+        } catch {
+          return true
+        }
+      },
+    })
 
     // ── Notifications ─────────────────────────────────────────────────────────
     // Read from state the daemon already keeps: device health from the

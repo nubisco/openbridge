@@ -11,11 +11,17 @@ import { accessSync, constants, existsSync, readFileSync } from 'fs'
 import { basename, dirname, join, resolve, sep } from 'path'
 import { spawn } from 'child_process'
 import { fileURLToPath } from 'url'
-import { APP_VOLUME } from './version.js'
+import { APP_VOLUME, OPENBRIDGE_VERSION } from './version.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
 export const PACKAGE_NAME = '@nubisco/openbridge'
+
+/**
+ * Product/version, the form the Nubisco hosts count as the app rather than a
+ * person. The same header goes on every fetch the daemon makes for itself.
+ */
+export const USER_AGENT = `openbridge/${OPENBRIDGE_VERSION}`
 
 /** The installed package root, i.e. the directory holding our package.json. */
 export const PACKAGE_ROOT = resolve(__dirname, '..')
@@ -234,7 +240,7 @@ export function detectInstall(): InstallInfo {
 export async function fetchLatestVersion(): Promise<string | null> {
   const res = await fetch(`https://registry.npmjs.org/${PACKAGE_NAME}/latest`, {
     signal: AbortSignal.timeout(8000),
-    headers: { Accept: 'application/json', 'User-Agent': 'openbridge-daemon' },
+    headers: { Accept: 'application/json', 'User-Agent': USER_AGENT },
   })
   if (!res.ok) return null
   const body = (await res.json()) as { version?: string }
@@ -264,13 +270,13 @@ export function tarballUrls(name: string, version: string, dependencies: Record<
 export async function tarballsReady(version: string): Promise<boolean> {
   const res = await fetch(`https://registry.npmjs.org/${PACKAGE_NAME}/${version}`, {
     signal: AbortSignal.timeout(8000),
-    headers: { Accept: 'application/json', 'User-Agent': 'openbridge-daemon' },
+    headers: { Accept: 'application/json', 'User-Agent': USER_AGENT },
   })
   if (!res.ok) return false
   const meta = (await res.json()) as { dependencies?: Record<string, string> }
   const checks = await Promise.all(
     tarballUrls(PACKAGE_NAME, version, meta.dependencies).map((url) =>
-      fetch(url, { method: 'HEAD', signal: AbortSignal.timeout(8000), headers: { 'User-Agent': 'openbridge-daemon' } })
+      fetch(url, { method: 'HEAD', signal: AbortSignal.timeout(8000), headers: { 'User-Agent': USER_AGENT } })
         .then((r) => r.ok)
         .catch(() => false),
     ),
@@ -306,7 +312,7 @@ export async function fetchReleaseNotes(version: string): Promise<string | null>
   try {
     const res = await fetch(`https://api.github.com/repos/nubisco/openbridge/releases/tags/v${version}`, {
       signal: AbortSignal.timeout(8000),
-      headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'openbridge-daemon' },
+      headers: { Accept: 'application/vnd.github+json', 'User-Agent': USER_AGENT },
     })
     if (!res.ok) return null
     return ((await res.json()) as { body?: string }).body ?? null

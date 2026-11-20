@@ -320,16 +320,44 @@ curl http://localhost:8582/api/health
 
 Everything lives under `~/.openbridge`, in the home directory of the user running the daemon (`/root/.openbridge` in the Docker image):
 
-| Path                          | Contents                                              |
-| ----------------------------- | ----------------------------------------------------- |
-| `config.json`                 | Your configuration                                    |
-| `hap-storage/`                | HomeKit pairing data. Deleting it unpairs the bridge. |
-| `plugins/openbridge/`         | Installed OpenBridge plugins                          |
-| `plugins/homebridge/`         | Installed Homebridge plugins                          |
-| `metrics/`, `energy-history/` | Recorded device metrics                               |
-| `session.key`                 | Secret for signing session cookies                    |
+| Path                          | Contents                                                                                 |
+| ----------------------------- | ---------------------------------------------------------------------------------------- |
+| `config.json`                 | Your configuration                                                                       |
+| `hap-storage/`                | HomeKit pairing data. Deleting it unpairs the bridge.                                    |
+| `plugins/openbridge/`         | Installed OpenBridge plugins                                                             |
+| `plugins/homebridge/`         | Installed Homebridge plugins                                                             |
+| `metrics/`, `energy-history/` | Recorded device metrics                                                                  |
+| `session.key`                 | Secret for signing session cookies                                                       |
+| `install.json`                | The random id of this install, for the [install heartbeat](#anonymous-install-heartbeat) |
 
 The location follows the `HOME` environment variable, so running the daemon under a different `HOME` relocates all of it.
+
+## Anonymous install heartbeat
+
+Once per start, and once a day while it keeps running, the daemon tells Nubisco that this install is alive. That is how we know how many installs there are, how many are new, and how many have updated, per install method, without an account or a sign-in.
+
+What it sends, and nothing else:
+
+| Field             | Value                                                                                                                     |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `installId`       | A random UUID, generated once and kept in `~/.openbridge/install.json`. Not derived from your hardware, user or hostname. |
+| `version`         | The OpenBridge version running                                                                                            |
+| `previousVersion` | The version that ran before, only on the first start after an update                                                      |
+| `firstRun`        | `true` only on the very first start of an install                                                                         |
+| `installMethod`   | `docker`, `homebrew`, `npm` or `source`                                                                                   |
+| `os`, `arch`      | `darwin`, `linux` or `win32`, and `arm64` or `x64`                                                                        |
+
+Nothing about your home, your devices, your plugins, your network or you. The request goes to `https://downloads.nubisco.io/ping` with a `openbridge/<version>` user agent, times out after four seconds, is never retried and never delays startup. Offline installs simply send nothing.
+
+To turn it off, switch off **Anonymous install heartbeat** under Settings → Updates in the dashboard, or set it in `config.json`:
+
+```json
+{
+  "telemetry": { "installHeartbeat": false }
+}
+```
+
+The change applies at once, no restart needed. Deleting `install.json` makes the next start count as a new install.
 
 ## Environment variables
 
