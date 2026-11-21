@@ -45,25 +45,33 @@ jobs:
 
       - name: Pick the release
         id: pick
+        # The newest release that is at least a day old, not `latest`. With a release a
+        # day for a week, `latest` was always too young at run time, and the tap stood
+        # still at the last version that had happened to be old enough.
         run: |
           set -euo pipefail
-          meta=$(curl -fsS https://registry.npmjs.org/@nubisco/openbridge)
-          version=$(echo "$meta" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s)["dist-tags"].latest))')
-          published=$(echo "$meta" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>console.log(JSON.parse(s).time[process.argv[1]]))' "$version")
-          echo "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' || { echo "not a release version: $version"; exit 1; }
-          age=$(( $(date +%s) - $(date -d "$published" +%s) ))
           current=$(sed -n 's/^  url ".*openbridge-\([0-9.]*\)\.tgz"$/\1/p' tap/Formula/openbridge.rb 2>/dev/null || true)
-          echo "latest $version, published $published, tap has ${current:-nothing}"
-          if [ "$current" = "$version" ]; then
-            echo "update=false" >> "$GITHUB_OUTPUT"
-          elif [ "$age" -lt 90000 ]; then
-            # A day plus an hour, so the formula never lands just inside Homebrew's cutoff.
-            echo "$version is under a day old. A later run will take it."
-            echo "update=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "update=true" >> "$GITHUB_OUTPUT"
-          fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+          curl -fsS https://registry.npmjs.org/@nubisco/openbridge > meta.json
+          node - "$current" <<'JS' >> "$GITHUB_OUTPUT"
+          const fs = require('fs')
+          const meta = JSON.parse(fs.readFileSync('meta.json', 'utf8'))
+          const current = process.argv[2] || ''
+          const parse = (v) => v.split('.').map(Number)
+          const newer = (a, b) => { const [x, y] = [parse(a), parse(b)]; for (let i = 0; i < 3; i++) if (x[i] !== y[i]) return x[i] > y[i]; return false }
+          // A day plus an hour, so the formula never lands just inside Homebrew's cutoff.
+          const cutoff = Date.now() - 90_000 * 1000
+          const eligible = Object.entries(meta.time)
+            .filter(([v, at]) => /^\d+\.\d+\.\d+$/.test(v) && Date.parse(at) <= cutoff)
+            .map(([v]) => v)
+            .sort((a, b) => (newer(a, b) ? -1 : newer(b, a) ? 1 : 0))
+          const pick = eligible[0]
+          const latest = meta['dist-tags'].latest
+          console.error(`latest ${latest}, newest eligible ${pick ?? 'none'}, tap has ${current || 'nothing'}`)
+          const update = Boolean(pick) && (!current || newer(pick, current))
+          if (!update) console.error(pick ? 'the tap is current' : 'nothing is a day old yet')
+          console.log(`update=${update}`)
+          console.log(`version=${pick ?? ''}`)
+          JS
 
       - name: Write the formula
         if: steps.pick.outputs.update == 'true'
