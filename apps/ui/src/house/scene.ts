@@ -48,6 +48,7 @@ import {
   type Point,
   type ViewMode,
 } from './geometry'
+import { specOf } from './openings'
 import { formatPower, stateText, type LiveDevice } from './live'
 
 export const WARM_LIGHT = '#ffb45e'
@@ -1232,17 +1233,27 @@ export function renderFloor(
       // A window is glass over a low wall, up to the top. A sliding door is
       // glass from the floor to door height, in a frame with a mullion where
       // its two leaves meet, and wall above. A door is its leaf, swung open,
-      // in a frame with wall above, and a glass door's leaf is glass.
+      // in a frame with wall above, and a glass door's leaf is glass. A full
+      // height window is a sliding door that does not open: glass from the
+      // floor to its head, with no mullion.
       const door = w.type === 'door' && !!w.opening
       const slider = w.type === 'slider'
-      const z0 = slider || door ? 0 : H * 0.3
-      const zt = slider || door ? Math.min(H, 1.05 * CELLS_PER_M) : H
+      const win = w.type === 'window' && w.opening ? specOf(w.opening) : null
+      const full = !!win && win.sill === 0
+      // Heights drawn at half scale, as a door's 2.1 m head is drawn 1.05 m.
+      const head = full ? (win.head / 1000) * 0.5 * CELLS_PER_M : 1.05 * CELLS_PER_M
+      const z0 = slider || door || full ? 0 : H * 0.3
+      const zt = slider || door || full ? Math.min(H, head) : H
       if (door && w.opening) {
         const hd = zt
         const sw = doorSwing(w.opening)
         const q = sw.at(0.78)
+        // A solid leaf takes the colour the plan gives its door, a white
+        // wooden door white. Unsaid, it is the usual wood.
+        const colour = !w.opening.glass ? w.opening.spec?.frame?.colour : undefined
+        const fill = colour && /^#[0-9a-f]{6}$/i.test(colour) ? ` style="fill:${colour}"` : ''
         svg =
-          `<polygon class="hv-doorleaf${w.opening.glass ? ' hv-glassleaf' : ''}" points="${poly(o, [
+          `<polygon class="hv-doorleaf${w.opening.glass ? ' hv-glassleaf' : ''}"${fill} points="${poly(o, [
             [sw.hinge[0], sw.hinge[1], 0.03],
             [q[0], q[1], 0.03],
             [q[0], q[1], hd * 0.96],
@@ -1255,12 +1266,14 @@ export function renderFloor(
             [B[0], B[1], 0],
           ])}"/>`
         if (H > hd + 0.1) svg += `<polygon class="hv-wall" points="${quad(hd, H)}"/>${tint(hd, H)}${cap(H)}`
-      } else if (slider) {
+      } else if (slider || full) {
         const m1 = project(o.mode, (A[0] + B[0]) / 2, (A[1] + B[1]) / 2, 0)
         const m2 = project(o.mode, (A[0] + B[0]) / 2, (A[1] + B[1]) / 2, zt)
         svg =
           `<polygon class="hv-pane" points="${quad(0, zt)}"/>` +
-          `<line class="hv-slideframe" x1="${r1(m1[0])}" y1="${r1(m1[1])}" x2="${r1(m2[0])}" y2="${r1(m2[1])}"/>` +
+          (slider
+            ? `<line class="hv-slideframe" x1="${r1(m1[0])}" y1="${r1(m1[1])}" x2="${r1(m2[0])}" y2="${r1(m2[1])}"/>`
+            : '') +
           `<polyline class="hv-slideframe" points="${poly(o, [
             [A[0], A[1], 0],
             [A[0], A[1], zt],
@@ -1268,8 +1281,15 @@ export function renderFloor(
             [B[0], B[1], 0],
           ])}"/>`
         if (H > zt + 0.1) svg += `<polygon class="hv-wall" points="${quad(zt, H)}"/>${tint(zt, H)}${cap(H)}`
-      } else
+      } else {
         svg = `<polygon class="hv-wall" points="${quad(0, z0)}"/>${tint(0, z0)}<polygon class="hv-pane" points="${quad(z0, H)}"/>${cap(H)}`
+        // A sliding window shows where its two panes meet.
+        if (win?.operation === 'sliding') {
+          const m1 = project(o.mode, (A[0] + B[0]) / 2, (A[1] + B[1]) / 2, z0)
+          const m2 = project(o.mode, (A[0] + B[0]) / 2, (A[1] + B[1]) / 2, H)
+          svg += `<line class="hv-slideframe" x1="${r1(m1[0])}" y1="${r1(m1[1])}" x2="${r1(m2[0])}" y2="${r1(m2[1])}"/>`
+        }
+      }
       if (sh) {
         const closed = 1 - clamp(sh.position ?? 100, 0, 100) / 100
         const zb = zt - (zt - z0) * closed

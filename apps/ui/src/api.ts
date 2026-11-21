@@ -1,3 +1,4 @@
+import type { OpeningSpec } from '@house-model/v1'
 import type { Plan } from '@house-model/v2'
 const BASE = '/api'
 
@@ -278,8 +279,10 @@ export interface HouseOpening {
   hinge?: 'start' | 'end'
   /** The side a door swings into, on the plan. Default `down` or `right`. */
   opens?: 'up' | 'down' | 'left' | 'right'
-  /** A door with a glass leaf. A shutter can sit on it like on a window. */
+  /** A door with a glass leaf. Glass can carry coverings. */
   glass?: boolean
+  /** A door's or window's detail, in millimetres as plan version 2 has it. */
+  spec?: OpeningSpec
 }
 
 export type HouseLightMount = 'ceiling' | 'wall' | 'floor' | 'table' | 'pool'
@@ -291,6 +294,8 @@ export interface HousePlacement {
   x: number
   y: number
   opening?: string
+  /** The covering of that opening it drives. */
+  covering?: string
   color?: string
   circuitRooms?: string[]
   /** A gate's width in cells, centred on (x, y). */

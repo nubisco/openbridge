@@ -44,6 +44,7 @@ import {
   type WallUnit,
 } from './geometry'
 import { KIND_LETTER, type LiveDevice } from './live'
+import { applyPreset, claimCovering, detach, presetCells, type OpeningPreset } from './openings'
 
 /** 16 by 11 metres: a house and a garden, before the person resizes it. */
 export function emptyPlan(): HousePlan {
@@ -238,11 +239,7 @@ export function openingAt(floor: HouseFloor, u: WallUnit): HouseOpening | undefi
  * Put a door or window on the wall at `u`, a metre long and centred on the tap
  * where the wall allows. Returns null when there is no wall left there.
  */
-export function addOpening(
-  floor: HouseFloor,
-  u: WallUnit,
-  type: 'door' | 'window' | 'slider' | 'glassdoor',
-): HouseOpening | null {
+export function addOpening(floor: HouseFloor, u: WallUnit, preset: OpeningPreset): HouseOpening | null {
   const units = wallUnits(floor)
   const taken = new Set(floor.openings.flatMap(openingUnits))
   const free = (i: number) => {
@@ -250,8 +247,8 @@ export function addOpening(
     return units.has(k) && !taken.has(k)
   }
   if (!free(0)) return null
-  // A sliding door starts two metres wide, the usual two-pane door.
-  const want = type === 'slider' ? 2 * CELLS_PER_M : CELLS_PER_M
+  // As wide as the preset: a sliding door two metres, the usual two panes.
+  const want = presetCells(preset)
   // Grow from the tapped unit, preferring to centre on it.
   let start = 0
   let end = 1
@@ -260,16 +257,16 @@ export function addOpening(
     else if (free(end)) end++
     else start--
   }
-  const id = uniqueId(type, (x) => floor.openings.some((o) => o.id === x))
+  const id = uniqueId(preset.kind, (x) => floor.openings.some((o) => o.id === x))
   const o: HouseOpening = {
     id,
-    type: type === 'glassdoor' ? 'door' : type,
+    type: preset.kind,
     axis: u.axis,
     x: u.axis === 'h' ? u.x + start : u.x,
     y: u.axis === 'v' ? u.y + start : u.y,
     len: end - start,
   }
-  if (type === 'glassdoor') o.glass = true
+  applyPreset(o, preset)
   floor.openings.push(o)
   return o
 }
@@ -644,7 +641,7 @@ export function removeFurniture(floor: HouseFloor, id: string): void {
 
 export function removeOpening(floor: HouseFloor, id: string): void {
   floor.openings = floor.openings.filter((o) => o.id !== id)
-  for (const p of floor.placements) if (p.opening === id) delete p.opening
+  for (const p of floor.placements) if (p.opening === id) detach(p)
 }
 
 export function placementOf(plan: HousePlan, ref: string) {
@@ -672,10 +669,13 @@ export function place(plan: HousePlan, floor: HouseFloor, device: LiveDevice, x:
     x: clamp(Math.round(x * 2) / 2, 0, plan.plot.w),
     y: clamp(Math.round(y * 2) / 2, 0, plan.plot.h),
   }
-  delete p.opening
+  detach(p)
   if (device.kind === 'shutter') {
     const o = nearestFreeWindow(floor, x, y)
-    if (o) p.opening = o.id
+    if (o) {
+      p.opening = o.id
+      claimCovering(floor, o, p)
+    }
   }
   floor.placements.push(p)
 }
@@ -694,6 +694,8 @@ export function tidy(plan: HousePlan): HousePlan {
       const ok = openingFits(o, units)
       // A door turned into a window or an open wall is no longer a glass door.
       if (o.type !== 'door') delete o.glass
+      if (o.type === 'open') delete o.spec
+      if (o.spec && !takesShutter(o)) delete o.spec.coverings
       if (ok && takesShutter(o)) kept.add(o.id)
       return ok
     })
@@ -704,7 +706,9 @@ export function tidy(plan: HousePlan): HousePlan {
     // A plot made smaller can leave a piece hanging off it.
     for (const u of f.furniture ?? []) keepInPlot(plan, u)
     for (const p of f.placements) {
-      if (p.opening && !kept.has(p.opening)) delete p.opening
+      if (p.opening && !kept.has(p.opening)) detach(p)
+      const on = p.opening ? f.openings.find((o) => o.id === p.opening) : undefined
+      if (p.covering && !on?.spec?.coverings?.some((c) => c.id === p.covering)) delete p.covering
       if (p.circuitRooms) {
         p.circuitRooms = p.circuitRooms.filter((id) => rooms.has(id))
         if (!p.circuitRooms.length) delete p.circuitRooms

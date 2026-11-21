@@ -7,6 +7,8 @@
  * Pure types and helpers: no Node, no DOM, so the UI imports this too.
  */
 
+import type { Covering, FRAME_MATERIALS, LEAVES } from './v2.js'
+
 export const HOUSE_V1 = 1
 /** Metres per grid cell. */
 export const HOUSE_GRID = 0.5
@@ -84,8 +86,28 @@ export interface HouseOpening {
    * `down` or `right`.
    */
   opens?: 'up' | 'down' | 'left' | 'right'
-  /** A door with a glass leaf, such as a French door. A shutter can sit on it like on a window. */
+  /** A door with a glass leaf, such as a French door. Glass can carry coverings. */
   glass?: boolean
+  /**
+   * What cells cannot say about a door or window, carried as plan version 2
+   * has it (lengths in millimetres), so the cell editor can set it. `kind`
+   * is the element it was written for: a door turned into a window starts
+   * from a window's defaults, keeping only its frame and coverings.
+   */
+  spec?: OpeningSpec
+}
+
+export interface OpeningSpec {
+  kind: 'door' | 'window'
+  /** One of the door or window operations of version 2. */
+  operation?: string
+  /** A door's leaf. Only refines `glass`: a door that is not glass is solid. */
+  leaf?: (typeof LEAVES)[number]
+  sill?: number
+  head?: number
+  frame?: { material?: (typeof FRAME_MATERIALS)[number]; colour?: string }
+  /** Present, it is the whole list, so an empty list takes every covering off. */
+  coverings?: Covering[]
 }
 
 /** How a light hangs: from the ceiling, on a wall, or as a floor or table lamp. */
@@ -103,6 +125,8 @@ export interface HousePlacement {
   y: number
   /** A shutter or blind belongs to a window, and is drawn on it. */
   opening?: string
+  /** The covering of that window it drives, when the editor chose one. */
+  covering?: string
   /** The glow colour of a light that cannot report one (a relay driving a lamp). */
   color?: string
   /** Rooms a heating or cooling device's water circuit runs through, in order. */

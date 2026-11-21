@@ -56,11 +56,19 @@ function v1(): HousePlan {
   }
 }
 
-/** Version 1 leaves the usual hinge and swing unsaid, so compare with those dropped. */
+/**
+ * Version 1 leaves the usual hinge and swing unsaid, and the version 1 view
+ * adds each door's and window's detail, so compare without those.
+ */
 const norm = (p: HousePlan) =>
   JSON.parse(
     JSON.stringify(validateHousePlan(p), (k, v) =>
-      (k === 'opens' && (v === 'down' || v === 'right')) || (k === 'hinge' && v === 'start') ? undefined : v,
+      (k === 'opens' && (v === 'down' || v === 'right')) ||
+      (k === 'hinge' && v === 'start') ||
+      k === 'spec' ||
+      k === 'covering'
+        ? undefined
+        : v,
     ),
   )
 
@@ -228,6 +236,61 @@ describe('saving from the version 1 editor keeps what it cannot say', () => {
     const g = storey(fromV1(next, previous).plan, 'g')
     expect(g.placements.find((p) => p.ref === 'device:curtain')?.host).toEqual({ opening: 'win', covering: 'c2' })
     expect(g.placements.find((p) => p.ref === 'device:shutter')?.host).toEqual({ opening: 'win', covering: 'c1' })
+  })
+
+  it('takes the detail the editor set on a door or window', () => {
+    const previous = fromV1(v1()).plan
+    const next = toV1(previous)
+    const win = next.floors[0].openings.find((o) => o.id === 'win')!
+    win.spec = {
+      kind: 'window',
+      operation: 'fixed',
+      sill: 0,
+      head: 2100,
+      frame: { material: 'aluminium', colour: '#ffffff' },
+      coverings: [
+        { id: 'c1', kind: 'shutter', side: 'outside' },
+        { id: 'c2', kind: 'curtain', side: 'inside' },
+      ],
+    }
+    next.floors[0].openings.find((o) => o.id === 'gd')!.spec = { kind: 'door', operation: 'swing', leaf: 'part-glazed' }
+    const plan = validatePlan(fromV1(validateHousePlan(next), previous).plan)
+    expect(opening<Window>(plan, 'win')).toMatchObject({
+      operation: 'fixed',
+      sill: 0,
+      frame: { material: 'aluminium', colour: '#ffffff' },
+      coverings: [{ id: 'c1' }, { id: 'c2' }],
+    })
+    expect(opening<Door>(plan, 'gd').leaf).toBe('part-glazed')
+  })
+
+  it('takes every covering off when the editor sends an empty list', () => {
+    const previous = fromV1(v1()).plan
+    const next = toV1(previous)
+    next.floors[0].openings.find((o) => o.id === 'win')!.spec!.coverings = []
+    next.floors[0].placements = next.floors[0].placements.filter((p) => p.ref !== 'device:shutter')
+    expect(opening<Window>(fromV1(next, previous).plan, 'win').coverings).toBeUndefined()
+  })
+
+  it('ignores detail that does not fit what the cells say', () => {
+    const previous = fromV1(v1()).plan
+    const next = toV1(previous)
+    // A sliding operation on a door that is not a slider, and a glazed leaf on a solid door.
+    next.floors[0].openings.find((o) => o.id === 'wood')!.spec = { kind: 'door', operation: 'sliding', leaf: 'glazed' }
+    expect(opening<Door>(fromV1(next, previous).plan, 'wood')).toMatchObject({ operation: 'swing', leaf: 'solid' })
+  })
+
+  it('lets the editor say which covering a device drives', () => {
+    const previous = fromV1(v1()).plan
+    const next = toV1(previous)
+    const win = next.floors[0].openings.find((o) => o.id === 'win')!
+    win.spec!.coverings = [
+      { id: 'c1', kind: 'shutter', side: 'outside' },
+      { id: 'c2', kind: 'blind', side: 'inside' },
+    ]
+    next.floors[0].placements.find((p) => p.ref === 'device:shutter')!.covering = 'c2'
+    const g = storey(fromV1(next, previous).plan, 'g')
+    expect(g.placements.find((p) => p.ref === 'device:shutter')?.host).toEqual({ opening: 'win', covering: 'c2' })
   })
 
   it('leaves out an opening that sits on no wall, and says so', () => {
