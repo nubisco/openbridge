@@ -77,30 +77,14 @@
       />
     </div>
 
-    <div v-if="!preview" class="house-stage__rail" role="group" aria-label="Floors" data-nb-appearance="rounded">
-      <NbButton
-        v-if="plan.floors.length > 1"
-        size="sm"
-        :variant="floor === 'all' ? 'primary' : 'ghost'"
-        icon="stack"
-        :aria-pressed="floor === 'all'"
-        @click="emit('update:floor', 'all')"
-      >
-        <span v-if="!phone">All floors</span>
-        <span v-else class="sr-only">All floors</span>
-      </NbButton>
-      <NbButton
-        v-for="f in floorsTopDown"
-        :key="f.id"
-        size="sm"
-        :variant="floor === f.id ? 'primary' : 'ghost'"
-        :aria-pressed="floor === f.id"
-        :title="f.name"
-        @click="emit('update:floor', f.id)"
-      >
-        {{ phone ? shortName(f) : f.name }}
-      </NbButton>
-    </div>
+    <HouseFloorMenu
+      v-if="!preview"
+      :floors="plan.floors"
+      :model-value="floor"
+      :phone="phone"
+      allow-all
+      @update:model-value="(id: string) => emit('update:floor', id)"
+    />
 
     <!-- What an overlay shows, and why a room has no colour: it has no sensor. -->
     <div v-if="overlayLegend && !preview" class="house-stage__legend" role="note">
@@ -126,10 +110,11 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, toRaw, watch } from 'vue'
 import { usePhoneLayout } from '@nubisco/ui'
-import type { HouseFloor, HousePlan } from '@/api'
+import type { HousePlan } from '@/api'
 import { CELLS_PER_M, clamp, drawnBounds, project, r1, rotatePlan, S, type Point } from '@/house/geometry'
 import { overlayColor, renderFloor, roomReadings, wallHeight, type SceneOptions } from '@/house/scene'
 import type { LiveDevice } from '@/house/live'
+import HouseFloorMenu from './HouseFloorMenu.vue'
 
 const props = defineProps<{
   plan: HousePlan
@@ -284,8 +269,6 @@ watch(
 const floorsBottomUp = computed(() => viewPlan.value.floors.slice().sort((a, b) => a.level - b.level))
 const floorsTopDown = computed(() => floorsBottomUp.value.slice().reverse())
 const all = computed(() => props.floor === 'all' || !props.plan.floors.some((f) => f.id === props.floor))
-
-const shortName = (f: HouseFloor) => (f.level === 0 ? 'G' : f.level < 0 ? `B${-f.level}` : String(f.level))
 
 const visible = (id: string) => all.value || props.floor === id
 
@@ -543,32 +526,6 @@ onBeforeUnmount(() => observer?.disconnect())
 
 .hv-world {
   transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.house-stage__rail {
-  position: absolute;
-  left: var(--nb-spacing-8);
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: var(--nb-spacing-4);
-  // Concentric with the pill buttons inside: the panel's corner is the
-  // button's (half its height) plus the inset that holds it off the edge.
-  padding: var(--nb-overlay-inset, var(--nb-spacing-4));
-  border-radius: calc(var(--nb-field-height-sm) / 2 + var(--nb-overlay-inset, var(--nb-spacing-4)));
-  // A page surface floating on the stage, in the page's theme, so the
-  // library's buttons read as they do everywhere else in light and dark.
-  background: var(--nb-c-layer-1);
-  border: 1px solid var(--nb-c-border);
-
-  .is-phone & {
-    top: auto;
-    bottom: var(--nb-spacing-8);
-    transform: none;
-    flex-direction: row;
-  }
 }
 
 .house-stage__view {

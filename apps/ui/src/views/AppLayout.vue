@@ -8,9 +8,12 @@
     :inspector-visible="inspector.visible"
     :main-padding="!layout.fullBleed"
     :sidebar-variant="sidebarVariant"
+    :resizable="houseInspector"
+    :inspector-width="houseInspector ? houseInspectorWidth : null"
     sidebar-header-action-position="start"
     sidebar-header-action-compact="swap"
     @update:inspector-visible="(v: boolean) => !v && inspector.close()"
+    @update:inspector-width="setHouseInspectorWidth"
   >
     <!-- ═══ Brand ═══ -->
     <template #sidebar-logo>
@@ -221,6 +224,31 @@ watch(
     if (phone.value) shell.value?.setSidebarOpen(false)
   },
 )
+
+// On the House, live or editing, the inspector's left edge drags, so the plan
+// can have more of the width or the panel more room. The width is a
+// per-browser convenience, remembered like the rail's state.
+const HOUSE_WIDTH_KEY = 'openbridge.house.inspectorWidth'
+const houseInspector = computed(() => inspector.mode === 'house' || inspector.mode === 'house-editor')
+const houseInspectorWidth = ref<number | null>(readWidth())
+function readWidth(): number | null {
+  try {
+    const v = Number(localStorage.getItem(HOUSE_WIDTH_KEY))
+    return Number.isFinite(v) && v > 0 ? v : null
+  } catch {
+    return null
+  }
+}
+function setHouseInspectorWidth(px: number | null): void {
+  if (!houseInspector.value) return
+  houseInspectorWidth.value = px
+  try {
+    if (px == null) localStorage.removeItem(HOUSE_WIDTH_KEY)
+    else localStorage.setItem(HOUSE_WIDTH_KEY, String(px))
+  } catch {
+    /* storage unavailable */
+  }
+}
 
 const daemonLabel = computed(() => (daemon.connected ? 'Daemon connected' : 'Daemon offline'))
 
