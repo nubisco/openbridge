@@ -16,12 +16,26 @@
             @click="setTool(t.id)"
           />
         </div>
+        <!-- NbSelect takes no aria-label, so the toolbar's selects are named by labels only read out. -->
+        <label v-if="tool === 'door' || tool === 'window'" for="house-tool-preset" class="house-editor__sr">
+          {{ tool === 'door' ? 'Door to add' : 'Window to add' }}
+        </label>
+        <NbSelect
+          v-if="tool === 'door' || tool === 'window'"
+          id="house-tool-preset"
+          :model-value="tool === 'door' ? doorPreset : windowPreset"
+          :options="(tool === 'door' ? DOOR_PRESETS : WINDOW_PRESETS).map((p) => ({ label: p.label, value: p.id }))"
+          size="sm"
+          class="house-editor__kind"
+          @update:model-value="(v) => (tool === 'door' ? (doorPreset = String(v)) : (windowPreset = String(v)))"
+        />
+        <label v-if="tool === 'furniture'" for="house-tool-furniture" class="house-editor__sr">Furniture to add</label>
         <NbSelect
           v-if="tool === 'furniture'"
+          id="house-tool-furniture"
           v-model="furnitureKind"
           :options="FURNITURE_KINDS"
           size="sm"
-          aria-label="Furniture to add"
           class="house-editor__kind"
         />
         <NbButton
@@ -167,46 +181,163 @@
           </div>
         </NbPanel>
 
-        <NbPanel
-          v-else-if="opening"
-          :title="opening.type === 'door' && opening.glass ? 'Glass door' : OPENING_TITLE[opening.type]"
-          :flat="true"
-        >
-          <NbField v-slot="{ id }" label="Type" orientation="stack">
-            <NbSelect :id="id" v-model="opening.type" :options="OPENING_KINDS" size="sm" />
-          </NbField>
-          <NbField v-slot="{ id }" label="Width (m)" orientation="stack">
-            <NbNumberInput
-              :id="id"
-              :model-value="opening.len / CELLS_PER_M"
-              :min="0.5"
-              :max="20"
-              :step="0.25"
-              size="sm"
-              @update:model-value="setOpeningLength"
-            />
-          </NbField>
-          <template v-if="opening.type === 'door'">
-            <NbCheckbox
-              label="Glass, so a shutter can sit on it"
-              :model-value="!!opening.glass"
-              @update:model-value="(v?: boolean) => setGlass(!!v)"
-            />
-            <p class="house-editor__muted">{{ doorText }}</p>
-            <div class="house-editor__row house-editor__row--tight">
-              <NbButton size="sm" variant="secondary" icon="arrows-left-right" @click="flipHinge">Flip hinge</NbButton>
-              <NbButton size="sm" variant="secondary" icon="arrows-down-up" @click="flipSide">Open other way</NbButton>
+        <template v-else-if="opening">
+          <NbPanel :title="openingName(opening)" :flat="true">
+            <NbField v-slot="{ id }" label="What it is" orientation="stack">
+              <NbSelect
+                :id="id"
+                :model-value="opening.type === 'open' ? 'open' : opening.type === 'window' ? 'window' : 'door'"
+                :options="OPENING_KINDS"
+                size="sm"
+                @update:model-value="(v) => setOpeningKind(opening!, v as 'door' | 'window' | 'open')"
+              />
+            </NbField>
+            <NbField v-if="openingSpec" v-slot="{ id }" label="Preset" orientation="stack">
+              <NbSelect
+                :id="id"
+                :model-value="presetOf(opening)?.id ?? ''"
+                :options="presetOptions"
+                size="sm"
+                @update:model-value="(v) => pickPreset(String(v ?? ''))"
+              />
+            </NbField>
+            <NbField v-slot="{ id }" label="Width (m)" orientation="stack">
+              <NbNumberInput
+                :id="id"
+                :model-value="opening.len / CELLS_PER_M"
+                :min="0.5"
+                :max="20"
+                :step="0.25"
+                size="sm"
+                @update:model-value="setOpeningLength"
+              />
+            </NbField>
+            <template v-if="openingSpec">
+              <NbField v-slot="{ id }" label="How it opens" orientation="stack">
+                <NbSelect
+                  :id="id"
+                  :model-value="openingSpec.operation"
+                  :options="operationOptions"
+                  size="sm"
+                  @update:model-value="(v) => setOperation(opening!, String(v))"
+                />
+              </NbField>
+              <NbField v-if="openingSpec.kind === 'door'" v-slot="{ id }" label="Leaf" orientation="stack">
+                <NbSelect
+                  :id="id"
+                  :model-value="openingSpec.leaf"
+                  :options="leafOptions"
+                  size="sm"
+                  @update:model-value="(v) => setLeaf(opening!, v as 'solid' | 'glazed' | 'part-glazed')"
+                />
+              </NbField>
+              <div class="house-editor__pair">
+                <NbField v-slot="{ id }" label="Frame" orientation="stack">
+                  <NbSelect
+                    :id="id"
+                    :model-value="openingSpec.frame?.material ?? ''"
+                    :options="FRAME_OPTIONS"
+                    size="sm"
+                    @update:model-value="(v) => setFrame('material', String(v ?? ''))"
+                  />
+                </NbField>
+                <NbField v-slot="{ id }" label="Colour" orientation="stack">
+                  <NbSelect
+                    :id="id"
+                    :model-value="openingSpec.frame?.colour ?? ''"
+                    :options="COLOUR_OPTIONS"
+                    size="sm"
+                    @update:model-value="(v) => setFrame('colour', String(v ?? ''))"
+                  />
+                </NbField>
+              </div>
+              <!-- A door stands on the floor, so only a window has a sill. -->
+              <div class="house-editor__pair">
+                <NbField v-if="openingSpec.kind === 'window'" v-slot="{ id }" label="Sill (m)" orientation="stack">
+                  <NbNumberInput
+                    :id="id"
+                    :model-value="openingSpec.sill / 1000"
+                    :min="0"
+                    :max="3"
+                    :step="0.05"
+                    size="sm"
+                    @update:model-value="(v: number | null) => setHeight('sill', v)"
+                  />
+                </NbField>
+                <NbField v-slot="{ id }" label="Head (m)" orientation="stack">
+                  <NbNumberInput
+                    :id="id"
+                    :model-value="openingSpec.head / 1000"
+                    :min="0.3"
+                    :max="4"
+                    :step="0.05"
+                    size="sm"
+                    @update:model-value="(v: number | null) => setHeight('head', v)"
+                  />
+                </NbField>
+              </div>
+              <template v-if="opening.type === 'door'">
+                <p class="house-editor__muted">{{ doorText }}</p>
+                <div class="house-editor__row house-editor__row--tight">
+                  <NbButton size="sm" variant="secondary" icon="arrows-left-right" @click="flipHinge">
+                    Flip hinge
+                  </NbButton>
+                  <NbButton size="sm" variant="secondary" icon="arrows-down-up" @click="flipSide">
+                    Open other way
+                  </NbButton>
+                </div>
+              </template>
+            </template>
+            <p v-if="opening.type === 'open'" class="house-editor__muted">
+              No wall is drawn here, so the two rooms run into each other. Drag an end to leave part of the wall
+              standing.
+            </p>
+            <p class="house-editor__muted">Drag it along the wall to move it, or drag an end to resize it.</p>
+            <div class="house-editor__row">
+              <span />
+              <NbButton size="sm" variant="danger" icon="trash" @click="deleteOpening">Remove</NbButton>
             </div>
-          </template>
-          <p v-if="opening.type === 'open'" class="house-editor__muted">
-            No wall is drawn here, so the two rooms run into each other. Drag an end to leave part of the wall standing.
-          </p>
-          <p class="house-editor__muted">Drag it along the wall to move it, or drag an end to resize it.</p>
-          <div class="house-editor__row">
-            <span />
-            <NbButton size="sm" variant="danger" icon="trash" @click="deleteOpening">Remove</NbButton>
-          </div>
-        </NbPanel>
+          </NbPanel>
+
+          <NbPanel v-if="glazed" title="Coverings" :flat="true">
+            <p v-if="!coverings.length" class="house-editor__muted">
+              Nothing covers this glass yet. Add a shutter, a blind or curtains, and say what drives each one.
+            </p>
+            <div v-for="c in coverings" :key="c.id" class="house-editor__covering">
+              <div class="house-editor__pair">
+                <NbField v-slot="{ id }" label="Covering" orientation="stack">
+                  <NbSelect :id="id" v-model="c.kind" :options="COVERING_OPTIONS" size="sm" />
+                </NbField>
+                <NbField v-slot="{ id }" label="Side" orientation="stack">
+                  <NbSelect :id="id" v-model="c.side" :options="SIDE_OPTIONS" size="sm" />
+                </NbField>
+              </div>
+              <div class="house-editor__row house-editor__row--tight house-editor__row--end">
+                <NbField v-slot="{ id }" label="Driven by" orientation="stack" class="house-editor__grow">
+                  <NbSelect
+                    :id="id"
+                    :model-value="driverOf(floor, opening, c.id)?.ref ?? ''"
+                    :options="driverOptions(c.id)"
+                    size="sm"
+                    @update:model-value="(v) => setDriver(c.id, String(v ?? ''))"
+                  />
+                </NbField>
+                <NbButton
+                  v-nb-tooltip="{ body: 'Remove this covering', position: 'left' }"
+                  size="sm"
+                  variant="ghost"
+                  icon="trash"
+                  aria-label="Remove this covering"
+                  @click="removeCovering(floor, opening, c.id)"
+                />
+              </div>
+            </div>
+            <div class="house-editor__row">
+              <span />
+              <NbButton size="sm" variant="secondary" icon="plus" @click="addNextCovering">Add a covering</NbButton>
+            </div>
+          </NbPanel>
+        </template>
 
         <NbPanel v-else-if="radiator" title="Radiator" :flat="true">
           <NbField v-slot="{ id }" label="Width (m)" orientation="stack">
@@ -289,9 +420,7 @@
             This device is no longer on the bridge. Remove it from the plan, or leave it in case its plugin comes back.
           </p>
           <p v-else-if="placedDevice.kind === 'shutter'" class="house-editor__muted">
-            {{
-              placed.opening ? 'Attached to its window, and drawn on it.' : 'Drag it onto a window to attach it there.'
-            }}
+            {{ placedDriveText }}
           </p>
           <NbField v-if="placedDevice?.kind === 'light'" v-slot="{ id }" label="Mounted" orientation="stack">
             <NbSelect
@@ -517,6 +646,34 @@ import {
   shapeValid,
 } from '@/house/editor'
 import { KIND_LABEL, KIND_LETTER, LOOK_LABEL, type LiveDevice } from '@/house/live'
+import {
+  COVERING_LABEL,
+  DOOR_OPERATION_LABEL,
+  DOOR_PRESETS,
+  FRAME_COLOURS,
+  FRAME_LABEL,
+  LEAF_LABEL,
+  PRESETS,
+  WINDOW_OPERATION_LABEL,
+  WINDOW_PRESETS,
+  addCovering,
+  applyPreset,
+  coveringsOf,
+  detach,
+  drive,
+  driverOf,
+  ensureSpec,
+  isGlazed,
+  openingName,
+  presetOf,
+  removeCovering,
+  setLeaf,
+  setOpeningKind,
+  setOperation,
+  specOf,
+  type CoveringKind,
+  type OpeningPreset,
+} from '@/house/openings'
 import { WARM_LIGHT } from '@/house/scene'
 
 const props = defineProps<{
@@ -549,8 +706,6 @@ const TOOLS = [
   { id: 'pool', label: 'Pool', icon: 'swimming-pool' },
   { id: 'door', label: 'Door', icon: 'door-open' },
   { id: 'window', label: 'Window', icon: 'app-window' },
-  { id: 'slider', label: 'Sliding door', icon: 'columns' },
-  { id: 'glassdoor', label: 'Glass door', icon: 'door' },
   { id: 'open', label: 'Open wall', icon: 'arrows-out-line-horizontal' },
   { id: 'radiator', label: 'Radiator', icon: 'thermometer-hot' },
   { id: 'furniture', label: 'Furniture', icon: 'armchair' },
@@ -568,10 +723,17 @@ const ROOM_KINDS = [
 const OPENING_KINDS = [
   { label: 'Door', value: 'door' },
   { label: 'Window', value: 'window' },
-  { label: 'Sliding glass door', value: 'slider' },
   { label: 'Open, no wall', value: 'open' },
 ]
-const OPENING_TITLE = { door: 'Door', window: 'Window', open: 'Open wall', slider: 'Sliding door' } as const
+const options = <K extends string>(labels: Record<K, string>) =>
+  (Object.keys(labels) as K[]).map((k) => ({ label: labels[k], value: k }))
+const FRAME_OPTIONS = [{ label: 'Not said', value: '' }, ...options(FRAME_LABEL)]
+const COLOUR_OPTIONS = [{ label: 'Not said', value: '' }, ...FRAME_COLOURS]
+const COVERING_OPTIONS = options(COVERING_LABEL)
+const SIDE_OPTIONS = [
+  { label: 'Outside', value: 'outside' },
+  { label: 'Inside', value: 'inside' },
+]
 const GATE_AXES = [
   { label: 'Left to right', value: 'h' },
   { label: 'Front to back', value: 'v' },
@@ -593,19 +755,7 @@ const GLOW_COLOURS = [
   { label: 'Red', value: '#ff5a4d' },
 ]
 
-type Tool =
-  | 'select'
-  | 'room'
-  | 'outdoor'
-  | 'paved'
-  | 'pool'
-  | 'door'
-  | 'window'
-  | 'slider'
-  | 'glassdoor'
-  | 'open'
-  | 'radiator'
-  | 'furniture'
+type Tool = 'select' | 'room' | 'outdoor' | 'paved' | 'pool' | 'door' | 'window' | 'open' | 'radiator' | 'furniture'
 const isAreaTool = (t: Tool): t is 'room' | 'outdoor' | 'paved' | 'pool' =>
   t === 'room' || t === 'outdoor' || t === 'paved' || t === 'pool'
 const tool = ref<Tool>('room')
@@ -617,6 +767,9 @@ const selRef = ref<string | null>(null)
 const selOpening = ref<string | null>(null)
 const selRadiator = ref<string | null>(null)
 const selFurniture = ref<string | null>(null)
+/** What the Door and Window tools put down next. */
+const doorPreset = ref(DOOR_PRESETS[0].id)
+const windowPreset = ref(WINDOW_PRESETS[0].id)
 /** What the Furniture tool puts down next. */
 const furnitureKind = ref<HouseFurnitureKind>('table')
 const armed = ref<string | null>(null)
@@ -815,12 +968,9 @@ const help = computed(() => {
     paved:
       'Drag on the grid to draw paving: a terrace, a path, a drive, or the deck round the pool. Draw the pool inside it.',
     pool: 'Drag on the grid to draw a pool.',
-    door: 'Tap a wall to put a door there. Drag a door to move it, or its ends to resize it.',
-    window: 'Tap a wall to put a window there. Drag a window to move it, or its ends to resize it.',
-    slider:
-      'Tap a wall to put a sliding glass door there, two metres wide. Drag it to move it, or its ends to resize it. A shutter can sit on it.',
-    glassdoor:
-      'Tap a wall to put a glass door there. Drag it to move it, or its ends to resize it. A shutter can sit on it.',
+    door: 'Pick the kind of door, then tap a wall to put one there. Drag a door to move it, or its ends to resize it.',
+    window:
+      'Pick the kind of window, then tap a wall to put one there. Drag a window to move it, or its ends to resize it.',
     radiator:
       'Tap a wall, on the side the radiator hangs, to put one there. Drag it to move it, or its ends to resize it. A heating circuit serving the room runs through it.',
     furniture:
@@ -1026,12 +1176,92 @@ const doorText = computed(() => {
   return `Hinged at the ${hinge}, opens ${side === 'up' || side === 'down' ? side + 'wards' : 'to the ' + side} on the plan.`
 })
 
-/** Glass or solid. A shutter on a door that is made solid comes off it when the plan is saved. */
-function setGlass(on: boolean) {
+/** What a shutter or blind device drives, said in the device's panel. */
+const placedDriveText = computed(() => {
+  const p = placed.value
+  const o = p?.opening ? floor.value.openings.find((x) => x.id === p.opening) : undefined
+  if (!p || !o) return "Drag it onto a window to attach it there, or pick it in a window's Coverings."
+  const c = coveringsOf(o).find((x) => x.id === p.covering)
+  const what = c ? COVERING_LABEL[c.kind].toLowerCase() : 'covering'
+  return `Drives the ${what} of the ${openingName(o).toLowerCase()}, and is drawn on it.`
+})
+
+/** The preset the Door or Window tool puts down. */
+function toolPreset(): OpeningPreset {
+  if (tool.value === 'window') return WINDOW_PRESETS.find((p) => p.id === windowPreset.value) ?? WINDOW_PRESETS[0]
+  return DOOR_PRESETS.find((p) => p.id === doorPreset.value) ?? DOOR_PRESETS[0]
+}
+
+/** The selected door's or window's detail, filled in. Null for an open wall. */
+const openingSpec = computed(() => (opening.value && opening.value.type !== 'open' ? specOf(opening.value) : null))
+const glazed = computed(() => !!opening.value && isGlazed(opening.value))
+const coverings = computed(() => (opening.value ? coveringsOf(opening.value) : []))
+
+const presetOptions = computed(() => {
+  const kind = openingSpec.value?.kind
+  const list = PRESETS.filter((p) => p.kind === kind).map((p) => ({ label: p.label, value: p.id }))
+  return opening.value && presetOf(opening.value) ? list : [{ label: 'Custom', value: '' }, ...list]
+})
+const operationOptions = computed(() =>
+  openingSpec.value?.kind === 'window' ? options(WINDOW_OPERATION_LABEL) : options(DOOR_OPERATION_LABEL),
+)
+// A sliding door is glass, so it cannot have a solid leaf.
+const leafOptions = computed(() =>
+  options(LEAF_LABEL).filter((x) => x.value !== 'solid' || opening.value?.type !== 'slider'),
+)
+
+function pickPreset(id: string) {
+  const p = PRESETS.find((x) => x.id === id)
+  if (p && opening.value) applyPreset(opening.value, p)
+}
+
+function setFrame(key: 'material' | 'colour', v: string) {
+  const s = opening.value && ensureSpec(opening.value)
+  if (!s) return
+  const frame = { ...s.frame } as Record<string, string>
+  if (v) frame[key] = v
+  else delete frame[key]
+  if (Object.keys(frame).length) s.frame = frame
+  else delete s.frame
+}
+
+/** Sill and head in metres, kept at least 10 cm apart. */
+function setHeight(key: 'sill' | 'head', v: number | null) {
+  const s = opening.value && ensureSpec(opening.value)
+  if (!s || v === null) return
+  const mm = Math.round(clamp(v, 0, 4) * 1000)
+  if (key === 'sill') s.sill = Math.min(mm, (s.head ?? 2100) - 100)
+  else s.head = Math.max(mm, (s.sill ?? 0) + 100)
+}
+
+/** A shutter outside first, then curtains inside. */
+function addNextCovering() {
   const o = opening.value
   if (!o) return
-  if (on) o.glass = true
-  else delete o.glass
+  const has = (k: CoveringKind) => coverings.value.some((c) => c.kind === k)
+  addCovering(o, !has('shutter') ? 'shutter' : !has('curtain') ? 'curtain' : 'blind')
+}
+
+/** Devices that can drive a covering: shutters and blinds placed on this floor. */
+function driverOptions(covering: string) {
+  const o = opening.value
+  const list = floor.value.placements
+    .filter((p) => props.devices.get(p.ref)?.kind === 'shutter')
+    .filter((p) => !p.opening || (o && p.opening === o.id && driverOf(floor.value, o, covering) === p) || !o)
+    .map((p) => ({ label: props.devices.get(p.ref)?.name ?? p.ref, value: p.ref }))
+  return [{ label: 'By hand, no motor', value: '' }, ...list]
+}
+
+function setDriver(covering: string, ref: string) {
+  const o = opening.value
+  if (!o) return
+  const current = driverOf(floor.value, o, covering)
+  if (!ref) {
+    if (current) detach(current)
+    return
+  }
+  const p = floor.value.placements.find((x) => x.ref === ref)
+  if (p) drive(floor.value, o, covering, p)
 }
 
 function flipHinge() {
@@ -1223,20 +1453,14 @@ function onDown(e: PointerEvent) {
     const y0 = clamp(Math.round(p.y), 0, ph)
     drag = { type: 'draw', x0, y0 }
     draft.value = { x: x0, y: y0, w: 0, h: 0 }
-  } else if (
-    tool.value === 'door' ||
-    tool.value === 'window' ||
-    tool.value === 'slider' ||
-    tool.value === 'glassdoor' ||
-    tool.value === 'open'
-  ) {
+  } else if (tool.value === 'door' || tool.value === 'window' || tool.value === 'open') {
     if (!grabOpening(t, p)) {
       const u = nearestWall(floor.value, p.x, p.y)
       clearSelection()
       if (!u) return
       const existing = openingAt(floor.value, u)
       const o =
-        existing ?? (tool.value === 'open' ? addOpenWall(floor.value, u) : addOpening(floor.value, u, tool.value))
+        existing ?? (tool.value === 'open' ? addOpenWall(floor.value, u) : addOpening(floor.value, u, toolPreset()))
       if (o) selOpening.value = o.id
       if (existing)
         drag = {
@@ -1744,6 +1968,43 @@ $ruler: 20px;
 
 .house-editor__row--tight {
   margin-top: 0;
+}
+
+.house-editor__row--end {
+  align-items: flex-end;
+
+  :deep(.nb-field) {
+    margin-bottom: 0;
+  }
+}
+
+// Two short fields side by side: frame and colour, sill and head.
+// Read out, not shown: the toolbar selects' names.
+.house-editor__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.house-editor__pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--nb-spacing-8);
+}
+
+// One covering: what it is and where, then what drives it.
+.house-editor__covering {
+  padding-bottom: var(--nb-spacing-8);
+  margin-bottom: var(--nb-spacing-8);
+  border-bottom: 1px solid var(--nb-c-border);
+}
+
+.house-editor__grow {
+  flex: 1;
+  min-width: 0;
 }
 
 .house-editor__muted {

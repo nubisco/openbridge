@@ -113,6 +113,13 @@ How it is built (stage 1, `apps/daemon/src/house-model/`):
 - Until the editor draws in millimetres, it still saves version 1. The daemon
   converts that against the stored plan, keeping by id everything version 1
   cannot say (wall thickness by overlap, frames, operation, coverings).
+- A door or window in version 1 carries its version 2 detail in `spec` (how
+  it opens, the leaf, frame, sill and head in millimetres, and its coverings),
+  and a device on glass names the covering it drives in `covering`. That is
+  how the cell editor sets them (stage 2). The cells stay authoritative for
+  what they can say: whether it is a window, whether it slides, whether it
+  is glass. Detail that contradicts them is ignored, and an empty
+  `coverings` list takes every covering off.
 - A space keeps the rectangles the editor drew it as (`rects`), so the editor
   shows the same parts it had. The outline is the shape.
 - A device on a building element names it in `host` (an opening, and the

@@ -22,7 +22,7 @@ import { dirname } from 'path'
 import { Logger } from '@nubisco/openbridge-logger'
 import { fromV1, toV1 } from './house-model/convert.js'
 import { PlanError, validatePlan } from './house-model/validate.js'
-import type { Plan } from './house-model/v2.js'
+import { LEAVES, type Covering, type Plan } from './house-model/v2.js'
 import {
   DEVICE_LOOKS,
   FURNITURE_KINDS,
@@ -40,6 +40,7 @@ import {
   type HouseRadiator,
   type HouseRect,
   type HouseRoom,
+  type OpeningSpec,
 } from './house-model/v1.js'
 
 export * from './house-model/v1.js'
@@ -132,6 +133,29 @@ function name(v: unknown, path: string): string {
  * plan cannot fail on a field a newer one added, and nothing unexpected ends
  * up on disk.
  */
+/**
+ * A door's or window's detail as the cell editor sends it. Checked for shape
+ * here, and for sense once converted, by validatePlan.
+ */
+function openingSpec(raw: unknown, at: string): OpeningSpec {
+  const s = obj(raw, at)
+  if (s.kind !== 'door' && s.kind !== 'window') fail(`${at}.kind`, 'must be door or window')
+  const out: OpeningSpec = { kind: s.kind }
+  if (s.operation !== undefined) {
+    if (typeof s.operation !== 'string' || s.operation.length > 20) fail(`${at}.operation`, 'must be a short string')
+    out.operation = s.operation
+  }
+  if (s.leaf !== undefined) {
+    if (!(LEAVES as readonly unknown[]).includes(s.leaf)) fail(`${at}.leaf`, `must be ${LEAVES.join(', ')}`)
+    out.leaf = s.leaf as OpeningSpec['leaf']
+  }
+  if (s.sill !== undefined) out.sill = int(s.sill, `${at}.sill`, 0, 20_000)
+  if (s.head !== undefined) out.head = int(s.head, `${at}.head`, 1, 20_000)
+  if (s.frame !== undefined) out.frame = obj(s.frame, `${at}.frame`) as OpeningSpec['frame']
+  if (s.coverings !== undefined) out.coverings = arr(s.coverings, `${at}.coverings`, 6) as Covering[]
+  return out
+}
+
 export function validateHousePlan(raw: unknown): HousePlan {
   const p = obj(raw, 'plan')
   if (p.version !== HOUSE_V1) fail('plan.version', `must be ${HOUSE_V1}`)
@@ -216,6 +240,7 @@ export function validateHousePlan(raw: unknown): HousePlan {
         out.opens = o.opens as HouseOpening['opens']
       }
       if (o.glass === true) out.glass = true
+      if (o.spec !== undefined && o.type !== 'open') out.spec = openingSpec(o.spec, `${op}.spec`)
       return out
     })
 
@@ -290,6 +315,7 @@ export function validateHousePlan(raw: unknown): HousePlan {
         if (!windows.has(oid))
           fail(`${pp}.opening`, `'${oid}' is not a window, sliding door or glass door on this floor`)
         out.opening = oid
+        if (pl.covering !== undefined) out.covering = id(pl.covering, `${pp}.covering`)
       }
       if (pl.color !== undefined) {
         if (typeof pl.color !== 'string' || !COLOR.test(pl.color)) fail(`${pp}.color`, 'must be a #rrggbb colour')

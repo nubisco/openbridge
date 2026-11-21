@@ -16,7 +16,9 @@ import { Cells, cellLoops, cellsIn, rectangles } from './cells.js'
 import * as V1 from './v1.js'
 import {
   DEFAULTS,
+  DOOR_OPERATIONS,
   PLAN_VERSION,
+  WINDOW_OPERATIONS,
   isGlazed,
   type Covering,
   type Door,
@@ -202,35 +204,46 @@ function makeOpening(o: V1.HouseOpening, wall: Wall, at: number, prev: Opening |
     hinge: o.hinge ?? 'start',
     opens: toWallSide(o.axis, o.opens ?? (o.axis === 'h' ? 'down' : 'right')),
   })
-  const kept = old ? { frame: old.frame, coverings: old.coverings } : {}
+  // What the editor said wins over what was stored. Frame and coverings
+  // carry over to another kind of element, the rest only to the same kind.
+  const spec = o.spec
+  const kind = o.type === 'window' ? 'window' : 'door'
+  const same = spec?.kind === kind ? spec : undefined
+  const kept = {
+    frame: spec && 'frame' in spec ? spec.frame : old?.frame,
+    coverings: spec && 'coverings' in spec ? spec.coverings?.map((c) => ({ ...c })) : old?.coverings,
+  }
   if (o.type === 'window') {
     const was = old?.kind === 'window' ? old : undefined
+    const op = WINDOW_OPERATIONS.find((x) => x === same?.operation)
     const win: Window = {
       ...base,
       kind: 'window',
-      operation: was?.operation ?? 'casement',
-      sill: was?.sill ?? DEFAULTS.windowSill,
-      head: was?.head ?? DEFAULTS.windowHead,
+      operation: op ?? was?.operation ?? 'casement',
+      sill: same?.sill ?? was?.sill ?? DEFAULTS.windowSill,
+      head: same?.head ?? was?.head ?? DEFAULTS.windowHead,
       ...kept,
       ...(o.hinge !== undefined || o.opens !== undefined ? sides() : {}),
     }
     return tidyOpening(win)
   }
+  // The cells say whether it slides and whether it is glass. The detail
+  // only refines that, so a door made solid in an old tab loses its glass.
   const sliding = o.type === 'slider'
   const glass = sliding || o.glass === true
-  const was =
-    old?.kind === 'door' &&
-    (old.operation === 'sliding' || old.operation === 'lift-slide') === sliding &&
-    (old.leaf !== 'solid') === glass
-      ? old
-      : undefined
+  const slides = (x: string | undefined) => x === 'sliding' || x === 'lift-slide'
+  const fits = (x: { operation?: string; leaf?: string } | undefined) =>
+    !!x && slides(x.operation) === sliding && (x.leaf !== 'solid') === glass
+  const was = old?.kind === 'door' && fits(old) ? old : undefined
+  const op = DOOR_OPERATIONS.find((x) => x === same?.operation && slides(x) === sliding)
+  const leaf = same?.leaf !== undefined && (same.leaf !== 'solid') === glass ? same.leaf : undefined
   const door: Door = {
     ...base,
     kind: 'door',
-    operation: was?.operation ?? (sliding ? 'sliding' : 'swing'),
-    leaf: was?.leaf ?? (glass ? 'glazed' : 'solid'),
-    sill: was?.sill ?? 0,
-    head: was?.head ?? DEFAULTS.doorHead,
+    operation: op ?? was?.operation ?? (sliding ? 'sliding' : 'swing'),
+    leaf: leaf ?? was?.leaf ?? (glass ? 'glazed' : 'solid'),
+    sill: same?.sill ?? was?.sill ?? 0,
+    head: same?.head ?? was?.head ?? DEFAULTS.doorHead,
     ...kept,
     ...sides(),
   }
@@ -240,7 +253,7 @@ function makeOpening(o: V1.HouseOpening, wall: Wall, at: number, prev: Opening |
 /** Drop what an opening cannot have and empty lists, so the stored plan says only what is true. */
 function tidyOpening<T extends Door | Window>(o: T): T {
   if (!isGlazed(o) || !o.coverings?.length) delete o.coverings
-  if (o.frame === undefined) delete o.frame
+  if (o.frame === undefined || (!o.frame.material && !o.frame.colour)) delete o.frame
   if (o.hinge === undefined) delete o.hinge
   if (o.opens === undefined) delete o.opens
   return o
@@ -299,9 +312,22 @@ export function fromV1(p: V1.HousePlan, previous?: Plan | null): Migration {
       return !!o && isGlazed(o)
     })
     for (const pl of onGlass) {
-      const was = before?.placements.find((x) => x.ref === pl.ref)?.host
       const o = byId.get(pl.opening!) as Door | Window
-      if (was?.opening === o.id && was.covering && o.coverings?.some((c) => c.id === was.covering)) {
+      const chosen = pl.covering && o.coverings?.some((c) => c.id === pl.covering) ? pl.covering : undefined
+      const taken = (c: string) => claimed.has(`${o.id}/${c}`)
+      if (chosen && !taken(chosen)) {
+        hosts.set(pl.ref, { opening: o.id, covering: chosen })
+        claimed.add(`${o.id}/${chosen}`)
+        continue
+      }
+      const was = before?.placements.find((x) => x.ref === pl.ref)?.host
+      if (
+        pl.covering === undefined &&
+        was?.opening === o.id &&
+        !taken(was.covering ?? '') &&
+        was.covering &&
+        o.coverings?.some((c) => c.id === was.covering)
+      ) {
         hosts.set(pl.ref, { opening: o.id, covering: was.covering })
         claimed.add(`${o.id}/${was.covering}`)
       }
@@ -402,6 +428,11 @@ function openingOf(o: Opening, wall: Wall): V1.HouseOpening | null {
   if (o.kind === 'window') out.type = 'window'
   else if (o.operation === 'sliding' || o.operation === 'lift-slide') out.type = 'slider'
   else if (o.leaf !== 'solid') out.glass = true
+  const spec: V1.OpeningSpec = { kind: o.kind, operation: o.operation, sill: o.sill, head: o.head }
+  if (o.kind === 'door') spec.leaf = o.leaf
+  if (o.frame) spec.frame = { ...o.frame }
+  if (isGlazed(o)) spec.coverings = (o.coverings ?? []).map((c) => ({ ...c }))
+  out.spec = spec
   // Version 1 leaves the usual hinge and side unsaid.
   if (o.hinge === 'end') out.hinge = 'end'
   if (o.opens) {
@@ -429,6 +460,7 @@ export function toV1(p: Plan): V1.HousePlan {
       placements: s.placements.map((pl) => {
         const out: V1.HousePlacement = { ref: pl.ref, x: half(pl.x), y: half(pl.y) }
         if (pl.host) out.opening = pl.host.opening
+        if (pl.host?.covering) out.covering = pl.host.covering
         if (pl.color !== undefined) out.color = pl.color
         if (pl.circuitRooms !== undefined) out.circuitRooms = [...pl.circuitRooms]
         if (pl.length !== undefined) out.length = Math.max(1, Math.round(cells(pl.length)))
