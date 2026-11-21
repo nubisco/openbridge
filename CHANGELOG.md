@@ -1,3 +1,10 @@
+# [1.31.0](https://github.com/nubisco/openbridge/compare/v1.30.1...v1.31.0) (2026-11-21)
+
+
+### Features
+
+* **house:** one Door and one Window tool with presets, and coverings on glass ([#48](https://github.com/nubisco/openbridge/issues/48)) ([92dbd66](https://github.com/nubisco/openbridge/commit/92dbd662564aac24654e618d9994bbd0825fa20a))
+
 ## [1.30.1](https://github.com/nubisco/openbridge/compare/v1.30.0...v1.30.1) (2026-11-21)
 
 
