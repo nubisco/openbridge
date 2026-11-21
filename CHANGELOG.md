@@ -1,3 +1,10 @@
+## [1.30.1](https://github.com/nubisco/openbridge/compare/v1.30.0...v1.30.1) (2026-11-21)
+
+
+### Bug Fixes
+
+* **house:** one floor menu for the view and the editor, and a resizable inspector ([#46](https://github.com/nubisco/openbridge/issues/46)) ([d6faad4](https://github.com/nubisco/openbridge/commit/d6faad493640fe5a2ffa3beab77e3becd4032a7d))
+
 # [1.30.0](https://github.com/nubisco/openbridge/compare/v1.29.0...v1.30.0) (2026-11-20)
 
 
