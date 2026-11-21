@@ -1,0 +1,55 @@
+# The House page layout
+
+Status: agreed direction. Decided by Jose on 2026-11-21, after a layout study
+modelled on Live Home 3D. Icons for every element are in
+[house-icons.md](house-icons.md).
+
+## The frame
+
+The app's rail on the left, the top bar and the shell's inspector on the right
+are given. The canvas fills everything else, in view and in edit mode, and
+controls float over it:
+
+- Drawing tools at the top of the canvas, grouped: pointer (Select, Pan,
+  Ruler), build (Wall, Area, Door, Window, Gap, later Stairs), fit out
+  (Radiator, Furniture), history (Undo, Redo).
+- The floor menu on the left edge, the same in both modes. Editing adds a +
+  button and a menu to rename or delete a floor (shipped in 1.30.x, PR #46).
+- View controls bottom right: zoom, fit, turn, 2D or 3D, and one "Show" menu
+  for devices, temperature, humidity, room names and walls up or low.
+- A status strip along the bottom while editing: cursor position and what the
+  tool does.
+
+## The inspector while editing
+
+Resizable from its left edge (PR #46). It has:
+
+- **A permanent 3D preview** at the top, of the floor being edited, updating
+  as you draw. Not a side by side split of the canvas.
+- Three tabs below it: **Properties** (the selection, or the floor when nothing
+  is selected), **Library** (door and window presets, furniture, devices not
+  on the plan yet, all draggable onto the canvas), **House** (an outline of
+  floors, rooms and what is in each).
+
+## Doors and windows
+
+Shipped first (stage 2, `apps/ui/src/house/openings.ts`): one Door tool and
+one Window tool, each with its presets beside it in the toolbar until the
+Library tab exists, and a door and window panel with the Coverings section.
+
+One Door tool and one Window tool. Presets in the Library: wooden door (white),
+wooden door (brown), glazed swing door, sliding glass door, sliding window,
+full height fixed window, casement window. Anything glazed gets a Coverings
+section in Properties: kind, inside or outside, manual or the device that
+drives it. Coverings are a requirement of the model, not an option of a door.
+
+## The ruler
+
+Pick Ruler, drag from one point to another. It snaps to wall ends, corners and
+openings and stays on the plan as a dimension line. Typing a different length
+in Properties offers "Resize the plan to match", with the factor shown. It
+multiplies every horizontal position and length, walls, rooms, openings,
+radiators, furniture and devices, as one undo step. Heights do not change.
+The confirm step has "Keep door, window and furniture sizes", which moves them
+without resizing. It ships with the editor in millimetres (stage 4), because
+the 0.5 m grid would round the result.
