@@ -1,3 +1,10 @@
+## [1.31.1](https://github.com/nubisco/openbridge/compare/v1.31.0...v1.31.1) (2026-11-21)
+
+
+### Bug Fixes
+
+* **homebrew:** take the newest release that is a day old, not latest ([#49](https://github.com/nubisco/openbridge/issues/49)) ([04fc30f](https://github.com/nubisco/openbridge/commit/04fc30f0101ef2dc7ef10a789069201bc6a18b96))
+
 # [1.31.0](https://github.com/nubisco/openbridge/compare/v1.30.1...v1.31.0) (2026-11-21)
 
 
