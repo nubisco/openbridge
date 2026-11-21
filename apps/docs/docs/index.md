@@ -17,7 +17,7 @@ Your devices' readings and history over the Model Context Protocol. Ask how much
 
 ## Local-first
 
-Runs entirely on your network. The HAP bridge is published locally, no cloud relay, no accounts required.
+Runs entirely on your network. The HAP bridge is published locally, no cloud relay, no accounts required. The only thing it reports is an [anonymous install count](/guide/installation#anonymous-install-heartbeat), and you can switch it off.
 
 ## Plugin system
 
