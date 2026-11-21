@@ -10,7 +10,8 @@
 //
 // Keep in sync with WIDGET_ICON / CATEGORY_INFO (DeviceInspector.vue,
 // PluginInspector.vue, DevicesView.vue), navItems (AppLayout.vue), the House
-// view's empty state (HouseView.vue), the House editor's tools (HouseEditor.vue) and the
+// view's empty state (HouseView.vue), the House editor's tools (HouseEditor.vue), Library
+// (house/library.ts) and outline (HouseOutline.vue), and the
 // bell's two states (NotificationBell.vue).
 import { registerIcons } from '@nubisco/ui'
 
@@ -59,6 +60,20 @@ import * as thermometer from '@nubisco/ui/icons/thermometer'
 import * as thermometerHot from '@nubisco/ui/icons/thermometer-hot'
 import * as toggleRight from '@nubisco/ui/icons/toggle-right'
 import * as wind from '@nubisco/ui/icons/wind'
+// The House editor's Library and outline (house/library.ts, HouseOutline.vue).
+import * as couch from '@nubisco/ui/icons/couch'
+import * as rug from '@nubisco/ui/icons/rug'
+import * as bed from '@nubisco/ui/icons/bed'
+import * as bathtub from '@nubisco/ui/icons/bathtub'
+import * as shower from '@nubisco/ui/icons/shower'
+import * as toilet from '@nubisco/ui/icons/toilet'
+import * as pottedPlant from '@nubisco/ui/icons/potted-plant'
+import * as dropHalfBottom from '@nubisco/ui/icons/drop-half-bottom'
+import * as gauge from '@nubisco/ui/icons/gauge'
+import * as thermometerSimple from '@nubisco/ui/icons/thermometer-simple'
+import * as securityCamera from '@nubisco/ui/icons/security-camera'
+import * as stack from '@nubisco/ui/icons/stack'
+import * as dotsThree from '@nubisco/ui/icons/dots-three'
 
 export function registerRuntimeIcons(): void {
   registerIcons({
@@ -107,5 +122,18 @@ export function registerRuntimeIcons(): void {
     'thermometer-hot': thermometerHot,
     'toggle-right': toggleRight,
     wind: wind,
+    couch: couch,
+    rug: rug,
+    bed: bed,
+    bathtub: bathtub,
+    shower: shower,
+    toilet: toilet,
+    'potted-plant': pottedPlant,
+    'drop-half-bottom': dropHalfBottom,
+    gauge: gauge,
+    'thermometer-simple': thermometerSimple,
+    'security-camera': securityCamera,
+    stack: stack,
+    'dots-three': dotsThree,
   })
 }
