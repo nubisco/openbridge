@@ -3,15 +3,6 @@
     <div class="house-editor__main">
       <!-- Rounded, here only: the controls floating over the blueprint. -->
       <div class="house-editor__toolbar" data-nb-appearance="rounded">
-        <NbTabs
-          :model-value="floorId"
-          :items="floorTabs"
-          variant="contained"
-          size="sm"
-          aria-label="Floor to edit"
-          @update:model-value="selectFloor"
-        />
-        <NbButton size="sm" variant="secondary" icon="plus" @click="newFloor">Floor</NbButton>
         <!-- One icon per tool, named by its tooltip (which is also its accessible name). -->
         <div class="house-editor__tools" role="toolbar" aria-label="Drawing tool">
           <NbButton
@@ -83,6 +74,17 @@
           :cursor="cursor ? cursor[1] - RULER_SIZE : null"
         />
         <div class="house-editor__ruler-corner" aria-hidden="true">m</div>
+        <HouseFloorMenu
+          class="house-editor__floors"
+          :floors="plan.floors"
+          :model-value="floorId"
+          :phone="phone"
+          editable
+          @update:model-value="selectFloor"
+          @add="newFloor"
+          @rename="renameFloor"
+          @delete="deleteFloor"
+        />
         <div class="house-editor__zoom" role="group" aria-label="Zoom" data-nb-appearance="rounded">
           <NbButton
             v-nb-tooltip="{ body: `Zoom in (${mod} +, or ${mod} and scroll)`, position: 'left', aria: 'none' }"
@@ -453,6 +455,7 @@
 import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from 'vue'
 import { useConfirm, usePhoneLayout, useToast } from '@nubisco/ui'
 import { useInspectorStore } from '@/stores/inspector'
+import HouseFloorMenu from '@/components/house/HouseFloorMenu.vue'
 import HouseRuler from '@/components/house/HouseRuler.vue'
 import { RULER_SIZE } from '@/house/ruler'
 import type {
@@ -606,7 +609,9 @@ type Tool =
 const isAreaTool = (t: Tool): t is 'room' | 'outdoor' | 'paved' | 'pool' =>
   t === 'room' || t === 'outdoor' || t === 'paved' || t === 'pool'
 const tool = ref<Tool>('room')
-const floorId = ref(props.initialFloor ?? props.plan.floors[0].id)
+/** The top floor, where the editor opens when no single floor was in view. */
+const topFloor = () => props.plan.floors.reduce((a, b) => (b.level > a.level ? b : a))
+const floorId = ref(props.plan.floors.some((f) => f.id === props.initialFloor) ? props.initialFloor! : topFloor().id)
 const selRoom = ref<string | null>(null)
 const selRef = ref<string | null>(null)
 const selOpening = ref<string | null>(null)
@@ -620,12 +625,6 @@ const svgEl = ref<SVGSVGElement | null>(null)
 const unit = ref(1)
 
 const floor = computed<HouseFloor>(() => props.plan.floors.find((f) => f.id === floorId.value) ?? props.plan.floors[0])
-const floorTabs = computed(() =>
-  props.plan.floors
-    .slice()
-    .sort((a, b) => b.level - a.level)
-    .map((f) => ({ id: f.id, label: f.name })),
-)
 const room = computed(() => floor.value.rooms.find((r) => r.id === selRoom.value) ?? null)
 const opening = computed(() => floor.value.openings.find((o) => o.id === selOpening.value) ?? null)
 const piece = computed(() => (floor.value.furniture ?? []).find((f) => f.id === selFurniture.value) ?? null)
@@ -871,6 +870,11 @@ function newFloor() {
   tool.value = 'select'
 }
 
+function renameFloor(id: string, name: string) {
+  const f = props.plan.floors.find((x) => x.id === id)
+  if (f) f.name = name
+}
+
 const hasFloorBelow = computed(() => props.plan.floors.some((f) => f.level < floor.value.level))
 
 async function deleteFloor() {
@@ -887,7 +891,7 @@ async function deleteFloor() {
   })
   if (!ok) return
   removeFloor(props.plan, f.id)
-  floorId.value = props.plan.floors[0].id
+  floorId.value = topFloor().id
   clearSelection()
 }
 
@@ -1653,6 +1657,18 @@ $ruler: 20px;
   font-family: var(--nb-font-family-mono);
   font-size: 9px;
   pointer-events: none;
+}
+
+// The floors, on the left inside the ruler, where the live view has them.
+.house-editor__floors {
+  left: calc(var(--nb-spacing-8) + #{$ruler});
+
+  // On a phone the zoom row has the bottom, so the floors take the top left,
+  // inside the rulers.
+  &.is-phone {
+    top: calc(var(--nb-spacing-8) + #{$ruler});
+    bottom: auto;
+  }
 }
 
 .house-editor__zoom {
