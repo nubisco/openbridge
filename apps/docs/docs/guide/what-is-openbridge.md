@@ -17,7 +17,7 @@ Homebridge is mature, widely used and well supported, with a large plugin ecosys
 - **A view of the whole home:** a plan of your home in 2D and 3D shows each device's live state where it is, and every device keeps its history on the bridge.
 - **You choose what Apple Home sees:** each device has an **Expose to HomeKit** switch, so OpenBridge can read a device without adding it to Apple Home twice. The Matter platform plugin goes further and reads Matter devices you already paired with Apple Home, as a second controller.
 - **Homebridge compatibility:** existing Homebridge platform plugins run unchanged, next to native OpenBridge plugins.
-- **Local by default:** the daemon sends no telemetry. It contacts the internet only to check for updates and to fetch the plugin catalogue and plugins.
+- **Local by default:** nothing about your home, your devices or your network leaves it. The daemon contacts the internet to check for updates (the npm registry and GitHub), to fetch the plugin catalogue and plugins, and once a day to send an [anonymous install heartbeat](/guide/installation#anonymous-install-heartbeat) you can switch off.
 
 ## What OpenBridge does, step by step
 

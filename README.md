@@ -45,7 +45,7 @@ Homebridge works, but it was designed for a different era. OpenBridge is built f
 - **Drop-in Homebridge compatibility**: existing `platform` plugins work with zero modification
 - **Built-in dashboard**: Vue 3 UI included; no separate install needed
 - **Full HTTP API**: everything the UI does, your scripts can do too
-- **MIT licensed**: no paid tiers, no telemetry, no gatekeeping
+- **MIT licensed**: no paid tiers, no gatekeeping. The only thing the daemon reports is an anonymous install count, and you can [switch it off](https://docs.nubisco.io/openbridge/guide/installation#anonymous-install-heartbeat)
 
 ---
 
