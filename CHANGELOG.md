@@ -1,3 +1,10 @@
+# [1.32.0](https://github.com/nubisco/openbridge/compare/v1.31.1...v1.32.0) (2026-11-22)
+
+
+### Features
+
+* **house:** Library and House tabs and a live 3D preview in the editor's inspector ([#50](https://github.com/nubisco/openbridge/issues/50)) ([0443bac](https://github.com/nubisco/openbridge/commit/0443bac1b517ed541da6ea5c55aff6bb39a7d09e))
+
 ## [1.31.1](https://github.com/nubisco/openbridge/compare/v1.31.0...v1.31.1) (2026-11-21)
 
 
