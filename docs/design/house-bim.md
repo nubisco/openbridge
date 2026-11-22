@@ -158,6 +158,27 @@ relies on to track changes.
 (schema and geometry), and the exported real plan is opened in Bonsai
 (BlenderBIM) with screenshots compared against the editor.
 
+Shipped in stage 3:
+
+- The writer and the mapping are `apps/daemon/src/house-model/ifc.ts`
+  (`toIfc`). What a placed device is in IFC is the caller's to say: the UI
+  decides it from the device's kind and look in `apps/ui/src/house/ifc.ts`.
+- "Export IFC" is on the House page, in view and while editing. Editing, it
+  exports what is drawn, saved or not. The file is built in the browser.
+- Plan (x, y) is IFC (x, -y) in metres, so the house is the same way round.
+  A wall's placement runs along it, so its left side is local +Y, which is
+  where the side of a radiator or a covering is worked out.
+- Coverings are `IfcShadingDevice`s connected to their door or window
+  (`IfcRelConnectsElements`), and a device that drives one is connected to
+  it the same way. Detail the IFC classes have no place for (how an opening
+  works, its frame, a covering's side, whether it has a motor) is in the
+  property sets `House_Opening`, `House_Covering` and `House_Device`.
+- Not exported yet: heating circuits as pipes.
+- `house-ifc.test.ts` runs IfcOpenShell (`validate-ifc.py` beside it) on
+  every CI run: the schema, its rules, and building every shape. The real
+  plan and every device mapping were checked the same way when it shipped.
+  Opening the export in Bonsai is still to do.
+
 ## Stages
 
 Each stage ships on its own, and the live house view keeps working at every
