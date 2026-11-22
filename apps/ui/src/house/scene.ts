@@ -49,6 +49,7 @@ import {
   type ViewMode,
 } from './geometry'
 import { specOf } from './openings'
+import { ROLLS, coveringDraws, type CoveringDraw } from './coverings'
 import { formatPower, stateText, type LiveDevice } from './live'
 
 export const WARM_LIGHT = '#ffb45e'
@@ -837,6 +838,147 @@ export const overlayText = (overlay: 'temperature' | 'humidity', v: number) =>
  * One floor. `devices` holds every live device by ref, and the floor's own
  * placements decide which of them appear here.
  */
+// ─── Coverings ──────────────────────────────────────────────────────────────
+// Each covering on a door or window is drawn by its kind, on its own side of
+// the glass (coverings.ts says which), and as closed as its device reports.
+// One worked by hand is drawn open. A covering a device drives is that
+// device on the plan: focusable, with its position on a pill above it.
+
+/** How far off the glass a covering hangs, in cells. */
+const OFF = 0.14
+
+/** A point along the opening from A to B at t, pushed off the wall by k cells. */
+const along = (A: Point, B: Point, n: Point, t: number, k: number): Point => [
+  lerp(A[0], B[0], t) + n[0] * k,
+  lerp(A[1], B[1], t) + n[1] * k,
+]
+
+/** The device wrapper and pill for a driven covering, the pill at t along the opening. */
+function driven(o: SceneOptions, c: CoveringDraw, svg: string, at: Point): string {
+  const d = c.device
+  if (!d) return svg
+  return (
+    `<g class="hv-dev${d.reachable ? '' : ' hv-off'}" data-ref="${esc(d.ref)}" role="button" tabindex="0" aria-label="${label(d)}">` +
+    svg +
+    `<g transform="translate(${r1(at[0])},${r1(at[1])}) scale(${o.unit.toFixed(4)})"><circle class="hv-hit" r="18"/>` +
+    pill(`${Math.round(d.position ?? 0)}%`, { cls: o.selected === d.ref ? 'hv-on' : '' }) +
+    '</g></g>'
+  )
+}
+
+/** A zigzag from t0 to t1 along the opening: curtains gathered in folds. */
+function folds(A: Point, B: Point, n: Point, t0: number, t1: number, len: number): Point[] {
+  const steps = Math.max(2, Math.round((Math.abs(t1 - t0) * len) / 0.12))
+  return Array.from({ length: steps + 1 }, (_, i) => along(A, B, n, lerp(t0, t1, i / steps), OFF + (i % 2 ? 0.1 : 0)))
+}
+
+/** The coverings on one opening in the plan view. */
+function coverings2d(o: SceneOptions, A: Point, B: Point, len: number, list: CoveringDraw[]): string {
+  const P = (q: Point) => project(o.mode, q[0], q[1])
+  const pts = (qs: Point[]) => qs.map((q) => P(q).map(r1).join(',')).join(' ')
+  const ln = (cls: string, p: Point, q: Point) => {
+    const [a, b] = [P(p), P(q)]
+    return `<line class="${cls}" x1="${r1(a[0])}" y1="${r1(a[1])}" x2="${r1(b[0])}" y2="${r1(b[1])}"/>`
+  }
+  return list
+    .map((c, i) => {
+      const n = c.normal
+      const k = c.covering.kind
+      let svg = ''
+      if (ROLLS.has(k)) {
+        // The box it rolls into, and the part rolled down over the glass.
+        svg = ln('hv-box2d', along(A, B, n, 0, OFF), along(A, B, n, 1, OFF))
+        if (c.closed > 0.01)
+          svg += ln(k === 'blind' ? 'hv-blind2d' : 'hv-slats2d', along(A, B, n, 0, OFF), along(A, B, n, c.closed, OFF))
+      } else if (k === 'curtain') {
+        // Two curtains, drawn back to the sides when open, meeting when closed.
+        const w = 0.12 + 0.38 * c.closed
+        svg =
+          `<polyline class="hv-curtain2d" points="${pts(folds(A, B, n, 0, w, len))}"/>` +
+          `<polyline class="hv-curtain2d" points="${pts(folds(A, B, n, 1, 1 - w, len))}"/>`
+      } else {
+        // An awning: folded against the wall, or out over the opening.
+        const out = 1.4 * c.closed
+        svg =
+          out > 0.05
+            ? `<polygon class="hv-awning2d" points="${pts([along(A, B, n, 0, OFF), along(A, B, n, 1, OFF), along(A, B, n, 1, OFF + out), along(A, B, n, 0, OFF + out)])}"/>`
+            : ln('hv-box2d', along(A, B, n, 0, OFF), along(A, B, n, 1, OFF))
+      }
+      const mid = P(along(A, B, n, (i + 1) / (list.length + 1), OFF))
+      return driven(o, c, svg, [mid[0], mid[1] - 16 * o.unit])
+    })
+    .join('')
+}
+
+/**
+ * The coverings on one opening in the 3D view, each as its own item so the
+ * depth sort puts the inside ones behind the glass and the outside ones in
+ * front. `z0` to `zt` is the glass, `H` the wall's top.
+ */
+function coverings3d(
+  o: SceneOptions,
+  A: Point,
+  B: Point,
+  len: number,
+  z0: number,
+  zt: number,
+  H: number,
+  list: CoveringDraw[],
+): Array<{ depth: number; svg: string }> {
+  return list.map((c, i) => {
+    const n = c.normal
+    const k = c.covering.kind
+    const at = (t: number, off: number, z: number): [number, number, number] => [...along(A, B, n, t, off), z]
+    const band = (t0: number, t1: number, z1: number, z2: number, off = OFF) =>
+      poly(o, [at(t0, off, z1), at(t1, off, z1), at(t1, off, z2), at(t0, off, z2)])
+    // The box sits over the glass, or at the very top where the glass runs to it.
+    const zbox = Math.min(zt, H - 0.14)
+    const box = `<polygon class="hv-rollbox" points="${band(0, 1, zbox, zbox + 0.14)}"/>`
+    let svg = ''
+    if (ROLLS.has(k)) {
+      svg = box
+      if (c.closed > 0.01) {
+        const zb = zbox - (zbox - z0) * c.closed
+        if (k === 'blind') svg += `<polygon class="hv-blind" points="${band(0, 1, zb, zbox)}"/>`
+        else {
+          svg += `<polygon class="hv-slats" points="${band(0, 1, zb, zbox)}"/>`
+          for (let z = zbox - 0.18; z > zb + 0.04; z -= 0.18) {
+            const p = project(o.mode, ...at(0, OFF, z))
+            const q = project(o.mode, ...at(1, OFF, z))
+            svg += `<line class="hv-slatl" x1="${r1(p[0])}" y1="${r1(p[1])}" x2="${r1(q[0])}" y2="${r1(q[1])}"/>`
+          }
+        }
+      }
+    } else if (k === 'curtain') {
+      // Hung from just over the glass to the floor, or to just under a sill.
+      const w = 0.12 + 0.38 * c.closed
+      const top = Math.min(H - 0.02, zt + 0.1)
+      const bottom = z0 > 0.3 ? Math.max(0.02, z0 - 0.25) : 0.02
+      const panel = (t0: number, t1: number) => {
+        let s = `<polygon class="hv-curtain" points="${band(t0, t1, bottom, top, OFF + 0.05)}"/>`
+        for (let j = 1; j < 4; j++) {
+          const t = lerp(t0, t1, j / 4)
+          const p = project(o.mode, ...at(t, OFF + 0.05, bottom))
+          const q = project(o.mode, ...at(t, OFF + 0.05, top))
+          s += `<line class="hv-curtainl" x1="${r1(p[0])}" y1="${r1(p[1])}" x2="${r1(q[0])}" y2="${r1(q[1])}"/>`
+        }
+        return s
+      }
+      svg = panel(0, w) + panel(1 - w, 1)
+    } else {
+      const out = 1.4 * c.closed
+      const z = zbox + 0.07
+      svg =
+        out > 0.05
+          ? `<polygon class="hv-awning" points="${poly(o, [at(0, OFF, z), at(1, OFF, z), at(1, OFF + out, z - 0.45 * c.closed), at(0, OFF + out, z - 0.45 * c.closed)])}"/>`
+          : box
+    }
+    const m = project(o.mode, ...at((i + 1) / (list.length + 1), OFF, H + 0.64))
+    const mid = along(A, B, n, 0.5, OFF + (k === 'awning' ? 0.7 * c.closed : 0))
+    return { depth: mid[0] + mid[1] + 0.01, svg: driven(o, c, svg, m) }
+  })
+}
+
 export function renderFloor(
   plan: HousePlan,
   floor: HouseFloor,
@@ -1138,9 +1280,7 @@ export function renderFloor(
     items.push({ depth: (a2[0] + b2[0] + a2[1] + b2[1]) / 2 + 0.02, svg: `<g pointer-events="none">${svg}</g>` })
   }
 
-  // Walls, doors, windows, and the shutters that sit on windows.
-  const shutters = new Map<string, LiveDevice>()
-  for (const { p, d } of placed) if (p.opening) shutters.set(p.opening, d)
+  // Walls, doors and windows, and what covers the glass.
   // The walls of a lit room catch its light, on the side facing into it.
   const litRooms = new Map<string, { color: string; k: number }>()
   if (o.overlay === 'none') for (const l of lit) if (l.room && l.room.kind === 'room') litRooms.set(l.room.id, l)
@@ -1150,7 +1290,6 @@ export function renderFloor(
     const depth = (w.x1 + w.x2 + w.y1 + w.y2) / 2
     const A: Point = [w.x1, w.y1]
     const B: Point = [w.x2, w.y2]
-    const sh = w.opening ? shutters.get(w.opening.id) : undefined
     let svg = ''
     if (!iso) {
       const a = project(o.mode, A[0], A[1])
@@ -1184,19 +1323,7 @@ export function renderFloor(
             ln('hv-pane2d hv-slide2d', at(0, -1), at(0.55, -1)) +
             ln('hv-pane2d hv-slide2d', at(0.45, 1), at(1, 1))
         } else svg = ln('hv-wall2d hv-glass2d', a, c) + ln('hv-pane2d', a, c)
-        if (sh) {
-          const closed = 1 - clamp(sh.position ?? 100, 0, 100) / 100
-          const m: Point = [lerp(a[0], c[0], closed), lerp(a[1], c[1], closed)]
-          const mid: Point = [(a[0] + c[0]) / 2, (a[1] + c[1]) / 2]
-          svg =
-            `<g class="hv-dev${sh.reachable ? '' : ' hv-off'}" data-ref="${esc(sh.ref)}" role="button" tabindex="0" aria-label="${label(sh)}">` +
-            svg +
-            (closed > 0.01 ? ln('hv-slats2d', a, m) : '') +
-            `<circle class="hv-hit" cx="${r1(mid[0])}" cy="${r1(mid[1])}" r="${r1(18 * o.unit)}"/></g>` +
-            `<g transform="translate(${r1(mid[0])},${r1(mid[1] - 16 * o.unit)}) scale(${o.unit.toFixed(4)})" pointer-events="none">` +
-            pill(`${Math.round(sh.position ?? 0)}%`, { cls: o.selected === sh.ref ? 'hv-on' : '' }) +
-            '</g>'
-        }
+        if (w.opening) svg += coverings2d(o, A, B, w.opening.len, coveringDraws(floor, w.opening, devices))
       }
       items.push({ depth, svg })
       continue
@@ -1290,27 +1417,8 @@ export function renderFloor(
           svg += `<line class="hv-slideframe" x1="${r1(m1[0])}" y1="${r1(m1[1])}" x2="${r1(m2[0])}" y2="${r1(m2[1])}"/>`
         }
       }
-      if (sh) {
-        const closed = 1 - clamp(sh.position ?? 100, 0, 100) / 100
-        const zb = zt - (zt - z0) * closed
-        let slats = ''
-        if (closed > 0.01) {
-          slats = `<polygon class="hv-slats" points="${quad(zb, zt)}"/>`
-          for (let z = zt - 0.18; z > zb + 0.04; z -= 0.18) {
-            const p = project(o.mode, A[0], A[1], z)
-            const q = project(o.mode, B[0], B[1], z)
-            slats += `<line class="hv-slatl" x1="${r1(p[0])}" y1="${r1(p[1])}" x2="${r1(q[0])}" y2="${r1(q[1])}"/>`
-          }
-        }
-        const mid = project(o.mode, (A[0] + B[0]) / 2, (A[1] + B[1]) / 2, H + 0.64)
-        svg =
-          `<g class="hv-dev${sh.reachable ? '' : ' hv-off'}" data-ref="${esc(sh.ref)}" role="button" tabindex="0" aria-label="${label(sh)}">` +
-          svg +
-          slats +
-          `<g transform="translate(${r1(mid[0])},${r1(mid[1])}) scale(${o.unit.toFixed(4)})"><circle class="hv-hit" r="18"/>` +
-          pill(`${Math.round(sh.position ?? 0)}%`, { cls: o.selected === sh.ref ? 'hv-on' : '' }) +
-          '</g></g>'
-      }
+      if (w.opening)
+        items.push(...coverings3d(o, A, B, w.opening.len, z0, zt, H, coveringDraws(floor, w.opening, devices)))
     }
     items.push({ depth, svg })
   }

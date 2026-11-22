@@ -41,8 +41,10 @@ import {
   unitKey,
   wallRuns,
   wallUnits,
+  type Point,
   type WallUnit,
 } from './geometry'
+import { coveringDraws } from './coverings'
 import { KIND_LETTER, type LiveDevice } from './live'
 import { applyPreset, claimCovering, detach, presetCells, type OpeningPreset } from './openings'
 
@@ -861,6 +863,25 @@ export function renderEditor(
         `<line class="hv-ewinb" ${c}/>` +
         `<path class="hv-edoor${w.opening.glass ? ' hv-eglassdoor' : ''}${sel}" d="M${sw.hinge[0] * S},${sw.hinge[1] * S} L${sw.open[0] * S},${sw.open[1] * S} ` +
         `A${len},${len} 0 0 ${sw.sweep} ${sw.free[0] * S},${sw.free[1] * S}"/>`
+    }
+    // What covers the glass, on its side: a box line for what rolls, folds at
+    // the ends for curtains, a dashed line for an awning.
+    if (w.opening) {
+      const A: Point = [w.x1, w.y1]
+      const B: Point = [w.x2, w.y2]
+      for (const cd of coveringDraws(floor, w.opening, devices)) {
+        const n = cd.normal
+        const at = (t: number, k: number) =>
+          `${r1((A[0] + (B[0] - A[0]) * t + n[0] * k) * S)},${r1((A[1] + (B[1] - A[1]) * t + n[1] * k) * S)}`
+        if (cd.covering.kind === 'curtain') {
+          const zig = (t0: number, t1: number) =>
+            [0, 1, 2, 3, 4].map((i) => at(t0 + ((t1 - t0) * i) / 4, 0.2 + (i % 2 ? 0.12 : 0))).join(' ')
+          h += `<polyline class="hv-ecover" points="${zig(0, 0.15)}"/><polyline class="hv-ecover" points="${zig(1, 0.85)}"/>`
+        } else {
+          const dash = cd.covering.kind === 'awning' ? ' hv-ecover--dash' : ''
+          h += `<polyline class="hv-ecover${dash}" points="${at(0, 0.2)} ${at(1, 0.2)}"/>`
+        }
+      }
     }
     // A wide invisible line over every opening, so a finger can grab it.
     if (w.opening) h += `<line class="hv-ehit" data-opening="${esc(w.opening.id)}" ${c}/>`

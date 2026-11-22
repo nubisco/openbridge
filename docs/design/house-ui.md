@@ -44,7 +44,11 @@ the plan without leaving the outline.
 
 Shipped first (stage 2, `apps/ui/src/house/openings.ts`): one Door tool and
 one Window tool, and a door and window panel with the Coverings section. Their
-presets moved from the toolbar to the Library tab when it shipped.
+presets moved from the toolbar to the Library tab when it shipped. Every covering is
+drawn by its kind on its own side of the glass (`apps/ui/src/house/coverings.ts`
+works out which side is inside): a box and slats for what rolls, curtains in
+folds, an awning's canvas. A covering a device drives is drawn as the device
+reports it, one worked by hand is drawn open.
 
 One Door tool and one Window tool. Presets in the Library: wooden door (white),
 wooden door (brown), glazed swing door, sliding glass door, sliding window,
