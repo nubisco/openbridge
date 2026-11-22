@@ -196,7 +196,16 @@ step.
    editor, validated as described.
 4. **The editor in millimetres.** Walls drawn and edited as walls, thickness and
    height in the inspector, exact numbers typed in, snapping chosen (0.5 m,
-   10 cm, 1 cm, off), measurements shown while drawing.
+   10 cm, 1 cm, off), measurements shown while drawing. It ships in four
+   steps, each usable on its own:
+   1. Undo and redo (shipped). A step is the plan once a change settles: each
+      tap or drag when it ends, typing when it pauses. Whole copies of the
+      plan, in `house-model/history.ts`.
+   2. The editor edits the version 2 plan: the draft in millimetres, the
+      blueprint drawing walls as they are, snapping chosen, saved as version 2.
+   3. Walls as walls: a Wall tool, a wall selected and edited on its own, its
+      thickness and height in Properties, exact lengths typed in.
+   4. The ruler, and resizing the plan to match it (see house-ui.md).
 5. **The 3D view in millimetres.** Walls drawn with their real thickness, rooms
    of any shape.
 6. **IFC import.** Then, extracting the shared package for Keystone.
