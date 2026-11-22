@@ -1,3 +1,10 @@
+# [1.34.0](https://github.com/nubisco/openbridge/compare/v1.33.0...v1.34.0) (2026-11-22)
+
+
+### Features
+
+* **house:** export the house as IFC4 ([#53](https://github.com/nubisco/openbridge/issues/53)) ([a629f00](https://github.com/nubisco/openbridge/commit/a629f004c9c62e33a9036fc43c28c3330811b67c))
+
 # [1.33.0](https://github.com/nubisco/openbridge/compare/v1.32.0...v1.33.0) (2026-11-22)
 
 
