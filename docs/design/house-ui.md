@@ -31,11 +31,20 @@ Resizable from its left edge (PR #46). It has:
   on the plan yet, all draggable onto the canvas), **House** (an outline of
   floors, rooms and what is in each).
 
+Shipped in stage 2: the preview is `HouseStage` in its preview mode, handed a
+copy of the draft a moment after each change (not on a phone, where the
+blueprint is the only room there is). The Library is
+`components/house/HouseLibrary.vue`: tap an item and the next tap on the plan
+puts it down, or drag it there. Picking the Door, Window or Furniture tool
+opens the Library, and something put down from it opens Properties. The House
+tab is `components/house/HouseOutline.vue`, and picking a row selects it on
+the plan without leaving the outline.
+
 ## Doors and windows
 
 Shipped first (stage 2, `apps/ui/src/house/openings.ts`): one Door tool and
-one Window tool, each with its presets beside it in the toolbar until the
-Library tab exists, and a door and window panel with the Coverings section.
+one Window tool, and a door and window panel with the Coverings section. Their
+presets moved from the toolbar to the Library tab when it shipped.
 
 One Door tool and one Window tool. Presets in the Library: wooden door (white),
 wooden door (brown), glazed swing door, sliding glass door, sliding window,
