@@ -349,7 +349,7 @@ What it sends, and nothing else:
 
 Nothing about your home, your devices, your plugins, your network or you. The request goes to `https://downloads.nubisco.io/ping` with a `openbridge/<version>` user agent, times out after four seconds, is never retried and never delays startup. Offline installs simply send nothing.
 
-On the server, the install id is hashed with a secret before it is stored, so the value in `install.json` never reaches Nubisco's records. As with any web request, the server also sees your IP address and user agent. The IP address is used to work out the country and to tell installs apart within one day, and is kept only as a keyed hash, never in clear. Update checks are separate: they go to the npm registry and GitHub, under those services' own terms. The full wording is in the [Nubisco privacy policy](https://nubisco.io/privacy#installed-apps).
+On the server, the install id is hashed with a secret before it is stored, so the value in `install.json` never reaches Nubisco's records. As with any web request, the server also sees your IP address and user agent. The IP address is used to work out the country and to tell installs apart within one day, and is kept only as a keyed hash, never in clear. Update checks are separate: they go to the npm registry and GitHub, under those services' own terms. The full wording is in the [Nubisco privacy policy](https://nubisco.io/privacy#the-install-heartbeat).
 
 To turn it off, switch off **Anonymous install heartbeat** under Settings → Updates in the dashboard, or set it in `config.json`:
 
