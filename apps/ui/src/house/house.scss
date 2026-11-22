@@ -210,6 +210,53 @@
   stroke: #7d838b;
   stroke-width: 0.8;
 }
+// Coverings (scene.ts). A box a blind or shutter rolls into, a fabric blind,
+// curtains in folds, and an awning's canvas.
+.hv-box2d {
+  stroke: #8d939b;
+  stroke-width: 2;
+}
+.hv-blind2d {
+  stroke: #e9dcc4;
+  stroke-width: 4;
+}
+.hv-curtain2d {
+  fill: none;
+  stroke: #c98f6b;
+  stroke-width: 1.6;
+  stroke-linejoin: round;
+}
+.hv-awning2d {
+  fill: rgba(214, 120, 84, 0.22);
+  stroke: #c96f4f;
+  stroke-width: 1.2;
+  stroke-dasharray: 4 3;
+}
+.hv-rollbox {
+  fill: #a9afb6;
+  stroke: #7d838b;
+  stroke-width: 0.6;
+}
+.hv-blind {
+  fill: rgba(240, 230, 210, 0.92);
+  stroke: #cdbfa6;
+  stroke-width: 0.6;
+}
+.hv-curtain {
+  fill: rgba(214, 160, 124, 0.85);
+  stroke: #b47e5c;
+  stroke-width: 0.6;
+}
+.hv-curtainl {
+  stroke: #a8714f;
+  stroke-width: 0.7;
+  opacity: 0.7;
+}
+.hv-awning {
+  fill: rgba(214, 120, 84, 0.85);
+  stroke: #a95a3e;
+  stroke-width: 0.8;
+}
 .hv-doorframe {
   stroke: #7a5232;
   stroke-width: 2;
@@ -538,6 +585,16 @@
   stroke: #5fe0ff;
   stroke-width: calc(3px / var(--hv-zoom, 1));
   pointer-events: none;
+}
+.hv-ecover {
+  fill: none;
+  stroke: #ffc59a;
+  stroke-width: calc(1.4px / var(--hv-zoom, 1));
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+.hv-ecover--dash {
+  stroke-dasharray: calc(4px / var(--hv-zoom, 1)) calc(3px / var(--hv-zoom, 1));
 }
 .hv-ewinb {
   stroke: #0b1c3a;
