@@ -2,6 +2,16 @@
   <div class="house">
     <component :is="topbarRight.Outlet">
       <div class="house__topbar">
+        <!-- The plan as a building model other software can open: what is drawn, saved or not. -->
+        <NbButton
+          v-if="!phone && (mode === 'edit' || house.hasPlan)"
+          size="sm"
+          variant="ghost"
+          icon="download-simple"
+          @click="exportIfc"
+        >
+          Export IFC
+        </NbButton>
         <template v-if="mode === 'edit'">
           <NbButton size="sm" variant="ghost" :disabled="saving" @click="discard">Discard</NbButton>
           <NbButton size="sm" variant="primary" :loading="saving" @click="save">Save plan</NbButton>
@@ -85,6 +95,9 @@ import { useInspectorStore } from '@/stores/inspector'
 import { useLayoutStore } from '@/stores/layout'
 import { emptyPlan, tidy } from '@/house/editor'
 import { setPower, tapToggles } from '@/house/control'
+import { downloadIfc, houseIfc } from '@/house/ifc'
+import { fromV1 } from '@house-model/convert'
+import type { HousePlan as PlanV1 } from '@house-model/v1'
 import HouseStage from '@/components/house/HouseStage.vue'
 import HouseEditor from '@/components/house/HouseEditor.vue'
 import '@/house/house.scss'
@@ -223,6 +236,23 @@ async function save() {
     toast.error((e as Error).message, { title: 'Could not save the plan' })
   } finally {
     saving.value = false
+  }
+}
+
+/**
+ * Save the house as an IFC file: the drawing being edited, saved or not, or
+ * the saved plan. Built in the browser by the model's own writer.
+ */
+function exportIfc() {
+  try {
+    const plan =
+      mode.value === 'edit' && draft.value
+        ? fromV1(tidy(JSON.parse(JSON.stringify(draft.value))) as PlanV1, house.model).plan
+        : house.model
+    if (!plan) return
+    downloadIfc(houseIfc(plan, house.byRef, 'Home'), 'Home')
+  } catch (e) {
+    toast.error((e as Error).message, { title: 'Could not export the plan' })
   }
 }
 
