@@ -1,3 +1,10 @@
+# [1.33.0](https://github.com/nubisco/openbridge/compare/v1.32.0...v1.33.0) (2026-11-22)
+
+
+### Features
+
+* **house:** draw every covering by its kind, and the ones worked by hand ([#52](https://github.com/nubisco/openbridge/issues/52)) ([a8c95b5](https://github.com/nubisco/openbridge/commit/a8c95b585cc856b6b38022927c04ae569628706c))
+
 # [1.32.0](https://github.com/nubisco/openbridge/compare/v1.31.1...v1.32.0) (2026-11-22)
 
 
