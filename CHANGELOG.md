@@ -1,3 +1,10 @@
+# [1.37.0](https://github.com/nubisco/openbridge/compare/v1.36.0...v1.37.0) (2026-11-23)
+
+
+### Features
+
+* **house:** select a wall to set its thickness and height ([#56](https://github.com/nubisco/openbridge/issues/56)) ([542d279](https://github.com/nubisco/openbridge/commit/542d279b7ebdf9a4386ed834e2336aeacf4763da))
+
 # [1.36.0](https://github.com/nubisco/openbridge/compare/v1.35.0...v1.36.0) (2026-11-23)
 
 
