@@ -411,7 +411,23 @@
                   />
                 </NbField>
               </div>
-              <p class="house-editor__muted">
+              <template v-if="wall.drawn">
+                <NbField v-slot="{ id }" label="Length (m)" orientation="stack">
+                  <NbNumberInput
+                    :id="id"
+                    :model-value="Number(metres(wallLength))"
+                    :min="0.1"
+                    :step="lengthStep"
+                    size="sm"
+                    @update:model-value="setDrawnWallLength"
+                  />
+                </NbField>
+                <div class="house-editor__row">
+                  <span />
+                  <NbButton size="sm" variant="danger" icon="trash" @click="deleteDrawnWall">Remove</NbButton>
+                </div>
+              </template>
+              <p v-else class="house-editor__muted">
                 Walls follow the rooms: move or resize a room to move its walls. A wall is cut where it changes from
                 between two rooms to outside.
               </p>
@@ -664,6 +680,7 @@ import HouseStage from '@/components/house/HouseStage.vue'
 import type { LibraryItem } from '@/house/library'
 import { RULER_SIZE } from '@/house/ruler'
 import { History } from '@house-model/history'
+import type { HouseDrawnWall } from '@house-model/v1'
 import type {
   HouseFloor,
   HouseFurniture,
@@ -693,6 +710,7 @@ import {
   setSnap,
   snap as snapTo,
   toMm,
+  type Point,
 } from '@/house/geometry'
 import {
   FURNITURE_NAME,
@@ -728,6 +746,12 @@ import {
   setPlotSize,
   setWall,
   floorWalls,
+  addDrawnWall,
+  moveDrawnWall,
+  removeDrawnWall,
+  setDrawnLength,
+  wallPoint,
+  onDrawnWall,
   shapeValid,
 } from '@/house/editor'
 import { KIND_LABEL, LOOK_LABEL, type LiveDevice } from '@/house/live'
@@ -788,6 +812,7 @@ const toast = useToast()
 // can still be changed afterwards in the room's panel.
 const TOOLS = [
   { id: 'select', label: 'Select', icon: 'cursor' },
+  { id: 'wall', label: 'Wall', icon: 'wall' },
   { id: 'room', label: 'Room', icon: 'bounding-box' },
   { id: 'outdoor', label: 'Garden', icon: 'tree' },
   { id: 'paved', label: 'Paving', icon: 'squares-four' },
@@ -843,7 +868,18 @@ const GLOW_COLOURS = [
   { label: 'Red', value: '#ff5a4d' },
 ]
 
-type Tool = 'select' | 'room' | 'outdoor' | 'paved' | 'pool' | 'door' | 'window' | 'open' | 'radiator' | 'furniture'
+type Tool =
+  | 'select'
+  | 'wall'
+  | 'room'
+  | 'outdoor'
+  | 'paved'
+  | 'pool'
+  | 'door'
+  | 'window'
+  | 'open'
+  | 'radiator'
+  | 'furniture'
 const isAreaTool = (t: Tool): t is 'room' | 'outdoor' | 'paved' | 'pool' =>
   t === 'room' || t === 'outdoor' || t === 'paved' || t === 'pool'
 const tool = ref<Tool>('room')
@@ -864,6 +900,8 @@ const windowPreset = ref(WINDOW_PRESETS[0].id)
 const furnitureKind = ref<HouseFurnitureKind>('table')
 const armed = ref<string | null>(null)
 const draft = ref<Pick<HouseRoom, 'x' | 'y' | 'w' | 'h'> | null>(null)
+/** A wall being drawn with the Wall tool. */
+const draftWall = ref<{ a: Point; b: Point } | null>(null)
 const svgEl = ref<SVGSVGElement | null>(null)
 const unit = ref(1)
 
@@ -879,6 +917,7 @@ const wall = computed(() =>
 const wallText = computed(() => {
   const w = wall.value
   if (!w) return ''
+  if (w.drawn || !w.axis) return 'A wall drawn on its own. Drag it to move it, or an end to move that end.'
   const mid = (w.start + w.end) / 2
   const k = 0.01
   const [a, b] =
@@ -1065,6 +1104,7 @@ const markup = computed(() =>
     selectedFurniture: selFurniture.value,
     selectedWall: selWall.value,
     draft: draft.value,
+    draftWall: draftWall.value,
     unit: unit.value,
     zoom: zoom.value,
     showHandles: tool.value === 'select',
@@ -1076,7 +1116,8 @@ const help = computed(() => {
   if (armed.value) return `Now tap the plan where "${props.devices.get(armed.value)?.name ?? 'it'}" is.`
   return {
     select: 'Drag a room to move it, or its corners to resize it. Drag a device to move it. Tap anything to edit it.',
-    room: 'Drag on the grid to draw a room. It snaps to half a metre. Draw one inside another for a room within a room.',
+    wall: 'Drag from one end of a wall to the other: a garden wall, a partition, a fence. Rooms bring their own walls. Its ends catch on corners and other walls.',
+    room: 'Drag on the grid to draw a room. It snaps to the step chosen below. Draw one inside another for a room within a room.',
     outdoor: 'Drag on the grid to draw a garden or a lawn. It has no walls.',
     paved:
       'Drag on the grid to draw paving: a terrace, a path, a drive, or the deck round the pool. Draw the pool inside it.',
@@ -1171,6 +1212,25 @@ function setRoomSize(side: 'w' | 'h', v: number | null) {
     r[side] = before
     toast.warning('At that size the room would overlap its own wings or come apart from them.')
   }
+}
+
+/** A drawn wall's length, in cells. */
+const wallLength = computed(() => {
+  const d = wall.value?.drawn
+  return d ? Math.hypot(d.b[0] - d.a[0], d.b[1] - d.a[1]) : 0
+})
+
+function setDrawnWallLength(v: number | null) {
+  const d = wall.value?.drawn
+  if (!d || v === null || v <= 0) return
+  if (!setDrawnLength(floor.value, d, toMm(v * CELLS_PER_M)))
+    toast.warning('At that length it would run along another wall.')
+}
+
+function deleteDrawnWall() {
+  const d = wall.value?.drawn
+  if (d) removeDrawnWall(floor.value, d.id)
+  selWall.value = null
 }
 
 function setWallSize(what: 'thickness' | 'height', v: number | null) {
@@ -1461,6 +1521,16 @@ type Drag =
   | { type: 'rmove'; r: HouseRadiator; grab: number }
   | { type: 'rresize'; r: HouseRadiator; end: 'start' | 'end' }
   | { type: 'fdraw'; x0: number; y0: number }
+  | { type: 'wdraw'; a: Point }
+  | {
+      type: 'wmove'
+      d: HouseDrawnWall
+      start: { x: number; y: number }
+      a: Point
+      b: Point
+      carried: ReturnType<typeof onDrawnWall>
+    }
+  | { type: 'wend'; d: HouseDrawnWall; end: 'a' | 'b' }
   | { type: 'fmove'; f: HouseFurniture; grab: { x: number; y: number } }
   | { type: 'fresize'; f: HouseFurniture; corner: string; o: { x1: number; y1: number; x2: number; y2: number } }
 let drag: Drag | null = null
@@ -1575,7 +1645,12 @@ function onDown(e: PointerEvent) {
   const t = e.target instanceof Element ? e.target : null
   if (armed.value) return placeAt(armed.value, p)
 
-  if (isAreaTool(tool.value) || wingFor.value) {
+  if (tool.value === 'wall') {
+    const a = wallPoint(floor.value, p.x, p.y)
+    clearSelection()
+    drag = { type: 'wdraw', a }
+    draftWall.value = { a, b: a }
+  } else if (isAreaTool(tool.value) || wingFor.value) {
     const x0 = clamp(snapTo(p.x), 0, pw)
     const y0 = clamp(snapTo(p.y), 0, ph)
     drag = { type: 'draw', x0, y0 }
@@ -1620,7 +1695,10 @@ function onDown(e: PointerEvent) {
     const dev = t?.closest('[data-ref]')
     const rm = t?.closest('[data-room]')
     const wl = t?.closest('[data-wall]')
-    if (handle && room.value) {
+    const wend = t?.closest('[data-whandle]')?.getAttribute('data-whandle')
+    if (wend && wall.value?.drawn) {
+      drag = { type: 'wend', d: wall.value.drawn, end: wend === 'b' ? 'b' : 'a' }
+    } else if (handle && room.value) {
       const [index, corner] = (handle.getAttribute('data-handle') as string).split(':')
       const r = roomRects(room.value)[Number(index)]
       if (!r) return
@@ -1640,6 +1718,9 @@ function onDown(e: PointerEvent) {
     } else if (wl) {
       clearSelection()
       selWall.value = wl.getAttribute('data-wall')
+      // A drawn wall moves when dragged. A room's wall moves with its room.
+      const d = wall.value?.drawn
+      if (d) drag = { type: 'wmove', d, start: p, a: [...d.a], b: [...d.b], carried: onDrawnWall(floor.value, d) }
     } else if (rm) {
       const r = floor.value.rooms.find((x) => x.id === rm.getAttribute('data-room'))
       if (!r) return
@@ -1704,6 +1785,18 @@ function onMove(e: PointerEvent) {
       w: Math.abs(x - drag.x0),
       h: Math.abs(y - drag.y0),
     }
+  } else if (drag.type === 'wdraw') {
+    draftWall.value = { a: drag.a, b: wallPoint(floor.value, p.x, p.y, drag.a) }
+  } else if (drag.type === 'wmove') {
+    const dx = snapTo(p.x - drag.start.x, true)
+    const dy = snapTo(p.y - drag.start.y, true)
+    const by = (q: Point): Point => [toMm(q[0] + dx), toMm(q[1] + dy)]
+    if (moveDrawnWall(floor.value, drag.d, by(drag.a), by(drag.b)))
+      for (const c of drag.carried) Object.assign(c.o, { x: toMm(c.x + dx), y: toMm(c.y + dy) })
+  } else if (drag.type === 'wend') {
+    const other = drag.end === 'a' ? drag.d.b : drag.d.a
+    const q = wallPoint(floor.value, p.x, p.y, other, drag.d.id)
+    moveDrawnWall(floor.value, drag.d, drag.end === 'a' ? q : drag.d.a, drag.end === 'b' ? q : drag.d.b)
   } else if (drag.type === 'fmove') {
     moveFurniture(props.plan, drag.f, p.x, p.y, drag.grab)
   } else if (drag.type === 'fresize') {
@@ -1768,7 +1861,15 @@ function onUp(e?: PointerEvent) {
     panning.value = false
     return
   }
-  if (drag?.type === 'fdraw') {
+  if (drag?.type === 'wdraw') {
+    const w = draftWall.value
+    draftWall.value = null
+    if (w && Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]) >= 0.2) {
+      const d = addDrawnWall(floor.value, w.a, w.b)
+      if (d) selWall.value = `d:${d.id}`
+      else toast.warning('There is already a wall along there.')
+    }
+  } else if (drag?.type === 'fdraw') {
     const d = draft.value
     draft.value = null
     // A drag draws it to size. A tap, or a drag too small to mean anything, puts down the usual size.

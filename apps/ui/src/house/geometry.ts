@@ -140,14 +140,36 @@ export class Walls {
     }
   }
 
-  /** A floor's walls: the outlines of its rooms that have walls. */
+  /**
+   * A floor's walls: the outlines of its rooms that have walls, and the
+   * walls drawn on their own along x or y. One drawn at an angle holds no
+   * doors, so it is not among them.
+   */
   static of(floor: HouseFloor): Walls {
-    return new Walls(floor.rooms.filter((r) => r.kind === 'room').flatMap(roomOutline))
+    const drawn = (floor.drawnWalls ?? []).flatMap((d): WallSpan[] => {
+      const axis = drawnAxis(d)
+      if (!axis) return []
+      const i = axis === 'h' ? 0 : 1
+      return [
+        {
+          axis,
+          line: d.a[1 - i],
+          start: Math.min(d.a[i], d.b[i]),
+          end: Math.max(d.a[i], d.b[i]),
+        },
+      ]
+    })
+    return new Walls([...floor.rooms.filter((r) => r.kind === 'room').flatMap(roomOutline), ...drawn])
   }
 
   /** The stretch of wall that holds all of `[s, e]` on a line, if one does. */
   holding(axis: 'h' | 'v', line: number, s: number, e: number): [number, number] | undefined {
     return this.lines.get(lineKey(axis, line))?.find(([a, b]) => mmOf(a) <= mmOf(s) && mmOf(e) <= mmOf(b))
+  }
+
+  /** Whether any wall on a line runs over some of `[s, e]`. */
+  overlapping(axis: 'h' | 'v', line: number, s: number, e: number): boolean {
+    return !!this.lines.get(lineKey(axis, line))?.some(([a, b]) => mmOf(a) < mmOf(e) && mmOf(s) < mmOf(b))
   }
 
   /** The wall point nearest (x, y), within `reach` cells. */
@@ -258,6 +280,11 @@ export interface WallRun {
  * run as one shape keeps the scene to a few hundred nodes and joins without
  * seams.
  */
+/** Whether a drawn wall runs along x (`h`) or y (`v`), or at an angle (null). */
+export function drawnAxis(d: { a: [number, number]; b: [number, number] }): 'h' | 'v' | null {
+  return same(d.a[1], d.b[1]) ? 'h' : same(d.a[0], d.b[0]) ? 'v' : null
+}
+
 export function wallRuns(floor: HouseFloor, walls = Walls.of(floor)): WallRun[] {
   // Openings that still fit, first come first served where two overlap.
   const kept: HouseOpening[] = []
@@ -282,6 +309,11 @@ export function wallRuns(floor: HouseFloor, walls = Walls.of(floor)): WallRun[] 
       at = span[1]
     }
     if (mmOf(at) < mmOf(end)) runs.push(run(at, end, null))
+  }
+  // Walls drawn at an angle: plain wall, end to end.
+  for (const d of floor.drawnWalls ?? []) {
+    if (drawnAxis(d)) continue
+    runs.push({ type: 'wall', opening: null, axis: 'h', x1: d.a[0], y1: d.a[1], x2: d.b[0], y2: d.b[1] })
   }
   return runs
 }

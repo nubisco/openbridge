@@ -1,4 +1,4 @@
-import type { HouseWallSpec, OpeningSpec } from '@house-model/v1'
+import type { HouseDrawnWall, HouseWallSpec, OpeningSpec } from '@house-model/v1'
 import type { Plan } from '@house-model/v2'
 const BASE = '/api'
 
@@ -359,6 +359,7 @@ export interface HouseFloor {
   radiators?: HouseRadiator[]
   furniture?: HouseFurniture[]
   walls?: HouseWallSpec[]
+  drawnWalls?: HouseDrawnWall[]
 }
 
 export interface HousePlan {

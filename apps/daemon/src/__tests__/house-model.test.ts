@@ -255,6 +255,41 @@ describe('plans measured to the millimetre', () => {
   })
 })
 
+describe('walls drawn on their own', () => {
+  function drawn(): HousePlan {
+    const p = v1()
+    // A garden wall drawn right to left, a door in it, and a fence at an angle.
+    p.floors[0].drawnWalls = [
+      { id: 'gw', a: [28, 16], b: [20, 16], thickness: 200, height: 1800 },
+      { id: 'fence', a: [1, 1], b: [5, 4], thickness: 50, height: 1200 },
+    ]
+    p.floors[0].openings.push({ id: 'gate', type: 'door', axis: 'h', x: 22, y: 16, len: 2 })
+    return p
+  }
+
+  it('become walls of their own, turned to run towards +x', () => {
+    const plan = validatePlan(fromV1(drawn()).plan)
+    const g = storey(plan, 'g')
+    expect(g.walls.find((w) => w.id === 'gw')).toEqual({
+      id: 'gw',
+      a: [10000, 8000],
+      b: [14000, 8000],
+      thickness: 200,
+      height: 1800,
+    })
+    expect(g.walls.find((w) => w.id === 'fence')).toMatchObject({ a: [500, 500], b: [2500, 2000] })
+    expect(g.openings.find((o) => o.id === 'gate')).toMatchObject({ wall: 'gw', at: 1000, width: 1000 })
+  })
+
+  it('come back as drawn walls, not as room walls', () => {
+    const plan = fromV1(drawn()).plan
+    const view = toV1(plan)
+    expect(view.floors[0].drawnWalls?.map((w) => w.id)).toEqual(['gw', 'fence'])
+    expect(view.floors[0].walls?.some((w) => w.y === 16)).toBe(false)
+    expect(fromV1(view, plan).plan).toEqual(plan)
+  })
+})
+
 describe('wall thickness and height set in the editor', () => {
   it('reach the version 1 view, and come back', () => {
     const plan = fromV1(v1()).plan

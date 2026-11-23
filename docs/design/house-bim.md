@@ -218,8 +218,12 @@ step.
       a room's width and depth typed in. Walls still follow room edges, so
       the editor keeps what is set on one in the floor's `walls` (version 1,
       by where the wall is), and the saved plan's wall that overlaps it most
-      takes it. Then the version 2 editor: a Wall tool, free standing and
-      angled walls, rooms of any shape.
+      takes it. Next, the Wall tool (shipped): walls drawn on their own, a
+      garden wall, a partition, a fence, at any angle, with their own
+      thickness and height. A version 1 floor carries them as `drawnWalls`,
+      and the plan's walls that follow no room edge come back as them. One
+      along x or y holds doors, windows and radiators, which move with it.
+      Then rooms of any shape.
    4. The ruler, and resizing the plan to match it (see house-ui.md).
 5. **The 3D view in millimetres.** Walls drawn with their real thickness, rooms
    of any shape.

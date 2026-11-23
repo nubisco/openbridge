@@ -159,9 +159,25 @@ function specFor(floor: V1.HouseFloor, shape: Pick<Wall, 'a' | 'b'>): V1.HouseWa
     .sort((x, y) => y.o - x.o)[0]?.w
 }
 
+/**
+ * A drawn wall in millimetres. One along x or y is turned to run towards +x
+ * or +y, as the walls made from rooms do, so doors on it name their sides
+ * the same way.
+ */
+function drawnWall(d: V1.HouseDrawnWall): Wall {
+  let a: Point = [mm(d.a[0]), mm(d.a[1])]
+  let b: Point = [mm(d.b[0]), mm(d.b[1])]
+  const axis = axisOf(a, b)
+  if (axis && b[axis === 'h' ? 0 : 1] < a[axis === 'h' ? 0 : 1]) [a, b] = [b, a]
+  return { id: d.id, a, b, thickness: d.thickness, height: d.height }
+}
+
 function makeWalls(floor: V1.HouseFloor, prev: Wall[]): Wall[] {
-  // A wall's id must not clash with a door's or radiator's on the same storey.
-  const reserved = new Set([...floor.openings, ...(floor.radiators ?? [])].map((x) => x.id))
+  // A wall's id must not clash with a door's or radiator's on the same storey,
+  // or with a drawn wall's.
+  const reserved = new Set(
+    [...floor.openings, ...(floor.radiators ?? []), ...(floor.drawnWalls ?? [])].map((x) => x.id),
+  )
   const used = new Set<string>()
   const walls: Wall[] = []
   for (const l of wallLines(floor)) {
@@ -187,6 +203,7 @@ function makeWalls(floor: V1.HouseFloor, prev: Wall[]): Wall[] {
       height: spec?.height ?? before?.height ?? DEFAULTS.wallHeight,
     })
   }
+  for (const d of floor.drawnWalls ?? []) walls.push(drawnWall(d))
   return walls
 }
 
@@ -524,9 +541,23 @@ export function toV1(p: Plan): V1.HousePlan {
       return out
     })
     if (furniture.length) floor.furniture = furniture
+    // A wall that follows no room edge was drawn on its own.
+    const fromRooms = wallLines(floor).map((l) => {
+      const [a, b] = lineEnds(l)
+      return { a, b }
+    })
+    const drawn = s.walls.filter((w) => !fromRooms.some((l) => overlap(l, w) > 0))
+    if (drawn.length)
+      floor.drawnWalls = drawn.map((w) => ({
+        id: w.id,
+        a: [cells(w.a[0]), cells(w.a[1])],
+        b: [cells(w.b[0]), cells(w.b[1])],
+        thickness: w.thickness,
+        height: w.height,
+      }))
     const specs = s.walls.flatMap((w): V1.HouseWallSpec[] => {
       const axis = axisOf(w.a, w.b)
-      if (!axis) return []
+      if (!axis || drawn.includes(w)) return []
       const i = axis === 'h' ? 0 : 1
       const lo = Math.min(w.a[i], w.b[i])
       const len = cells(Math.abs(w.b[i] - w.a[i]))

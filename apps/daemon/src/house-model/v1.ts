@@ -212,6 +212,19 @@ export interface HouseWallSpec {
   height: number
 }
 
+/**
+ * A wall drawn with the Wall tool: one that does not follow a room edge (a
+ * garden wall, a partition), from `a` to `b` in cells, at any angle. One
+ * along x or y runs towards +x or +y, and can hold doors and windows.
+ */
+export interface HouseDrawnWall {
+  id: string
+  a: [number, number]
+  b: [number, number]
+  thickness: number
+  height: number
+}
+
 export interface HouseFloor {
   id: string
   name: string
@@ -226,6 +239,8 @@ export interface HouseFloor {
   furniture?: HouseFurniture[]
   /** Thickness and height of walls, from version 2 or as the editor set them. */
   walls?: HouseWallSpec[]
+  /** Walls drawn on their own, not following a room. */
+  drawnWalls?: HouseDrawnWall[]
 }
 
 export interface HousePlan {
