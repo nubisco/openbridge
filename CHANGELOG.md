@@ -1,3 +1,10 @@
+# [1.35.0](https://github.com/nubisco/openbridge/compare/v1.34.0...v1.35.0) (2026-11-23)
+
+
+### Features
+
+* **house:** undo and redo in the plan editor ([#54](https://github.com/nubisco/openbridge/issues/54)) ([28611fd](https://github.com/nubisco/openbridge/commit/28611fd8e9a841be2e29e6d02f7415f07919de56))
+
 # [1.34.0](https://github.com/nubisco/openbridge/compare/v1.33.0...v1.34.0) (2026-11-22)
 
 
