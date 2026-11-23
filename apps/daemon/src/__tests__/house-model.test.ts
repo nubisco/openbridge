@@ -255,6 +255,29 @@ describe('plans measured to the millimetre', () => {
   })
 })
 
+describe('wall thickness and height set in the editor', () => {
+  it('reach the version 1 view, and come back', () => {
+    const plan = fromV1(v1()).plan
+    const view = toV1(plan)
+    expect(view.floors[0].walls?.length).toBe(storey(plan, 'g').walls.length)
+    expect(fromV1(view, plan).plan).toEqual(plan)
+  })
+
+  it('win over what the wall had, on the wall they overlap most', () => {
+    const plan = fromV1(v1()).plan
+    const view = toV1(plan)
+    // The wall between the living room and the kitchen, along x = 12 cells.
+    const spec = view.floors[0].walls!.find((w) => w.axis === 'v' && w.x === 12)!
+    Object.assign(spec, { thickness: 150, height: 3000 })
+    const after = storey(fromV1(view, plan).plan, 'g').walls
+    const between = after.filter((w) => w.a[0] === 6000 && w.b[0] === 6000)
+    expect(between.map((w) => [w.thickness, w.height])).toEqual([[150, 3000]])
+    // Every other wall is as it was.
+    const others = (p: Plan) => storey(p, 'g').walls.filter((w) => !(w.a[0] === 6000 && w.b[0] === 6000))
+    expect(after.filter((w) => !(w.a[0] === 6000 && w.b[0] === 6000))).toEqual(others(plan))
+  })
+})
+
 describe('saving from the version 1 editor keeps what it cannot say', () => {
   function edited(): Plan {
     const plan = fromV1(v1()).plan

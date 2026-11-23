@@ -27,6 +27,7 @@ import {
   FURNITURE_BACK,
   furnitureBack,
   oppositeSide,
+  CELL_MM,
   mmOf,
   openingFits,
   openingLine,
@@ -49,6 +50,9 @@ import {
   type WallSpan,
   type WallUnit,
 } from './geometry'
+import { DEFAULTS } from '@house-model/v2'
+import { wallLines } from '@house-model/convert'
+import type { HouseFloor as FloorV1 } from '@house-model/v1'
 import { coveringDraws } from './coverings'
 import { KIND_LETTER, type LiveDevice } from './live'
 import { applyPreset, claimCovering, detach, presetCells, type OpeningPreset } from './openings'
@@ -388,6 +392,78 @@ export function resizeOpening(floor: HouseFloor, o: HouseOpening, end: 'start' |
   if (!fitsFree(floor, next)) return false
   Object.assign(o, next)
   return true
+}
+
+// ─── Walls ──────────────────────────────────────────────────────────────────
+// Walls follow the room edges. What the person sets on one (thickness,
+// height) is kept on the floor by where the wall is, and the plan's walls
+// take it from there when saved (house-model/convert.ts).
+
+/** A wall of a floor, in cells, with what it is built as. */
+export interface FloorWall {
+  /** Where it is, as a key: the same wall keeps it while rooms do not move. */
+  key: string
+  axis: 'h' | 'v'
+  line: number
+  start: number
+  end: number
+  /** Between two rooms, rather than with a room on one side only. */
+  inner: boolean
+  /** Millimetres. */
+  thickness: number
+  height: number
+}
+
+/** Every wall of a floor, cut where it changes from between rooms to outside, as the saved plan cuts them. */
+export function floorWalls(floor: HouseFloor): FloorWall[] {
+  return wallLines(floor as unknown as FloorV1).map((l) => {
+    const [line, start, end] = [l.line / CELL_MM, l.start / CELL_MM, l.end / CELL_MM]
+    const spec = specOn(floor, l.axis, line, start, end)
+    return {
+      key: `${l.axis}${l.line}_${l.start}`,
+      axis: l.axis,
+      line,
+      start,
+      end,
+      inner: l.inner,
+      thickness: spec?.thickness ?? (l.inner ? DEFAULTS.innerWall : DEFAULTS.outerWall),
+      height: spec?.height ?? DEFAULTS.wallHeight,
+    }
+  })
+}
+
+/** The spec on a line that overlaps a stretch of it most. */
+function specOn(floor: HouseFloor, axis: 'h' | 'v', line: number, start: number, end: number) {
+  let best: NonNullable<HouseFloor['walls']>[number] | undefined
+  let most = 0
+  for (const w of floor.walls ?? []) {
+    if (w.axis !== axis || !same(openingLine(w), line)) continue
+    const [s, e] = openingSpan(w)
+    const o = mmOf(Math.min(e, end)) - mmOf(Math.max(s, start))
+    if (o > most) {
+      most = o
+      best = w
+    }
+  }
+  return best
+}
+
+/** Set a wall's thickness or height. Any spec it overlaps gives way to one that is exactly this wall. */
+export function setWall(floor: HouseFloor, w: FloorWall, patch: { thickness?: number; height?: number }): void {
+  const keep = (floor.walls ?? []).filter((s) => {
+    if (s.axis !== w.axis || !same(openingLine(s), w.line)) return true
+    const [a, b] = openingSpan(s)
+    return mmOf(b) <= mmOf(w.start) || mmOf(a) >= mmOf(w.end)
+  })
+  keep.push({
+    axis: w.axis,
+    x: w.axis === 'h' ? w.start : w.line,
+    y: w.axis === 'v' ? w.start : w.line,
+    len: toMm(w.end - w.start),
+    thickness: patch.thickness ?? w.thickness,
+    height: patch.height ?? w.height,
+  })
+  floor.walls = keep
 }
 
 // ─── Radiators ──────────────────────────────────────────────────────────────
@@ -731,6 +807,7 @@ export interface EditorDrawOptions {
   selectedOpening: string | null
   selectedRadiator?: string | null
   selectedFurniture?: string | null
+  selectedWall?: string | null
   draft: Pick<HouseRoom, 'x' | 'y' | 'w' | 'h'> | null
   /** Screen pixels per editor unit, so labels and handles keep their size. */
   unit: number
@@ -852,11 +929,31 @@ export function renderEditor(
       h += `<text class="hv-edraft-label" x="${r1((d.x + d.w / 2) * S)}" y="${r1((d.y + d.h / 2) * S)}" font-size="${r1(fs)}">${metres(d.w)} × ${metres(d.h)} m</text>`
     }
   }
+  const walls = floorWalls(floor)
   for (const w of wallRuns(floor)) {
     const c = `x1="${w.x1 * S}" y1="${w.y1 * S}" x2="${w.x2 * S}" y2="${w.y2 * S}"`
     const sel = w.opening && w.opening.id === o.selectedOpening ? ' hv-sel' : ''
-    if (w.type === 'wall') h += `<line class="hv-ewall" ${c}/>`
-    else if (w.type === 'window') h += `<line class="hv-ewinb" ${c}/><line class="hv-ewin${sel}" ${c}/>`
+    if (w.type === 'wall') {
+      // As thick as it is built, a run of wall may be several walls (a
+      // thick outside one meeting a thin one between rooms).
+      const [a, b] = w.axis === 'h' ? [w.x1, w.x2] : [w.y1, w.y2]
+      const line = w.axis === 'h' ? w.y1 : w.x1
+      for (const fw of walls) {
+        if (fw.axis !== w.axis || !same(fw.line, line)) continue
+        const s = Math.max(a, fw.start)
+        const e = Math.min(b, fw.end)
+        if (mmOf(e) <= mmOf(s)) continue
+        const cc =
+          w.axis === 'h'
+            ? `x1="${r1(s * S)}" y1="${r1(line * S)}" x2="${r1(e * S)}" y2="${r1(line * S)}"`
+            : `x1="${r1(line * S)}" y1="${r1(s * S)}" x2="${r1(line * S)}" y2="${r1(e * S)}"`
+        const t = r1((fw.thickness / CELL_MM) * S)
+        const wsel = fw.key === o.selectedWall ? ' hv-sel' : ''
+        h +=
+          `<line class="hv-ewall${wsel}" style="stroke-width:max(${t}px, calc(2px / var(--hv-zoom, 1)))" ${cc}/>` +
+          `<line class="hv-ewhit" data-wall="${esc(fw.key)}" ${cc}/>`
+      }
+    } else if (w.type === 'window') h += `<line class="hv-ewinb" ${c}/><line class="hv-ewin${sel}" ${c}/>`
     else if (w.type === 'open') h += `<line class="hv-eopen${sel}" ${c}/>`
     else if (w.type === 'slider') {
       // Two panes, side by side and overlapping in the middle, as a plan

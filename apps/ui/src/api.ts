@@ -1,4 +1,4 @@
-import type { OpeningSpec } from '@house-model/v1'
+import type { HouseWallSpec, OpeningSpec } from '@house-model/v1'
 import type { Plan } from '@house-model/v2'
 const BASE = '/api'
 
@@ -358,6 +358,7 @@ export interface HouseFloor {
   placements: HousePlacement[]
   radiators?: HouseRadiator[]
   furniture?: HouseFurniture[]
+  walls?: HouseWallSpec[]
 }
 
 export interface HousePlan {

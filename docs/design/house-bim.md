@@ -212,8 +212,14 @@ step.
       algorithms work on any measurements, and the UI's walls are stretches
       along a line (`Walls` in `house/geometry.ts`). The live view and 3D
       draw the exact values too.
-   3. Walls as walls: a Wall tool, a wall selected and edited on its own, its
-      thickness and height in Properties, exact lengths typed in.
+   3. Walls as walls. Decided by Jose on 2026-11-23 to start with selectable
+      walls on the current editor (shipped): tap a wall with Select to set
+      its thickness and height, walls drawn as thick as they are built, and
+      a room's width and depth typed in. Walls still follow room edges, so
+      the editor keeps what is set on one in the floor's `walls` (version 1,
+      by where the wall is), and the saved plan's wall that overlaps it most
+      takes it. Then the version 2 editor: a Wall tool, free standing and
+      angled walls, rooms of any shape.
    4. The ruler, and resizing the plan to match it (see house-ui.md).
 5. **The 3D view in millimetres.** Walls drawn with their real thickness, rooms
    of any shape.

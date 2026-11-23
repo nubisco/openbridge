@@ -169,12 +169,38 @@
               <NbField v-slot="{ id }" label="Type" orientation="stack">
                 <NbSelect :id="id" v-model="room.kind" :options="ROOM_KINDS" size="sm" />
               </NbField>
-              <p class="house-editor__muted">
-                {{
-                  room.parts?.length
-                    ? `${metres(roomArea(room) / CELLS_PER_M)} m², in ${room.parts.length + 1} parts`
-                    : `${metres(room.w)} × ${metres(room.h)} m`
-                }}
+              <div class="house-editor__pair">
+                <NbField
+                  v-slot="{ id }"
+                  :label="room.parts?.length ? 'Main part width (m)' : 'Width (m)'"
+                  orientation="stack"
+                >
+                  <NbNumberInput
+                    :id="id"
+                    :model-value="room.w / CELLS_PER_M"
+                    :min="0.5"
+                    :step="plotStep"
+                    size="sm"
+                    @update:model-value="(v: number | null) => setRoomSize('w', v)"
+                  />
+                </NbField>
+                <NbField
+                  v-slot="{ id }"
+                  :label="room.parts?.length ? 'Main part depth (m)' : 'Depth (m)'"
+                  orientation="stack"
+                >
+                  <NbNumberInput
+                    :id="id"
+                    :model-value="room.h / CELLS_PER_M"
+                    :min="0.5"
+                    :step="plotStep"
+                    size="sm"
+                    @update:model-value="(v: number | null) => setRoomSize('h', v)"
+                  />
+                </NbField>
+              </div>
+              <p v-if="room.parts?.length" class="house-editor__muted">
+                {{ `${metres(roomArea(room) / CELLS_PER_M)} m², in ${room.parts.length + 1} parts` }}
               </p>
               <!-- A wing is another rectangle joined to the room along an edge: an L
              is one wing, a U two. -->
@@ -358,6 +384,38 @@
                 </div>
               </NbPanel>
             </template>
+
+            <NbPanel v-else-if="wall" title="Wall" :flat="true">
+              <p class="house-editor__muted">{{ wallText }}</p>
+              <div class="house-editor__pair">
+                <NbField v-slot="{ id }" label="Thickness (mm)" orientation="stack">
+                  <NbNumberInput
+                    :id="id"
+                    :model-value="wall.thickness"
+                    :min="10"
+                    :max="2000"
+                    :step="10"
+                    size="sm"
+                    @update:model-value="(v: number | null) => setWallSize('thickness', v)"
+                  />
+                </NbField>
+                <NbField v-slot="{ id }" label="Height (mm)" orientation="stack">
+                  <NbNumberInput
+                    :id="id"
+                    :model-value="wall.height"
+                    :min="100"
+                    :max="20000"
+                    :step="50"
+                    size="sm"
+                    @update:model-value="(v: number | null) => setWallSize('height', v)"
+                  />
+                </NbField>
+              </div>
+              <p class="house-editor__muted">
+                Walls follow the rooms: move or resize a room to move its walls. A wall is cut where it changes from
+                between two rooms to outside.
+              </p>
+            </NbPanel>
 
             <NbPanel v-else-if="radiator" title="Radiator" :flat="true">
               <NbField v-slot="{ id }" label="Width (m)" orientation="stack">
@@ -630,6 +688,7 @@ import {
   lightMount,
   radiatorRoom,
   roomArea,
+  roomAt,
   roomRects,
   setSnap,
   snap as snapTo,
@@ -667,6 +726,8 @@ import {
   renderEditor,
   replacePlan,
   setPlotSize,
+  setWall,
+  floorWalls,
   shapeValid,
 } from '@/house/editor'
 import { KIND_LABEL, LOOK_LABEL, type LiveDevice } from '@/house/live'
@@ -794,6 +855,8 @@ const selRef = ref<string | null>(null)
 const selOpening = ref<string | null>(null)
 const selRadiator = ref<string | null>(null)
 const selFurniture = ref<string | null>(null)
+/** The selected wall, by `FloorWall.key`. */
+const selWall = ref<string | null>(null)
 /** What the Door and Window tools put down next. */
 const doorPreset = ref(DOOR_PRESETS[0].id)
 const windowPreset = ref(WINDOW_PRESETS[0].id)
@@ -809,6 +872,24 @@ const room = computed(() => floor.value.rooms.find((r) => r.id === selRoom.value
 const opening = computed(() => floor.value.openings.find((o) => o.id === selOpening.value) ?? null)
 const piece = computed(() => (floor.value.furniture ?? []).find((f) => f.id === selFurniture.value) ?? null)
 const radiator = computed(() => (floor.value.radiators ?? []).find((r) => r.id === selRadiator.value) ?? null)
+const wall = computed(() =>
+  selWall.value ? (floorWalls(floor.value).find((w) => w.key === selWall.value) ?? null) : null,
+)
+/** "Outside wall of the Kitchen, 4.5 m long", or between which rooms. */
+const wallText = computed(() => {
+  const w = wall.value
+  if (!w) return ''
+  const mid = (w.start + w.end) / 2
+  const k = 0.01
+  const [a, b] =
+    w.axis === 'h'
+      ? [roomAt(floor.value, mid, w.line - k), roomAt(floor.value, mid, w.line + k)]
+      : [roomAt(floor.value, w.line - k, mid), roomAt(floor.value, w.line + k, mid)]
+  const walled = [a, b].filter((r) => r?.kind === 'room').map((r) => r!.name)
+  const long = `${metres(w.end - w.start)} m long`
+  if (w.inner && walled.length === 2) return `Between ${walled[0]} and ${walled[1]}, ${long}.`
+  return walled.length ? `Outside wall of ${walled[0]}, ${long}.` : `A wall ${long}.`
+})
 /** "Heats the Kitchen, from Heat pump", or why it does not. */
 const radiatorText = computed(() => {
   const r = radiator.value
@@ -982,6 +1063,7 @@ const markup = computed(() =>
     selectedOpening: selOpening.value,
     selectedRadiator: selRadiator.value,
     selectedFurniture: selFurniture.value,
+    selectedWall: selWall.value,
     draft: draft.value,
     unit: unit.value,
     zoom: zoom.value,
@@ -1032,6 +1114,7 @@ function removeWing(i: number) {
 
 function clearSelection() {
   wingFor.value = null
+  selWall.value = null
   selRoom.value = null
   selRef.value = null
   selOpening.value = null
@@ -1075,6 +1158,26 @@ async function deleteFloor() {
   removeFloor(props.plan, f.id)
   floorId.value = topFloor().id
   clearSelection()
+}
+
+/** Type a room's main rectangle to size, from its top left corner. */
+function setRoomSize(side: 'w' | 'h', v: number | null) {
+  const r = room.value
+  if (!r || v === null) return
+  const before = r[side]
+  const room0 = side === 'w' ? r.x : r.y
+  r[side] = clamp(toMm(v * CELLS_PER_M), 1, (side === 'w' ? props.plan.plot.w : props.plan.plot.h) - room0)
+  if (!shapeValid(r)) {
+    r[side] = before
+    toast.warning('At that size the room would overlap its own wings or come apart from them.')
+  }
+}
+
+function setWallSize(what: 'thickness' | 'height', v: number | null) {
+  const w = wall.value
+  if (!w || v === null) return
+  const [lo, hi] = what === 'thickness' ? [10, 2000] : [100, 20000]
+  setWall(floor.value, w, { [what]: clamp(Math.round(v), lo, hi) })
 }
 
 function deleteRoom() {
@@ -1516,6 +1619,7 @@ function onDown(e: PointerEvent) {
     const handle = t?.closest('[data-handle]')
     const dev = t?.closest('[data-ref]')
     const rm = t?.closest('[data-room]')
+    const wl = t?.closest('[data-wall]')
     if (handle && room.value) {
       const [index, corner] = (handle.getAttribute('data-handle') as string).split(':')
       const r = roomRects(room.value)[Number(index)]
@@ -1533,6 +1637,9 @@ function onDown(e: PointerEvent) {
       drag = { type: 'device', ref: selRef.value as string }
     } else if (grabFurniture(t, p)) {
       /* a piece of furniture, or one of its corners, is being dragged */
+    } else if (wl) {
+      clearSelection()
+      selWall.value = wl.getAttribute('data-wall')
     } else if (rm) {
       const r = floor.value.rooms.find((x) => x.id === rm.getAttribute('data-room'))
       if (!r) return
@@ -1827,6 +1934,9 @@ function pickOutline(p: OutlinePick) {
 watch(tool, (t) => {
   if (t === 'door' || t === 'window' || t === 'furniture') sideTab.value = 'library'
 })
+watch(selWall, (w) => {
+  if (w && sideTab.value === 'library') sideTab.value = 'properties'
+})
 watch(outlineSelected, () => {
   if (sideTab.value === 'library' && !outlineSelected.value.startsWith('floor:')) sideTab.value = 'properties'
 })
@@ -1932,6 +2042,7 @@ function restore(state: string | null) {
   if (selRadiator.value && !radiator.value) selRadiator.value = null
   if (selFurniture.value && !piece.value) selFurniture.value = null
   if (selRef.value && !placed.value) selRef.value = null
+  if (selWall.value && !wall.value) selWall.value = null
   canUndo.value = history.canUndo
   canRedo.value = history.canRedo
 }
@@ -2216,6 +2327,13 @@ $ruler: 20px;
   :deep(.nb-field) {
     margin-bottom: var(--nb-spacing-8);
   }
+}
+
+// Two short fields side by side: a width and a depth, a thickness and a height.
+.house-editor__pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--nb-spacing-8);
 }
 
 .house-editor__row {
