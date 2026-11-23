@@ -1,3 +1,10 @@
+# [1.41.0](https://github.com/nubisco/openbridge/compare/v1.40.0...v1.41.0) (2026-11-23)
+
+
+### Features
+
+* **house:** walls as solids in 3D, as thick and as high as they are built ([#60](https://github.com/nubisco/openbridge/issues/60)) ([28545fa](https://github.com/nubisco/openbridge/commit/28545faa79ac8375a52d4c83c505493a3cab7fa8))
+
 # [1.40.0](https://github.com/nubisco/openbridge/compare/v1.39.0...v1.40.0) (2026-11-23)
 
 
