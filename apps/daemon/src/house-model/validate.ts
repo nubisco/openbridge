@@ -16,6 +16,7 @@ import {
   WINDOW_OPERATIONS,
   isGlazed,
   type Covering,
+  type Dimension,
   type Furniture,
   type Opening,
   type Placement,
@@ -39,6 +40,7 @@ const LIMITS = {
   placements: 500,
   radiators: 300,
   furniture: 400,
+  dimensions: 200,
   /** 200 m, in millimetres. */
   site: 200_000,
   name: 80,
@@ -304,6 +306,21 @@ export function validatePlan(raw: unknown): Plan {
       return out
     })
 
+    const dimensionIds = new Set<string>()
+    const dimensions =
+      s.dimensions === undefined
+        ? []
+        : arr(s.dimensions, `${sp}.dimensions`, LIMITS.dimensions).map((dRaw, di): Dimension => {
+            const dp = `${sp}.dimensions[${di}]`
+            const d = obj(dRaw, dp)
+            const did = id(d.id, `${dp}.id`)
+            unique(dimensionIds, did, `${dp}.id`)
+            const a = point(d.a, `${dp}.a`)
+            const b = point(d.b, `${dp}.b`)
+            if (a[0] === b[0] && a[1] === b[1]) fail(dp, 'its ends are the same point')
+            return { id: did, a, b }
+          })
+
     return {
       id: sid,
       name: name(s.name, `${sp}.name`),
@@ -316,6 +333,7 @@ export function validatePlan(raw: unknown): Plan {
       radiators,
       furniture,
       placements,
+      ...(dimensions.length ? { dimensions } : {}),
     }
   })
 

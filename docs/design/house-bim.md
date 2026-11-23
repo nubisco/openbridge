@@ -233,7 +233,14 @@ step.
       go only on straight ones until the editor works on version 2. A space
       that is not a rectangle and has no rectangles hint comes back as a
       room drawn corner by corner.
-   4. The ruler, and resizing the plan to match it (see house-ui.md).
+   4. The ruler, and resizing the plan to match it (see house-ui.md),
+      shipped. Dimension lines are kept on their storey as `dimensions`
+      (version 2, optional, ends in millimetres) and on a version 1 floor
+      the same way, in cells. They are notes on the drawing, not part of
+      the building, so IFC export leaves them out. Their ends catch on
+      corners, wall ends and the ends of doors, windows and radiators, all
+      on wall centre lines, so a length measured inside a room is short by
+      half of each wall.
 5. **The 3D view in millimetres.** Walls drawn with their real thickness, rooms
    of any shape.
 6. **IFC import.** Then, extracting the shared package for Keystone.

@@ -66,3 +66,9 @@ radiators, furniture and devices, as one undo step. Heights do not change.
 The confirm step has "Keep door, window and furniture sizes", which moves them
 without resizing. It ships with the editor in millimetres (stage 4), because
 the 0.5 m grid would round the result.
+
+Shipped in stage 4. The resize is about the plot's corner, on every floor,
+and the plot grows with it. Wall thicknesses stay, as heights do. "Keep
+sizes" also keeps radiators and gates, and a door or radiator that would no
+longer fit its wall at its old size is scaled after all. The Ruler sits next
+to Select, and Select picks a dimension line too.

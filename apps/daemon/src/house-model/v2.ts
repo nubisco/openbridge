@@ -40,6 +40,15 @@ export interface Storey {
   radiators: Radiator[]
   furniture: Furniture[]
   placements: Placement[]
+  /** Dimension lines left on the plan by the editor's Ruler. Absent when there are none. */
+  dimensions?: Dimension[]
+}
+
+/** A measurement drawn on the plan, from `a` to `b`. Not part of the building. */
+export interface Dimension {
+  id: string
+  a: Point
+  b: Point
 }
 
 /**

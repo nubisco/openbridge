@@ -390,6 +390,30 @@
               </NbPanel>
             </template>
 
+            <NbPanel v-else-if="dim" title="Dimension" :flat="true">
+              <p class="house-editor__muted">
+                {{ metres(dimLength) }} m on the plan. Rooms are drawn to the middle of their walls, so measure from the
+                middle of a wall too.
+              </p>
+              <NbField v-slot="{ id }" label="Real length (m)" orientation="stack">
+                <NbNumberInput :id="id" v-model="dimTarget" :min="0.01" :max="200" :step="0.001" size="sm" />
+              </NbField>
+              <template v-if="dimFactor">
+                <p class="house-editor__muted">{{ dimFactorText }}</p>
+                <NbCheckbox v-model="keepSizes" label="Keep door, window and furniture sizes" />
+                <div class="house-editor__row house-editor__row--tight">
+                  <NbButton size="sm" variant="primary" icon="arrows-out" @click="resizeToMatch">
+                    Resize the plan to match
+                  </NbButton>
+                </div>
+              </template>
+              <p class="house-editor__muted">Drag an end to measure something else.</p>
+              <div class="house-editor__row">
+                <span />
+                <NbButton size="sm" variant="danger" icon="trash" @click="deleteDimension">Remove</NbButton>
+              </div>
+            </NbPanel>
+
             <NbPanel v-else-if="wall" title="Wall" :flat="true">
               <p class="house-editor__muted">{{ wallText }}</p>
               <div class="house-editor__pair">
@@ -685,7 +709,7 @@ import HouseStage from '@/components/house/HouseStage.vue'
 import type { LibraryItem } from '@/house/library'
 import { RULER_SIZE } from '@/house/ruler'
 import { History } from '@house-model/history'
-import type { HouseDrawnWall } from '@house-model/v1'
+import type { HouseDimension, HouseDrawnWall } from '@house-model/v1'
 import type {
   HouseFloor,
   HouseFurniture,
@@ -757,6 +781,11 @@ import {
   setDrawnLength,
   wallPoint,
   onDrawnWall,
+  addDimension,
+  dimensionLength,
+  removeDimension,
+  resizePlan,
+  rulerPoint,
   addPolygonRoom,
   moveCorner,
   shiftRoom,
@@ -820,6 +849,7 @@ const toast = useToast()
 // can still be changed afterwards in the room's panel.
 const TOOLS = [
   { id: 'select', label: 'Select', icon: 'cursor' },
+  { id: 'ruler', label: 'Ruler', icon: 'ruler' },
   { id: 'wall', label: 'Wall', icon: 'wall' },
   { id: 'room', label: 'Room', icon: 'bounding-box' },
   { id: 'outdoor', label: 'Garden', icon: 'tree' },
@@ -878,6 +908,7 @@ const GLOW_COLOURS = [
 
 type Tool =
   | 'select'
+  | 'ruler'
   | 'wall'
   | 'room'
   | 'outdoor'
@@ -901,6 +932,10 @@ const selRadiator = ref<string | null>(null)
 const selFurniture = ref<string | null>(null)
 /** The selected wall, by `FloorWall.key`. */
 const selWall = ref<string | null>(null)
+/** The selected dimension line. */
+const selDim = ref<string | null>(null)
+/** A dimension being drawn with the Ruler. */
+const draftDim = ref<{ a: Point; b: Point } | null>(null)
 /** What the Door and Window tools put down next. */
 const doorPreset = ref(DOOR_PRESETS[0].id)
 const windowPreset = ref(WINDOW_PRESETS[0].id)
@@ -941,6 +976,7 @@ const room = computed(() => floor.value.rooms.find((r) => r.id === selRoom.value
 const opening = computed(() => floor.value.openings.find((o) => o.id === selOpening.value) ?? null)
 const piece = computed(() => (floor.value.furniture ?? []).find((f) => f.id === selFurniture.value) ?? null)
 const radiator = computed(() => (floor.value.radiators ?? []).find((r) => r.id === selRadiator.value) ?? null)
+const dim = computed(() => (floor.value.dimensions ?? []).find((d) => d.id === selDim.value) ?? null)
 const wall = computed(() =>
   selWall.value ? (floorWalls(floor.value).find((w) => w.key === selWall.value) ?? null) : null,
 )
@@ -1140,6 +1176,8 @@ const markup = computed(() =>
     selectedRadiator: selRadiator.value,
     selectedFurniture: selFurniture.value,
     selectedWall: selWall.value,
+    selectedDimension: selDim.value,
+    draftDimension: draftDim.value,
     draft: draft.value,
     draftWall: draftWall.value,
     draftPolygon: polyDraft.value
@@ -1160,6 +1198,8 @@ const help = computed(() => {
   if (wingFor.value) return 'Drag a rectangle along an edge of the room to join it as a wing, making an L or a U.'
   if (armed.value) return `Now tap the plan where "${props.devices.get(armed.value)?.name ?? 'it'}" is.`
   return {
+    ruler:
+      'Drag from one point to another to measure it. The ends catch on corners, wall ends, doors and windows. The line stays on the plan: select it to type the real length and resize the plan to match.',
     select: 'Drag a room to move it, or its corners to resize it. Drag a device to move it. Tap anything to edit it.',
     wall: 'Drag from one end of a wall to the other: a garden wall, a partition, a fence. Rooms bring their own walls. Its ends catch on corners and other walls.',
     room: 'Drag to draw a rectangular room, or tap its corners one by one for any shape and tap the first again (or press Enter) to close it. Draw one inside another for a room within a room.',
@@ -1202,6 +1242,7 @@ function removeWing(i: number) {
 function clearSelection() {
   wingFor.value = null
   selWall.value = null
+  selDim.value = null
   selRoom.value = null
   selRef.value = null
   selOpening.value = null
@@ -1271,6 +1312,56 @@ function setDrawnWallLength(v: number | null) {
   if (!d || v === null || v <= 0) return
   if (!setDrawnLength(floor.value, d, toMm(v * CELLS_PER_M)))
     toast.warning('At that length it would run along another wall.')
+}
+
+/** The selected dimension's length on the plan, in cells. */
+const dimLength = computed(() => (dim.value ? dimensionLength(dim.value) : 0))
+/** The real length the person typed for it, in metres. */
+const dimTarget = ref<number | null>(null)
+const keepSizes = ref(false)
+watch(selDim, () => (dimTarget.value = dim.value ? Number(metres(dimLength.value)) : null))
+/** How many times bigger the plan would be for the dimension to measure what was typed. Null when it already does. */
+const dimFactor = computed(() => {
+  const t = dimTarget.value
+  if (!dim.value || !t || t <= 0 || !dimLength.value) return null
+  const k = (t * CELLS_PER_M) / dimLength.value
+  return Math.abs(k - 1) < 1e-6 || toMm(dimLength.value * k) === toMm(dimLength.value) ? null : k
+})
+const factorText = (k: number) => `×${Number(k.toFixed(4))}`
+const dimFactorText = computed(() => {
+  const k = dimFactor.value
+  if (!k) return ''
+  const pct = Math.abs(k - 1) * 100
+  const by = `${pct < 0.1 ? pct.toFixed(2) : Number(pct.toFixed(1))}%`
+  return `The whole plan, every floor, ${k > 1 ? 'grows' : 'shrinks'} ${factorText(k)} (${by}). Heights and wall thicknesses stay as they are.`
+})
+
+async function resizeToMatch() {
+  const k = dimFactor.value
+  if (!k) return
+  const p = props.plan
+  if (p.plot.w * k > 200 * CELLS_PER_M || p.plot.h * k > 200 * CELLS_PER_M)
+    return void toast.warning('At that size the plot would be over 200 m across.')
+  if (k < 0.1 || k > 10) return void toast.warning('That is more than ten times off. Check the length typed.')
+  const ok = await confirm({
+    title: 'Resize the plan',
+    message: `Every position and length across the ground, on every floor, is multiplied by ${Number(k.toFixed(4))}. ${
+      keepSizes.value
+        ? 'Doors, windows, radiators and furniture move with it and keep their size.'
+        : 'Doors, windows, radiators and furniture are resized too.'
+    } Undo puts it back.`,
+    confirmLabel: 'Resize the plan',
+    tone: 'neutral',
+  })
+  if (!ok) return
+  resizePlan(p, k, keepSizes.value)
+  settle()
+  dimTarget.value = dim.value ? Number(metres(dimLength.value)) : null
+}
+
+function deleteDimension() {
+  if (dim.value) removeDimension(floor.value, dim.value.id)
+  selDim.value = null
 }
 
 function deleteDrawnWall() {
@@ -1579,6 +1670,8 @@ type Drag =
       carried: ReturnType<typeof onDrawnWall>
     }
   | { type: 'wend'; d: HouseDrawnWall; end: 'a' | 'b' }
+  | { type: 'ddraw'; a: Point }
+  | { type: 'dend'; d: HouseDimension; end: 'a' | 'b' }
   | { type: 'fmove'; f: HouseFurniture; grab: { x: number; y: number } }
   | { type: 'fresize'; f: HouseFurniture; corner: string; o: { x1: number; y1: number; x2: number; y2: number } }
 let drag: Drag | null = null
@@ -1627,6 +1720,21 @@ function grabFurniture(t: Element | null, p: { x: number; y: number }): boolean 
   clearSelection()
   selFurniture.value = hit.id
   drag = { type: 'fmove', f: hit, grab: { x: p.x - hit.x, y: p.y - hit.y } }
+  return true
+}
+
+/** Select the dimension line under the pointer, or start dragging an end of the selected one. Select and Ruler only. */
+function grabDimension(t: Element | null): boolean {
+  if (tool.value !== 'select' && tool.value !== 'ruler') return false
+  const end = t?.closest('[data-dhandle]')?.getAttribute('data-dhandle')
+  if (end && dim.value) {
+    drag = { type: 'dend', d: dim.value, end: end === 'b' ? 'b' : 'a' }
+    return true
+  }
+  const id = t?.closest('[data-dim]')?.getAttribute('data-dim')
+  if (!id) return false
+  clearSelection()
+  selDim.value = id
   return true
 }
 
@@ -1693,7 +1801,14 @@ function onDown(e: PointerEvent) {
   const t = e.target instanceof Element ? e.target : null
   if (armed.value) return placeAt(armed.value, p)
 
-  if (tool.value === 'wall') {
+  if (grabDimension(t)) {
+    /* a dimension line, or one of the selected one's ends */
+  } else if (tool.value === 'ruler') {
+    const a = rulerPoint(floor.value, p.x, p.y)
+    clearSelection()
+    drag = { type: 'ddraw', a }
+    draftDim.value = { a, b: a }
+  } else if (tool.value === 'wall') {
     const a = wallPoint(floor.value, p.x, p.y)
     clearSelection()
     drag = { type: 'wdraw', a }
@@ -1843,6 +1958,12 @@ function onMove(e: PointerEvent) {
       w: Math.abs(x - drag.x0),
       h: Math.abs(y - drag.y0),
     }
+  } else if (drag.type === 'ddraw') {
+    draftDim.value = { a: drag.a, b: rulerPoint(floor.value, p.x, p.y, drag.a) }
+  } else if (drag.type === 'dend') {
+    const other = drag.end === 'a' ? drag.d.b : drag.d.a
+    const q = rulerPoint(floor.value, p.x, p.y, other, drag.d.id)
+    if (dimensionLength({ a: q, b: other }) >= 0.1) drag.d[drag.end] = q
   } else if (drag.type === 'wdraw') {
     draftWall.value = { a: drag.a, b: wallPoint(floor.value, p.x, p.y, drag.a) }
   } else if (drag.type === 'wmove') {
@@ -1922,7 +2043,12 @@ function onUp(e?: PointerEvent) {
     panning.value = false
     return
   }
-  if (drag?.type === 'wdraw') {
+  if (drag?.type === 'ddraw') {
+    const d = draftDim.value
+    draftDim.value = null
+    const made = d ? addDimension(floor.value, d.a, d.b) : null
+    if (made) selDim.value = made.id
+  } else if (drag?.type === 'wdraw') {
     const w = draftWall.value
     draftWall.value = null
     if (w && Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1]) >= 0.2) {
@@ -2101,6 +2227,9 @@ watch(tool, (t) => {
 watch(selWall, (w) => {
   if (w && sideTab.value === 'library') sideTab.value = 'properties'
 })
+watch(selDim, (d) => {
+  if (d && sideTab.value === 'library') sideTab.value = 'properties'
+})
 watch(outlineSelected, () => {
   if (sideTab.value === 'library' && !outlineSelected.value.startsWith('floor:')) sideTab.value = 'properties'
 })
@@ -2207,6 +2336,7 @@ function restore(state: string | null) {
   if (selFurniture.value && !piece.value) selFurniture.value = null
   if (selRef.value && !placed.value) selRef.value = null
   if (selWall.value && !wall.value) selWall.value = null
+  if (selDim.value && !dim.value) selDim.value = null
   canUndo.value = history.canUndo
   canRedo.value = history.canRedo
 }

@@ -366,6 +366,45 @@ describe('walls drawn on their own', () => {
   })
 })
 
+describe('dimension lines from the Ruler', () => {
+  function measured(): HousePlan {
+    const p = v1()
+    p.floors[0].dimensions = [
+      { id: 'dim', a: [2, 2], b: [18, 2] },
+      { id: 'dim2', a: [2.5, 3], b: [4.123, 7] },
+    ]
+    return p
+  }
+
+  it('are kept in millimetres on their storey, and come back', () => {
+    const plan = validatePlan(fromV1(measured()).plan)
+    expect(storey(plan, 'g').dimensions).toEqual([
+      { id: 'dim', a: [1000, 1000], b: [9000, 1000] },
+      { id: 'dim2', a: [1250, 1500], b: [2062, 3500] },
+    ])
+    const view = toV1(plan)
+    expect(view.floors[0].dimensions?.map((d) => d.id)).toEqual(['dim', 'dim2'])
+    expect(fromV1(view, plan).plan).toEqual(plan)
+  })
+
+  it('are left out where there are none, and change nothing else', () => {
+    const plan = fromV1(v1()).plan
+    expect(storey(plan, 'g').dimensions).toBeUndefined()
+    const withDims = fromV1(measured()).plan
+    expect({ ...storey(withDims, 'g'), dimensions: undefined }).toEqual({ ...storey(plan, 'g'), dimensions: undefined })
+  })
+
+  it('are refused with both ends on one point, or an id used twice', () => {
+    const plan = fromV1(measured()).plan
+    const one = structuredClone(plan)
+    storey(one, 'g').dimensions![0].b = [1000, 1000]
+    expect(() => validatePlan(one)).toThrow(PlanError)
+    const twice = structuredClone(plan)
+    storey(twice, 'g').dimensions![1].id = 'dim'
+    expect(() => validatePlan(twice)).toThrow(/used twice/)
+  })
+})
+
 describe('wall thickness and height set in the editor', () => {
   it('reach the version 1 view, and come back', () => {
     const plan = fromV1(v1()).plan

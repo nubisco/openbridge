@@ -249,6 +249,15 @@ export interface HouseFloor {
   walls?: HouseWallSpec[]
   /** Walls drawn on their own, not following a room. */
   drawnWalls?: HouseDrawnWall[]
+  /** Dimension lines left by the Ruler, from `a` to `b` in cells. */
+  dimensions?: HouseDimension[]
+}
+
+/** A measurement drawn on the plan with the Ruler. Not part of the building. */
+export interface HouseDimension {
+  id: string
+  a: [number, number]
+  b: [number, number]
 }
 
 export interface HousePlan {
