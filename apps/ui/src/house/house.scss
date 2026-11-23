@@ -581,6 +581,13 @@
   stroke-linecap: square;
   pointer-events: none;
 }
+.hv-edraftwall {
+  stroke: #3ccfc0;
+  stroke-width: calc(3px / var(--hv-zoom, 1));
+  stroke-dasharray: calc(6px / var(--hv-zoom, 1)) calc(4px / var(--hv-zoom, 1));
+  stroke-linecap: round;
+  pointer-events: none;
+}
 .hv-ewall.hv-sel {
   stroke: #3ccfc0;
 }

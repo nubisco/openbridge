@@ -28,6 +28,7 @@ import {
   furnitureBack,
   oppositeSide,
   CELL_MM,
+  drawnAxis,
   mmOf,
   openingFits,
   openingLine,
@@ -52,7 +53,7 @@ import {
 } from './geometry'
 import { DEFAULTS } from '@house-model/v2'
 import { wallLines } from '@house-model/convert'
-import type { HouseFloor as FloorV1 } from '@house-model/v1'
+import type { HouseDrawnWall, HouseFloor as FloorV1 } from '@house-model/v1'
 import { coveringDraws } from './coverings'
 import { KIND_LETTER, type LiveDevice } from './live'
 import { applyPreset, claimCovering, detach, presetCells, type OpeningPreset } from './openings'
@@ -401,9 +402,12 @@ export function resizeOpening(floor: HouseFloor, o: HouseOpening, end: 'start' |
 
 /** A wall of a floor, in cells, with what it is built as. */
 export interface FloorWall {
-  /** Where it is, as a key: the same wall keeps it while rooms do not move. */
+  /** Where it is, as a key: the same wall keeps it while rooms do not move. A drawn wall's is `d:` and its id. */
   key: string
-  axis: 'h' | 'v'
+  /** The drawn wall this is, for one drawn on its own. */
+  drawn?: HouseDrawnWall
+  /** Null for a drawn wall at an angle. */
+  axis: 'h' | 'v' | null
   line: number
   start: number
   end: number
@@ -416,7 +420,26 @@ export interface FloorWall {
 
 /** Every wall of a floor, cut where it changes from between rooms to outside, as the saved plan cuts them. */
 export function floorWalls(floor: HouseFloor): FloorWall[] {
-  return wallLines(floor as unknown as FloorV1).map((l) => {
+  const drawn = (floor.drawnWalls ?? []).map((d): FloorWall => {
+    const axis = drawnAxis(d)
+    const i = axis === 'v' ? 1 : 0
+    return {
+      key: `d:${d.id}`,
+      drawn: d,
+      axis,
+      line: axis ? d.a[1 - i] : 0,
+      start: axis ? Math.min(d.a[i], d.b[i]) : 0,
+      end: axis ? Math.max(d.a[i], d.b[i]) : Math.hypot(d.b[0] - d.a[0], d.b[1] - d.a[1]),
+      inner: false,
+      thickness: d.thickness,
+      height: d.height,
+    }
+  })
+  return [...fromRooms(floor), ...drawn]
+}
+
+function fromRooms(floor: HouseFloor): FloorWall[] {
+  return wallLines({ ...floor, drawnWalls: undefined } as unknown as FloorV1).map((l) => {
     const [line, start, end] = [l.line / CELL_MM, l.start / CELL_MM, l.end / CELL_MM]
     const spec = specOn(floor, l.axis, line, start, end)
     return {
@@ -450,6 +473,11 @@ function specOn(floor: HouseFloor, axis: 'h' | 'v', line: number, start: number,
 
 /** Set a wall's thickness or height. Any spec it overlaps gives way to one that is exactly this wall. */
 export function setWall(floor: HouseFloor, w: FloorWall, patch: { thickness?: number; height?: number }): void {
+  if (w.drawn) {
+    Object.assign(w.drawn, patch)
+    return
+  }
+  if (!w.axis) return
   const keep = (floor.walls ?? []).filter((s) => {
     if (s.axis !== w.axis || !same(openingLine(s), w.line)) return true
     const [a, b] = openingSpan(s)
@@ -464,6 +492,105 @@ export function setWall(floor: HouseFloor, w: FloorWall, patch: { thickness?: nu
     height: patch.height ?? w.height,
   })
   floor.walls = keep
+}
+
+// ─── Walls drawn on their own ───────────────────────────────────────────────
+
+/** Where a drawn wall's end can catch: a room's corner, or another drawn wall's end. */
+function catchPoints(floor: HouseFloor, except?: string): Point[] {
+  const out: Point[] = []
+  for (const r of floor.rooms)
+    for (const q of roomRects(r)) out.push([q.x, q.y], [q.x + q.w, q.y], [q.x, q.y + q.h], [q.x + q.w, q.y + q.h])
+  for (const d of floor.drawnWalls ?? []) if (d.id !== except) out.push(d.a, d.b)
+  return out
+}
+
+/**
+ * Where a drawn wall's end goes for a pointer at (x, y): onto a corner or
+ * another wall's end within reach, else snapped. From `from`, a line within
+ * a few degrees of straight across or down is made exactly so, which is
+ * what doors need and what was almost certainly meant.
+ */
+export function wallPoint(floor: HouseFloor, x: number, y: number, from?: Point, except?: string): Point {
+  const reach = 0.4
+  let p: Point = [snap(x, true), snap(y, true)]
+  let best = reach
+  for (const c of catchPoints(floor, except)) {
+    const d = Math.hypot(c[0] - x, c[1] - y)
+    if (d < best) {
+      best = d
+      p = [c[0], c[1]]
+    }
+  }
+  if (from) {
+    const dx = p[0] - from[0]
+    const dy = p[1] - from[1]
+    const tan = Math.tan((4 * Math.PI) / 180)
+    if (Math.abs(dy) <= Math.abs(dx) * tan) p = [p[0], from[1]]
+    else if (Math.abs(dx) <= Math.abs(dy) * tan) p = [from[0], p[1]]
+  }
+  return [toMm(p[0]), toMm(p[1])]
+}
+
+/** Whether a drawn wall can stand there: long enough, and not along another wall. */
+export function drawnWallFits(floor: HouseFloor, d: Pick<HouseDrawnWall, 'id' | 'a' | 'b'>): boolean {
+  if (Math.hypot(d.b[0] - d.a[0], d.b[1] - d.a[1]) < 0.2) return false
+  const axis = drawnAxis(d)
+  if (!axis) return true
+  const others = Walls.of({ ...floor, drawnWalls: (floor.drawnWalls ?? []).filter((x) => x.id !== d.id) })
+  const i = axis === 'h' ? 0 : 1
+  return !others.overlapping(axis, d.a[1 - i], Math.min(d.a[i], d.b[i]), Math.max(d.a[i], d.b[i]))
+}
+
+/** Draw a wall from `a` to `b`: a partition, 100 mm thick and full height, until the person says otherwise. */
+export function addDrawnWall(floor: HouseFloor, a: Point, b: Point): HouseDrawnWall | null {
+  const taken = (v: string) =>
+    (floor.drawnWalls ?? []).some((x) => x.id === v) ||
+    floor.openings.some((o) => o.id === v) ||
+    (floor.radiators ?? []).some((r) => r.id === v)
+  const d: HouseDrawnWall = {
+    id: uniqueId('wall', taken),
+    a,
+    b,
+    thickness: DEFAULTS.innerWall,
+    height: DEFAULTS.wallHeight,
+  }
+  if (!drawnWallFits(floor, d)) return null
+  ;(floor.drawnWalls ??= []).push(d)
+  return d
+}
+
+/** Move a drawn wall's ends, where it still fits. */
+export function moveDrawnWall(floor: HouseFloor, d: HouseDrawnWall, a: Point, b: Point): boolean {
+  if (!drawnWallFits(floor, { id: d.id, a, b })) return false
+  d.a = a
+  d.b = b
+  return true
+}
+
+/** The doors, windows and radiators on a drawn wall, with where they are, so moving it carries them. */
+export function onDrawnWall(floor: HouseFloor, d: HouseDrawnWall) {
+  const axis = drawnAxis(d)
+  if (!axis) return []
+  const i = axis === 'h' ? 0 : 1
+  const only = new Walls([{ axis, line: d.a[1 - i], start: Math.min(d.a[i], d.b[i]), end: Math.max(d.a[i], d.b[i]) }])
+  return [...floor.openings, ...(floor.radiators ?? [])]
+    .filter((x) => openingFits(x, only))
+    .map((o) => ({ o, x: o.x, y: o.y }))
+}
+
+/** Make a drawn wall this long, from its first end. */
+export function setDrawnLength(floor: HouseFloor, d: HouseDrawnWall, len: number): boolean {
+  const now = Math.hypot(d.b[0] - d.a[0], d.b[1] - d.a[1])
+  if (!now) return false
+  const k = len / now
+  const b: Point = [toMm(d.a[0] + (d.b[0] - d.a[0]) * k), toMm(d.a[1] + (d.b[1] - d.a[1]) * k)]
+  return moveDrawnWall(floor, d, d.a, b)
+}
+
+export function removeDrawnWall(floor: HouseFloor, id: string): void {
+  floor.drawnWalls = (floor.drawnWalls ?? []).filter((d) => d.id !== id)
+  if (!floor.drawnWalls.length) delete floor.drawnWalls
 }
 
 // ─── Radiators ──────────────────────────────────────────────────────────────
@@ -809,6 +936,8 @@ export interface EditorDrawOptions {
   selectedFurniture?: string | null
   selectedWall?: string | null
   draft: Pick<HouseRoom, 'x' | 'y' | 'w' | 'h'> | null
+  /** A wall being drawn, end to end. */
+  draftWall?: { a: Point; b: Point } | null
   /** Screen pixels per editor unit, so labels and handles keep their size. */
   unit: number
   /** How far the blueprint is zoomed in, 1 at the fitted view. Markers and handles keep their size on screen. */
@@ -855,7 +984,7 @@ function spanPath(e: WallSpan): string {
   return `M${r1(x1 * S)},${r1(y1 * S)}L${r1(x2 * S)},${r1(y2 * S)}`
 }
 
-const metres = (cells: number) => String(Math.round((cells / CELLS_PER_M) * 100) / 100)
+const metres = (cells: number) => String(Math.round(cells * CELL_MM) / 1000)
 
 export function renderEditor(
   plan: HousePlan,
@@ -930,7 +1059,23 @@ export function renderEditor(
     }
   }
   const walls = floorWalls(floor)
+  const wallLine = (fw: FloorWall, cc: string) => {
+    const t = r1((fw.thickness / CELL_MM) * S)
+    const wsel = fw.key === o.selectedWall ? ' hv-sel' : ''
+    return (
+      `<line class="hv-ewall${wsel}" style="stroke-width:max(${t}px, calc(2px / var(--hv-zoom, 1)))" ${cc}/>` +
+      `<line class="hv-ewhit" data-wall="${esc(fw.key)}" ${cc}/>`
+    )
+  }
+  // Walls drawn at an angle, end to end.
+  for (const fw of walls) {
+    if (!fw.drawn || fw.axis) continue
+    const { a, b } = fw.drawn
+    h += wallLine(fw, `x1="${r1(a[0] * S)}" y1="${r1(a[1] * S)}" x2="${r1(b[0] * S)}" y2="${r1(b[1] * S)}"`)
+  }
   for (const w of wallRuns(floor)) {
+    // Angled walls are drawn above.
+    if (w.x1 !== w.x2 && w.y1 !== w.y2) continue
     const c = `x1="${w.x1 * S}" y1="${w.y1 * S}" x2="${w.x2 * S}" y2="${w.y2 * S}"`
     const sel = w.opening && w.opening.id === o.selectedOpening ? ' hv-sel' : ''
     if (w.type === 'wall') {
@@ -947,11 +1092,7 @@ export function renderEditor(
           w.axis === 'h'
             ? `x1="${r1(s * S)}" y1="${r1(line * S)}" x2="${r1(e * S)}" y2="${r1(line * S)}"`
             : `x1="${r1(line * S)}" y1="${r1(s * S)}" x2="${r1(line * S)}" y2="${r1(e * S)}"`
-        const t = r1((fw.thickness / CELL_MM) * S)
-        const wsel = fw.key === o.selectedWall ? ' hv-sel' : ''
-        h +=
-          `<line class="hv-ewall${wsel}" style="stroke-width:max(${t}px, calc(2px / var(--hv-zoom, 1)))" ${cc}/>` +
-          `<line class="hv-ewhit" data-wall="${esc(fw.key)}" ${cc}/>`
+        h += wallLine(fw, cc)
       }
     } else if (w.type === 'window') h += `<line class="hv-ewinb" ${c}/><line class="hv-ewin${sel}" ${c}/>`
     else if (w.type === 'open') h += `<line class="hv-eopen${sel}" ${c}/>`
@@ -1052,6 +1193,22 @@ export function renderEditor(
     ]
     for (const [c, x, y] of corners) {
       h += `<circle class="hv-eh${c === 'ne' || c === 'sw' ? ' hv-alt' : ''}" data-fhandle="${c}" cx="${x * S}" cy="${y * S}" r="${r1(fit(6, 8))}"/>`
+    }
+  }
+  if (o.draftWall) {
+    const { a, b } = o.draftWall
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1])
+    h += `<line class="hv-edraftwall" x1="${r1(a[0] * S)}" y1="${r1(a[1] * S)}" x2="${r1(b[0] * S)}" y2="${r1(b[1] * S)}"/>`
+    if (len > 0)
+      h += `<text class="hv-edraft-label" x="${r1(((a[0] + b[0]) / 2) * S)}" y="${r1(((a[1] + b[1]) / 2) * S - fs)}" font-size="${r1(fs)}">${metres(len)} m</text>`
+  }
+  const sw = walls.find((w) => w.key === o.selectedWall)?.drawn
+  if (sw && o.showHandles) {
+    for (const [end, p] of [
+      ['a', sw.a],
+      ['b', sw.b],
+    ] as const) {
+      h += `<circle class="hv-eh" data-whandle="${end}" cx="${r1(p[0] * S)}" cy="${r1(p[1] * S)}" r="${r1(fit(6, 8))}"/>`
     }
   }
   const sel = floor.rooms.find((r) => r.id === o.selectedRoom)
