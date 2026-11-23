@@ -1,3 +1,10 @@
+# [1.40.0](https://github.com/nubisco/openbridge/compare/v1.39.0...v1.40.0) (2026-11-23)
+
+
+### Features
+
+* **house:** a Ruler that leaves dimension lines, and resizes the plan to match ([#59](https://github.com/nubisco/openbridge/issues/59)) ([e85bad5](https://github.com/nubisco/openbridge/commit/e85bad58376dbc445cdc87002a40bb205718a5cb))
+
 # [1.39.0](https://github.com/nubisco/openbridge/compare/v1.38.0...v1.39.0) (2026-11-23)
 
 
