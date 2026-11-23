@@ -48,10 +48,14 @@ import {
   roomsOutsideIn,
   wallRuns,
   CELL_MM,
+  mmOf,
+  same,
+  type WallRun,
   waterColor,
   type Point,
   type ViewMode,
 } from './geometry'
+import { floorWalls, type FloorWall } from './editor'
 import { specOf } from './openings'
 import { ROLLS, coveringDraws, type CoveringDraw } from './coverings'
 import { formatPower, stateText, type LiveDevice } from './live'
@@ -1003,6 +1007,175 @@ function coverings3d(
   })
 }
 
+// ─── Walls as solids ────────────────────────────────────────────────────────
+
+/** The walls a run is made of, each with its own thickness and height, end to end along it. */
+function runPieces(run: WallRun, walls: FloorWall[]): Array<{ A: Point; B: Point; w: FloorWall }> {
+  const A: Point = [run.x1, run.y1]
+  const B: Point = [run.x2, run.y2]
+  if (!same(run.x1, run.x2) && !same(run.y1, run.y2)) {
+    const near = (p: Point, q: Point) => same(p[0], q[0]) && same(p[1], q[1])
+    const w = walls.find((x) => !x.axis && ((near(x.a, A) && near(x.b, B)) || (near(x.a, B) && near(x.b, A))))
+    return w ? [{ A, B, w }] : []
+  }
+  const axis = same(run.y1, run.y2) ? 'h' : 'v'
+  const [a, b] = axis === 'h' ? [run.x1, run.x2] : [run.y1, run.y2]
+  const line = axis === 'h' ? run.y1 : run.x1
+  const out: Array<{ A: Point; B: Point; w: FloorWall }> = []
+  for (const w of walls) {
+    if (w.axis !== axis || !same(w.line, line)) continue
+    const s = Math.max(Math.min(a, b), w.start)
+    const e = Math.min(Math.max(a, b), w.end)
+    if (mmOf(e) <= mmOf(s)) continue
+    out.push(axis === 'h' ? { A: [s, line], B: [e, line], w } : { A: [line, s], B: [line, e], w })
+  }
+  return out
+}
+
+const segDist = (p: Point, a: Point, b: Point) => {
+  const [dx, dy] = [b[0] - a[0], b[1] - a[1]]
+  const t = clamp(((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy || 1), 0, 1)
+  return Math.hypot(p[0] - a[0] - dx * t, p[1] - a[1] - dy * t)
+}
+const unit = (a: Point, b: Point): Point => {
+  const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1
+  return [(b[0] - a[0]) / l, (b[1] - a[1]) / l]
+}
+const leftOf = (d: Point): Point => [-d[1], d[0]]
+/** Where the line through p along d meets the line through q along e. */
+function meet(p: Point, d: Point, q: Point, e: Point): Point | null {
+  const den = d[0] * e[1] - d[1] * e[0]
+  if (Math.abs(den) < 1e-9) return null
+  const t = ((q[0] - p[0]) * e[1] - (q[1] - p[1]) * e[0]) / den
+  return [p[0] + d[0] * t, p[1] + d[1] * t]
+}
+
+/**
+ * The end of a wall at `p`, travelling into it along `din`: its corner on the
+ * left of that travel and the one on the right. Two walls meeting at a corner
+ * are cut where their faces meet (a mitre, for any angle and either
+ * thickness). A wall ending against the side of another reaches into it, and
+ * so does one between rooms meeting a corner of outside walls. A free end, or
+ * one at a door or window, is cut square.
+ */
+function wallEnd(
+  p: Point,
+  din: Point,
+  own: FloorWall,
+  walls: FloorWall[],
+  gaps: Array<[Point, Point]>,
+): [Point, Point] {
+  const h = own.thickness / 2 / CELL_MM
+  const n = leftOf(din)
+  const square = (e: number): [Point, Point] => [
+    [p[0] + din[0] * e + n[0] * h, p[1] + din[1] * e + n[1] * h],
+    [p[0] + din[0] * e - n[0] * h, p[1] + din[1] * e - n[1] * h],
+  ]
+  const atEnd = (q: Point) => Math.hypot(q[0] - p[0], q[1] - p[1]) < 1e-3
+  if (!atEnd(own.a) && !atEnd(own.b)) return square(0)
+  const corners: Array<{ v: Point; h: number; inner: boolean }> = []
+  let into = 0
+  // Half the thickness of a wall at the corner whose end there is a door or window.
+  let blocked = 0
+  for (const g of walls) {
+    if (g === own) continue
+    const gu = unit(g.a, g.b)
+    if (Math.abs(din[0] * gu[1] - din[1] * gu[0]) < 1e-6) continue
+    const hg = g.thickness / 2 / CELL_MM
+    // A door, window or open stretch at the corner: there is no wall there to meet.
+    const open = gaps.some(
+      ([a, b]) => segDist(p, a, b) < 1e-3 && Math.abs(gu[0] * (b[1] - a[1]) - gu[1] * (b[0] - a[0])) < 1e-6,
+    )
+    if (open && (atEnd(g.a) || atEnd(g.b))) {
+      blocked = Math.max(blocked, hg)
+      continue
+    }
+    if (atEnd(g.a)) corners.push({ v: gu, h: hg, inner: g.inner })
+    else if (atEnd(g.b)) corners.push({ v: [-gu[0], -gu[1]], h: hg, inner: g.inner })
+    else if (segDist(p, g.a, g.b) < 1e-3) {
+      // Against the side of a wall running past: reach its far face.
+      const sin = Math.abs(din[0] * gu[1] - din[1] * gu[0])
+      into = Math.max(into, hg / sin)
+    }
+  }
+  // Where more than two walls meet, an outside wall turns the corner with the
+  // other outside wall, and a wall between rooms butts into them.
+  const pair = corners.length === 1 ? corners : corners.filter((c) => c.inner === own.inner)
+  if (pair.length === 1 && !into && !blocked && !(own.inner && corners.length > 1)) {
+    const { v, h: hg } = pair[0]
+    const m = leftOf(v)
+    const l = meet([p[0] + n[0] * h, p[1] + n[1] * h], din, [p[0] + m[0] * hg, p[1] + m[1] * hg], v)
+    const r = meet([p[0] - n[0] * h, p[1] - n[1] * h], din, [p[0] - m[0] * hg, p[1] - m[1] * hg], v)
+    // A very sharp corner would run its point far out: cut it square instead.
+    const far = 4 * Math.max(h, hg)
+    if (l && r && Math.hypot(l[0] - p[0], l[1] - p[1]) < far && Math.hypot(r[0] - p[0], r[1] - p[1]) < far)
+      return [l, r]
+  }
+  // A wall between rooms stops at a corner of outside walls, which close it.
+  if (own.inner && corners.length > 1) return square(into)
+  return square(Math.max(into, blocked, ...corners.map((c) => c.h)))
+}
+
+/** A piece of wall as its outline on the floor: start left, end left, end right, start right. */
+function wallOutline(A: Point, B: Point, own: FloorWall, walls: FloorWall[], gaps: Array<[Point, Point]>): Point[] {
+  const u = unit(A, B)
+  const [eL, eR] = wallEnd(B, u, own, walls, gaps)
+  // Travelling into the start, the wall's left is on the right.
+  const [sR, sL] = wallEnd(A, [-u[0], -u[1]], own, walls, gaps)
+  return [sL, eL, eR, sR]
+}
+
+/** A plain outline for a piece of wall in a door's or window's run: square both ends. */
+function squareOutline(A: Point, B: Point, half: number): Point[] {
+  const n = leftOf(unit(A, B))
+  const at = (q: Point, k: number): Point => [q[0] + n[0] * k, q[1] + n[1] * k]
+  return [at(A, half), at(B, half), at(B, -half), at(A, -half)]
+}
+
+/**
+ * A wall as the solid it is, from z1 to z2, standing on its outline: the
+ * faces the view sees and the top. `glow` gives the light of the room a seen
+ * long face looks into, if it is lit.
+ */
+function solidWall(
+  o: SceneOptions,
+  outline: Point[],
+  z1: number,
+  z2: number,
+  glow?: (x: number, y: number) => { color: string; k: number } | undefined,
+): string {
+  const c: Point = [outline.reduce((t, q) => t + q[0], 0) / 4, outline.reduce((t, q) => t + q[1], 0) / 4]
+  let svg = ''
+  if (z2 > z1) {
+    outline.forEach((p, i) => {
+      const q = outline[(i + 1) % 4]
+      const len = Math.hypot(q[0] - p[0], q[1] - p[1])
+      if (len < 1e-6) return
+      // Its outward normal. The view looks in from +x and +y, so it sees the faces turned that way.
+      let m: Point = [-(q[1] - p[1]) / len, (q[0] - p[0]) / len]
+      const mid: Point = [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2]
+      if (m[0] * (mid[0] - c[0]) + m[1] * (mid[1] - c[1]) < 0) m = [-m[0], -m[1]]
+      if (m[0] + m[1] <= 0) return
+      const face = poly(o, [
+        [p[0], p[1], z1],
+        [q[0], q[1], z1],
+        [q[0], q[1], z2],
+        [p[0], p[1], z2],
+      ])
+      const long = i % 2 === 0
+      svg += `<polygon class="hv-wall${long ? '' : ' hv-wallend'}" points="${face}"/>`
+      const g = long ? glow?.(mid[0] + m[0] * 0.25, mid[1] + m[1] * 0.25) : undefined
+      if (g)
+        svg += `<polygon class="hv-walllit" fill="${g.color}" fill-opacity="${(0.12 + 0.26 * g.k).toFixed(2)}" points="${face}"/>`
+    })
+  }
+  svg += `<polygon class="hv-walltop" points="${poly(
+    o,
+    outline.map((q): [number, number, number] => [q[0], q[1], z2]),
+  )}"/>`
+  return svg
+}
+
 export function renderFloor(
   plan: HousePlan,
   floor: HouseFloor,
@@ -1309,7 +1482,16 @@ export function renderFloor(
   // The walls of a lit room catch its light, on the side facing into it.
   const litRooms = new Map<string, { color: string; k: number }>()
   if (o.overlay === 'none') for (const l of lit) if (l.room && l.room.kind === 'room') litRooms.set(l.room.id, l)
-  for (const w of wallRuns(floor)) {
+  const walls = floorWalls(floor)
+  const runs = wallRuns(floor)
+  // Where the walls are not: doors, windows and open stretches.
+  const gaps = runs
+    .filter((r) => r.type !== 'wall')
+    .map((r): [Point, Point] => [
+      [r.x1, r.y1],
+      [r.x2, r.y2],
+    ])
+  for (const w of runs) {
     // An open stretch is a wall that is not there: nothing to draw.
     if (w.type === 'open') continue
     const depth = (w.x1 + w.x2 + w.y1 + w.y2) / 2
@@ -1321,8 +1503,14 @@ export function renderFloor(
       const c = project(o.mode, B[0], B[1])
       const ln = (cls: string, p: Point, q: Point, extra = '') =>
         `<line class="${cls}" x1="${r1(p[0])}" y1="${r1(p[1])}" x2="${r1(q[0])}" y2="${r1(q[1])}"${extra}/>`
-      if (w.type === 'wall') svg = ln('hv-wall2d', a, c)
-      else {
+      if (w.type === 'wall') {
+        // As thick as it is built, each wall of the run its own thickness,
+        // its ends closing the corners it makes with others.
+        for (const pc of runPieces(w, walls)) {
+          const pts = wallOutline(pc.A, pc.B, pc.w, walls, gaps).map((q) => project(o.mode, q[0], q[1]))
+          svg += `<polygon class="hv-wallsolid2d" points="${pts.map((q) => `${r1(q[0])},${r1(q[1])}`).join(' ')}"/>`
+        }
+      } else {
         if (w.type === 'door' && w.opening) {
           // The leaf drawn open, and the arc its free end sweeps, on the side
           // and from the hinge the plan says. A glass leaf is drawn as glass.
@@ -1360,28 +1548,28 @@ export function renderFloor(
         [B[0], B[1], z2],
         [A[0], A[1], z2],
       ])
-    // The top of a wall, drawn as a thick light line with a darker rim, which
-    // is what makes a wall read as solid plaster rather than a pane.
-    const cap = (z: number) => {
-      const p = project(o.mode, A[0], A[1], z)
-      const q = project(o.mode, B[0], B[1], z)
-      const c = `x1="${r1(p[0])}" y1="${r1(p[1])}" x2="${r1(q[0])}" y2="${r1(q[1])}"`
-      return `<line class="hv-caprim" ${c}/><line class="hv-cap" ${c}/>`
+    const glow = (x: number, y: number) => {
+      const r = roomAt(floor, x, y)
+      return r ? litRooms.get(r.id) : undefined
     }
-    // The view looks in from +x and +y, so the face of a wall it shows is
-    // the one facing the room in front of it, at the higher x or y. That
-    // room's light is what tints it.
-    const mx = (A[0] + B[0]) / 2
-    const my = (A[1] + B[1]) / 2
-    const facing = roomAt(floor, w.axis === 'h' ? mx : mx + 0.25, w.axis === 'h' ? my + 0.25 : my)
-    const glowOn = facing ? litRooms.get(facing.id) : undefined
-    const tint = (z1: number, z2: number) =>
-      glowOn
-        ? `<polygon class="hv-walllit" fill="${glowOn.color}" fill-opacity="${(0.12 + 0.26 * glowOn.k).toFixed(2)}" points="${quad(z1, z2)}"/>`
-        : ''
+    // Each wall stands as high as it is built (at the drawing's half scale),
+    // or no higher than the cut when the walls are drawn low.
+    const tall = (fw: FloorWall) => {
+      const real = zm(o, fw.height / 1000)
+      return o.walls === 'up' ? real : Math.min(H, real)
+    }
+    const pieces = runPieces(w, walls)
     if (w.type === 'wall') {
-      svg = `<polygon class="hv-wall" points="${quad(0, H)}"/>${tint(0, H)}${cap(H)}`
+      for (const pc of pieces) {
+        svg += solidWall(o, wallOutline(pc.A, pc.B, pc.w, walls, gaps), 0, tall(pc.w), glow)
+      }
     } else {
+      // The wall the opening is in: its thickness frames it, and what is
+      // above and below it is solid wall.
+      const host = pieces[0]?.w
+      const half = host ? host.thickness / 2 / CELL_MM : 0
+      const HW = host ? tall(host) : H
+      const solid = (z1: number, z2: number) => solidWall(o, squareOutline(A, B, half), z1, z2, glow)
       // A window is glass over a low wall, up to the top. A sliding door is
       // glass from the floor to door height, in a frame with a mullion where
       // its two leaves meet, and wall above. A door is its leaf, swung open,
@@ -1394,8 +1582,8 @@ export function renderFloor(
       const full = !!win && win.sill === 0
       // Heights drawn at half scale, as a door's 2.1 m head is drawn 1.05 m.
       const head = full ? (win.head / 1000) * 0.5 * CELLS_PER_M : 1.05 * CELLS_PER_M
-      const z0 = slider || door || full ? 0 : H * 0.3
-      const zt = slider || door || full ? Math.min(H, head) : H
+      const z0 = slider || door || full ? 0 : HW * 0.3
+      const zt = slider || door || full ? Math.min(HW, head) : HW
       if (door && w.opening) {
         const hd = zt
         const sw = doorSwing(w.opening)
@@ -1417,7 +1605,7 @@ export function renderFloor(
             [B[0], B[1], hd],
             [B[0], B[1], 0],
           ])}"/>`
-        if (H > hd + 0.1) svg += `<polygon class="hv-wall" points="${quad(hd, H)}"/>${tint(hd, H)}${cap(H)}`
+        if (HW > hd + 0.1) svg += solid(hd, HW)
       } else if (slider || full) {
         const m1 = project(o.mode, (A[0] + B[0]) / 2, (A[1] + B[1]) / 2, 0)
         const m2 = project(o.mode, (A[0] + B[0]) / 2, (A[1] + B[1]) / 2, zt)
@@ -1432,18 +1620,19 @@ export function renderFloor(
             [B[0], B[1], zt],
             [B[0], B[1], 0],
           ])}"/>`
-        if (H > zt + 0.1) svg += `<polygon class="hv-wall" points="${quad(zt, H)}"/>${tint(zt, H)}${cap(H)}`
+        if (HW > zt + 0.1) svg += solid(zt, HW)
       } else {
-        svg = `<polygon class="hv-wall" points="${quad(0, z0)}"/>${tint(0, z0)}<polygon class="hv-pane" points="${quad(z0, H)}"/>${cap(H)}`
+        // The sill wall, the glass in the middle of the wall's thickness, and the head on top.
+        svg = `${solid(0, z0)}<polygon class="hv-pane" points="${quad(z0, HW)}"/>${solid(HW, HW)}`
         // A sliding window shows where its two panes meet.
         if (win?.operation === 'sliding') {
           const m1 = project(o.mode, (A[0] + B[0]) / 2, (A[1] + B[1]) / 2, z0)
-          const m2 = project(o.mode, (A[0] + B[0]) / 2, (A[1] + B[1]) / 2, H)
+          const m2 = project(o.mode, (A[0] + B[0]) / 2, (A[1] + B[1]) / 2, HW)
           svg += `<line class="hv-slideframe" x1="${r1(m1[0])}" y1="${r1(m1[1])}" x2="${r1(m2[0])}" y2="${r1(m2[1])}"/>`
         }
       }
       if (w.opening)
-        items.push(...coverings3d(o, A, B, w.opening.len, z0, zt, H, coveringDraws(floor, w.opening, devices)))
+        items.push(...coverings3d(o, A, B, w.opening.len, z0, zt, HW, coveringDraws(floor, w.opening, devices)))
     }
     items.push({ depth, svg })
   }
