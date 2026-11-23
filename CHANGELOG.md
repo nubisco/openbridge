@@ -1,3 +1,10 @@
+# [1.36.0](https://github.com/nubisco/openbridge/compare/v1.35.0...v1.36.0) (2026-11-23)
+
+
+### Features
+
+* **house:** the plan editor works to the millimetre, with snapping ([#55](https://github.com/nubisco/openbridge/issues/55)) ([62ddb09](https://github.com/nubisco/openbridge/commit/62ddb095c2ef09fcb139bfbcce5a50f63e618752))
+
 # [1.35.0](https://github.com/nubisco/openbridge/compare/v1.34.0...v1.35.0) (2026-11-23)
 
 
