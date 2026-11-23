@@ -1,9 +1,11 @@
 /**
  * Between plan versions 1 and 2.
  *
- * `fromV1` turns a version 1 plan into version 2 exactly: every version 1
- * value is a whole number of half cells, which is a whole number of
- * millimetres. Given the version 2 plan it replaces, it keeps what version 1
+ * `fromV1` turns a version 1 plan into version 2, every value to the nearest
+ * millimetre. Plans saved by the version 1 editor are whole half cells, so
+ * for them it is exact. The editor itself now works to the millimetre in
+ * version 1's shapes (rectangles, walls along room edges), so its values are
+ * any number of millimetres, still exact. Given the version 2 plan it replaces, it keeps what version 1
  * cannot say (a wall's thickness, a door's frame, curtains with no motor) for
  * every element that is still there, so a save from the version 1 editor
  * loses nothing it did not change.
@@ -12,7 +14,7 @@
  * work in millimetres themselves.
  */
 
-import { Cells, cellLoops, cellsIn, rectangles } from './cells.js'
+import { Cells, Grid, rectLoops, rectangles, type Rect } from './cells.js'
 import * as V1 from './v1.js'
 import {
   DEFAULTS,
@@ -39,8 +41,7 @@ export const CELL = V1.HOUSE_GRID * 1000
 
 const mm = (cells: number) => Math.round(cells * CELL)
 const cells = (v: number) => v / CELL
-/** To the nearest half cell, which is as fine as version 1 goes. */
-const half = (v: number) => Math.round((v / CELL) * 2) / 2
+const mmRect = (q: Rect): Rect => ({ x: mm(q.x), y: mm(q.y), w: mm(q.w), h: mm(q.h) })
 
 // ─── Sides ──────────────────────────────────────────────────────────────────
 // Version 1 names a side as seen on the plan (up, down, left, right). Version
@@ -62,12 +63,9 @@ const axisOf = (a: Point, b: Point): 'h' | 'v' | null => (a[1] === b[1] ? 'h' : 
 
 // ─── Walls ──────────────────────────────────────────────────────────────────
 
-const cellIn = (rooms: V1.HouseRoom[], cx: number, cy: number) =>
-  rooms.some((r) => V1.roomRects(r).some((q) => cx >= q.x && cx < q.x + q.w && cy >= q.y && cy < q.y + q.h))
-
 interface Line {
   axis: 'h' | 'v'
-  /** The y of a line along x, or the x of one along y, in cells. */
+  /** The y of a line along x, or the x of one along y, in millimetres. */
   line: number
   start: number
   end: number
@@ -79,37 +77,27 @@ interface Line {
  * merged into straight runs. A run is cut where it changes from a wall
  * between two rooms (inner, thin) to one with a room on one side only
  * (outer, thick), as those are different walls in a building.
+ *
+ * Worked on a grid cut at every room corner, so each cell is wholly in a
+ * room or not, whatever the rooms measure.
  */
 export function wallLines(floor: V1.HouseFloor): Line[] {
-  const walled = floor.rooms.filter((r) => r.kind === 'room')
+  const walled = floor.rooms.filter((r) => r.kind === 'room').map((r) => V1.roomRects(r).map(mmRect))
+  const g = Grid.of(walled.flat())
+  const each = walled.map((rects) => g.cells(rects))
+  const all = new Cells()
+  for (const c of each) for (const [i, j] of c) all.add(i, j)
   const units = new Map<string, { axis: 'h' | 'v'; line: number; at: number; inner: boolean }>()
-  for (const r of walled) {
-    const rects = V1.roomRects(r)
-    const inR = (x: number, y: number) => rects.some((q) => x >= q.x && x < q.x + q.w && y >= q.y && y < q.y + q.h)
-    for (const q of rects) {
-      for (let i = 0; i < q.w; i++) {
-        const x = q.x + i
-        for (const y of [q.y, q.y + q.h]) {
-          if (inR(x, y - 1) && inR(x, y)) continue
-          units.set(`h${x},${y}`, {
-            axis: 'h',
-            line: y,
-            at: x,
-            inner: cellIn(walled, x, y - 1) && cellIn(walled, x, y),
-          })
-        }
+  for (const c of each) {
+    for (const [i, j] of c) {
+      for (const jj of [j, j + 1]) {
+        // The edge between cell rows jj - 1 and jj, if this room is on one side only.
+        if (c.has(i, jj - 1) && c.has(i, jj)) continue
+        units.set(`h${i},${jj}`, { axis: 'h', line: jj, at: i, inner: all.has(i, jj - 1) && all.has(i, jj) })
       }
-      for (let j = 0; j < q.h; j++) {
-        const y = q.y + j
-        for (const x of [q.x, q.x + q.w]) {
-          if (inR(x - 1, y) && inR(x, y)) continue
-          units.set(`v${x},${y}`, {
-            axis: 'v',
-            line: x,
-            at: y,
-            inner: cellIn(walled, x - 1, y) && cellIn(walled, x, y),
-          })
-        }
+      for (const ii of [i, i + 1]) {
+        if (c.has(ii - 1, j) && c.has(ii, j)) continue
+        units.set(`v${ii},${j}`, { axis: 'v', line: ii, at: j, inner: all.has(ii - 1, j) && all.has(ii, j) })
       }
     }
   }
@@ -122,18 +110,22 @@ export function wallLines(floor: V1.HouseFloor): Line[] {
     if (cur && cur.axis === u.axis && cur.line === u.line && cur.end === u.at && cur.inner === u.inner) cur.end++
     else lines.push({ axis: u.axis, line: u.line, start: u.at, end: u.at + 1, inner: u.inner })
   }
-  return lines
+  // From grid indices back to millimetres.
+  return lines.map((l) => {
+    const [along, across] = l.axis === 'h' ? [g.xs, g.ys] : [g.ys, g.xs]
+    return { ...l, line: across.at[l.line], start: along.at[l.start], end: along.at[l.end] }
+  })
 }
 
 const lineEnds = (l: Line): [Point, Point] =>
   l.axis === 'h'
     ? [
-        [mm(l.start), mm(l.line)],
-        [mm(l.end), mm(l.line)],
+        [l.start, l.line],
+        [l.end, l.line],
       ]
     : [
-        [mm(l.line), mm(l.start)],
-        [mm(l.line), mm(l.end)],
+        [l.line, l.start],
+        [l.line, l.end],
       ]
 
 /** How far two walls on the same line overlap, in millimetres. 0 when they are not on one line. */
@@ -261,13 +253,12 @@ function tidyOpening<T extends Door | Window>(o: T): T {
 
 // ─── Spaces ─────────────────────────────────────────────────────────────────
 
-const scale = (loop: Point[]): Point[] => loop.map(([x, y]) => [mm(x), mm(y)])
-
 function makeSpace(r: V1.HouseRoom): Space {
-  const [outline, ...holes] = cellLoops(Cells.of(V1.roomRects(r)))
-  const s: Space = { id: r.id, name: r.name, kind: r.kind, outline: scale(outline) }
-  if (holes.length) s.holes = holes.map(scale)
-  if (r.parts?.length) s.rects = V1.roomRects(r).map((q) => ({ x: mm(q.x), y: mm(q.y), w: mm(q.w), h: mm(q.h) }))
+  const rects = V1.roomRects(r).map(mmRect)
+  const [outline, ...holes] = rectLoops(rects)
+  const s: Space = { id: r.id, name: r.name, kind: r.kind, outline }
+  if (holes.length) s.holes = holes
+  if (r.parts?.length) s.rects = rects
   return s
 }
 
@@ -390,7 +381,13 @@ export function fromV1(p: V1.HousePlan, previous?: Plan | null): Migration {
     }
   })
   return {
-    plan: { version: PLAN_VERSION, unit: 'mm', site: { w: mm(p.plot.w), h: mm(p.plot.h) }, snap: CELL, storeys },
+    plan: {
+      version: PLAN_VERSION,
+      unit: 'mm',
+      site: { w: mm(p.plot.w), h: mm(p.plot.h) },
+      snap: previous?.snap ?? CELL,
+      storeys,
+    },
     dropped,
   }
 }
@@ -404,9 +401,18 @@ function sameCells(a: Cells, b: Cells): boolean {
 }
 
 function roomOf(s: Space): V1.HouseRoom {
-  const grid = cellsIn(s.outline, s.holes ?? [], CELL)
-  const hint = s.rects?.map((q) => ({ x: half(q.x), y: half(q.y), w: half(q.w), h: half(q.h) }))
-  const [main, ...parts] = hint && sameCells(Cells.of(hint), grid) ? hint : rectangles(grid)
+  const holes = s.holes ?? []
+  const g = Grid.of(s.rects ?? [], [s.outline, ...holes])
+  const shape = g.inside(s.outline, holes)
+  // The rectangles the editor drew it as, while they still make this shape.
+  let hint: Rect[] | undefined
+  try {
+    if (s.rects && sameCells(g.cells(s.rects), shape)) hint = s.rects
+  } catch {
+    // A rectangle off the outline's corners: not this shape.
+  }
+  const rects = hint ?? rectangles(shape, g).map((r) => g.rect(r))
+  const [main, ...parts] = rects.map((q) => ({ x: cells(q.x), y: cells(q.y), w: cells(q.w), h: cells(q.h) }))
   const room: V1.HouseRoom = { id: s.id, name: s.name, kind: s.kind, ...(main ?? { x: 0, y: 0, w: 1, h: 1 }) }
   if (parts.length) room.parts = parts
   return room
@@ -418,8 +424,8 @@ function openingOf(o: Opening, wall: Wall): V1.HouseOpening | null {
   const i = axis === 'h' ? 0 : 1
   const dir = Math.sign(wall.b[i] - wall.a[i]) || 1
   const s = dir > 0 ? wall.a[i] + o.at : wall.a[i] - o.at - o.width
-  const at = half(s)
-  const len = half(o.width)
+  const at = cells(s)
+  const len = cells(o.width)
   const out: V1.HouseOpening =
     axis === 'h'
       ? { id: o.id, type: 'door', axis, x: at, y: cells(wall.a[1]), len }
@@ -458,12 +464,12 @@ export function toV1(p: Plan): V1.HousePlan {
       rooms: s.spaces.map(roomOf),
       openings,
       placements: s.placements.map((pl) => {
-        const out: V1.HousePlacement = { ref: pl.ref, x: half(pl.x), y: half(pl.y) }
+        const out: V1.HousePlacement = { ref: pl.ref, x: cells(pl.x), y: cells(pl.y) }
         if (pl.host) out.opening = pl.host.opening
         if (pl.host?.covering) out.covering = pl.host.covering
         if (pl.color !== undefined) out.color = pl.color
         if (pl.circuitRooms !== undefined) out.circuitRooms = [...pl.circuitRooms]
-        if (pl.length !== undefined) out.length = Math.max(1, Math.round(cells(pl.length)))
+        if (pl.length !== undefined) out.length = cells(pl.length)
         if (pl.axis !== undefined) out.axis = pl.axis
         if (pl.mount !== undefined) out.mount = pl.mount
         if (pl.look !== undefined) out.look = pl.look
@@ -475,18 +481,25 @@ export function toV1(p: Plan): V1.HousePlan {
       if (!axis) return []
       const i = axis === 'h' ? 0 : 1
       const lo = Math.min(r.a[i], r.b[i])
-      const len = half(Math.abs(r.b[i] - r.a[i]))
+      const len = cells(Math.abs(r.b[i] - r.a[i]))
       // A radiator drawn the other way round has its sides the other way round too.
       const side = r.b[i] >= r.a[i] ? r.side : r.side === 'left' ? 'right' : 'left'
       return [
         axis === 'h'
-          ? { id: r.id, axis, x: half(lo), y: cells(r.a[1]), len, side: fromWallSide(axis, side) }
-          : { id: r.id, axis, x: cells(r.a[0]), y: half(lo), len, side: fromWallSide(axis, side) },
+          ? { id: r.id, axis, x: cells(lo), y: cells(r.a[1]), len, side: fromWallSide(axis, side) }
+          : { id: r.id, axis, x: cells(r.a[0]), y: cells(lo), len, side: fromWallSide(axis, side) },
       ]
     })
     if (radiators.length) floor.radiators = radiators
     const furniture = s.furniture.map((u): V1.HouseFurniture => {
-      const out: V1.HouseFurniture = { id: u.id, kind: u.kind, x: half(u.x), y: half(u.y), w: half(u.w), d: half(u.d) }
+      const out: V1.HouseFurniture = {
+        id: u.id,
+        kind: u.kind,
+        x: cells(u.x),
+        y: cells(u.y),
+        w: cells(u.w),
+        d: cells(u.d),
+      }
       if (u.height !== undefined) out.height = Math.round(u.height / 10) / 100
       if (u.back !== undefined) out.back = u.back
       return out
@@ -497,7 +510,7 @@ export function toV1(p: Plan): V1.HousePlan {
   return {
     version: V1.HOUSE_V1,
     grid: V1.HOUSE_GRID,
-    plot: { w: Math.round(cells(p.site.w)), h: Math.round(cells(p.site.h)) },
+    plot: { w: cells(p.site.w), h: cells(p.site.h) },
     floors,
   }
 }

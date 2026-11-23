@@ -201,8 +201,17 @@ step.
    1. Undo and redo (shipped). A step is the plan once a change settles: each
       tap or drag when it ends, typing when it pauses. Whole copies of the
       plan, in `house-model/history.ts`.
-   2. The editor edits the version 2 plan: the draft in millimetres, the
-      blueprint drawing walls as they are, snapping chosen, saved as version 2.
+   2. Millimetres everywhere (shipped). Decided by Jose on 2026-11-23: the
+      editor keeps drawing version 1's shapes (rectangles, walls along room
+      edges) first, with every value exact to the millimetre, and real wall
+      elements follow in step 3. Snapping is chosen in the status strip
+      (0.5 m, 10 cm, 1 cm, off) and saved as the plan's `snap`. The editor
+      saves version 2, converting in the browser against the stored plan.
+      Shapes are no longer walked cell by cell: `Grid` in
+      `house-model/cells.ts` cuts the plane at every corner, so the same
+      algorithms work on any measurements, and the UI's walls are stretches
+      along a line (`Walls` in `house/geometry.ts`). The live view and 3D
+      draw the exact values too.
    3. Walls as walls: a Wall tool, a wall selected and edited on its own, its
       thickness and height in Properties, exact lengths typed in.
    4. The ruler, and resizing the plan to match it (see house-ui.md).

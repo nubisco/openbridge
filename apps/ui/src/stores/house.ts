@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { toV1 } from '@house-model/convert'
+import { fromV1, toV1 } from '@house-model/convert'
+import type { HousePlan as PlanV1 } from '@house-model/v1'
 import { api, type HouseModel, type HousePlan, type StoredHouse } from '@/api'
 import { liveDevices, type LiveDevice, type NativeDevice } from '@/house/live'
 import { useDaemonStore } from './daemon'
@@ -48,10 +49,16 @@ export const useHouseStore = defineStore('house', () => {
    * having already taken the newer plan, so the caller can tell the person
    * and let them redo the change on top of it.
    */
-  async function save(next: HousePlan | null): Promise<'saved' | 'conflict'> {
-    // Sent in cells. The server converts it and keeps from the stored plan
-    // what cells cannot say (wall thickness, a door's frame, curtains).
-    const res = await api.house.save(next, rev.value)
+  async function save(next: HousePlan | null, snap?: number): Promise<'saved' | 'conflict'> {
+    // Drawn in version 1's shapes, measured to the millimetre, and sent as
+    // version 2: converted here against the stored plan, which keeps what
+    // the editor cannot say (wall thickness, a door's frame, curtains).
+    let plan: HouseModel | null = null
+    if (next) {
+      plan = fromV1(next as unknown as PlanV1, model.value).plan
+      if (snap) plan.snap = snap
+    }
+    const res = await api.house.save(plan, rev.value)
     take(res.ok ? res.house : res.conflict)
     return res.ok ? 'saved' : 'conflict'
   }

@@ -27,21 +27,26 @@ import {
   FURNITURE_BACK,
   furnitureBack,
   oppositeSide,
+  mmOf,
   openingFits,
+  openingLine,
+  openingSpan,
   openingsOverlap,
-  openingUnits,
   r1,
   roomArea,
   roomAt,
   roomOutline,
   roomRects,
   roomsOutsideIn,
+  same,
+  snap,
+  toMm,
   sliderPanes,
   takesShutter,
-  unitKey,
+  Walls,
   wallRuns,
-  wallUnits,
   type Point,
+  type WallSpan,
   type WallUnit,
 } from './geometry'
 import { coveringDraws } from './coverings'
@@ -123,17 +128,12 @@ export function addFloor(plan: HousePlan): HouseFloor {
 export function setPlotSize(plan: HousePlan, axis: 'w' | 'h', cells: number): void {
   const rects = plan.floors.flatMap((f) => f.rooms.flatMap(roomRects))
   const min = Math.max(2, ...rects.map((r) => (axis === 'w' ? r.x + r.w : r.y + r.h)))
-  plan.plot[axis] = clamp(Math.round(cells), min, 400)
+  plan.plot[axis] = clamp(toMm(cells), min, 400)
 }
 
 export function removeFloor(plan: HousePlan, floorId: string): void {
   if (plan.floors.length <= 1) return
   plan.floors = plan.floors.filter((f) => f.id !== floorId)
-}
-
-/** The wall units on a room's outline, so moving a room can carry its openings along. */
-function perimeter(r: HouseRoom): Set<string> {
-  return new Set(roomOutline(r).map((u) => unitKey(u.x, u.y, u.axis)))
 }
 
 const overlaps = (a: HouseRect, b: HouseRect) =>
@@ -191,15 +191,13 @@ export function roomPayload(floor: HouseFloor, r: HouseRoom) {
     roomRects(r).some((p) => q.x >= p.x && q.y >= p.y && q.x + q.w <= p.x + p.w && q.y + q.h <= p.y + p.h)
   const inner = floor.rooms.filter((x) => x !== r && roomRects(x).every(within))
   const group = new Set<HouseRoom>([r, ...inner])
-  const edge = new Set([...group].flatMap((x) => [...perimeter(x)]))
+  // The outlines of the rooms that move, so their doors and radiators go too.
+  const edge = new Walls([...group].flatMap(roomOutline))
+  const onEdge = (o: Pick<HouseOpening, 'axis' | 'x' | 'y' | 'len'>) => openingFits(o, edge)
   return {
     rooms: inner.map((x) => ({ room: x, o: roomRects(x).map((q) => ({ ...q })) })),
-    openings: floor.openings
-      .filter((o) => openingUnits(o).every((k) => edge.has(k)))
-      .map((o) => ({ o, x: o.x, y: o.y })),
-    radiators: (floor.radiators ?? [])
-      .filter((r) => spanUnits(r).every((k) => edge.has(k)))
-      .map((r) => ({ o: r, x: r.x, y: r.y })),
+    openings: floor.openings.filter(onEdge).map((o) => ({ o, x: o.x, y: o.y })),
+    radiators: (floor.radiators ?? []).filter(onEdge).map((r) => ({ o: r, x: r.x, y: r.y })),
     furniture: (floor.furniture ?? [])
       .filter((f) => {
         const at = roomAt(floor, f.x + f.w / 2, f.y + f.d / 2)
@@ -216,57 +214,57 @@ export function roomPayload(floor: HouseFloor, r: HouseRoom) {
   }
 }
 
-/** The wall unit nearest a point, within reach of a finger. */
+/** The point on a wall nearest a point, within reach of a finger. */
 export function nearestWall(floor: HouseFloor, x: number, y: number, reach = 1.4): WallUnit | null {
-  let best: WallUnit | null = null
-  let bd = reach
-  for (const u of wallUnits(floor).values()) {
-    const mx = u.x + (u.axis === 'h' ? 0.5 : 0)
-    const my = u.y + (u.axis === 'v' ? 0.5 : 0)
-    const d = Math.hypot(x - mx, y - my)
-    if (d < bd) {
-      bd = d
-      best = u
-    }
-  }
-  return best
+  return Walls.of(floor).nearest(x, y, reach)
 }
 
+/** The opening on that wall at that point, if any. */
 export function openingAt(floor: HouseFloor, u: WallUnit): HouseOpening | undefined {
-  const k = unitKey(u.x, u.y, u.axis)
-  return floor.openings.find((o) => openingUnits(o).includes(k))
+  return floor.openings.find((o) => {
+    if (o.axis !== u.axis || !same(openingLine(o), u.line)) return false
+    const [s, e] = openingSpan(o)
+    return mmOf(s) <= mmOf(u.at) && mmOf(u.at) <= mmOf(e)
+  })
 }
 
 /**
- * Put a door or window on the wall at `u`, a metre long and centred on the tap
- * where the wall allows. Returns null when there is no wall left there.
+ * The stretch of the wall at `u` that is free: up to the wall's ends, or the
+ * doors and windows either side. Null when `u` is on a door or window.
+ */
+function freeAround(floor: HouseFloor, u: WallUnit): [number, number] | null {
+  const stretch = Walls.of(floor).holding(u.axis, u.line, u.at, u.at)
+  if (!stretch) return null
+  let [lo, hi] = stretch
+  for (const o of floor.openings) {
+    if (o.axis !== u.axis || !same(openingLine(o), u.line)) continue
+    const [s, e] = openingSpan(o)
+    if (mmOf(e) <= mmOf(u.at)) lo = Math.max(lo, e)
+    else if (mmOf(s) >= mmOf(u.at)) hi = Math.min(hi, s)
+    else return null
+  }
+  return [lo, hi]
+}
+
+/**
+ * Put a door or window on the wall at `u`, as wide as its preset and centred
+ * on the tap where the wall allows. Returns null when there is no free wall
+ * half a metre long there.
  */
 export function addOpening(floor: HouseFloor, u: WallUnit, preset: OpeningPreset): HouseOpening | null {
-  const units = wallUnits(floor)
-  const taken = new Set(floor.openings.flatMap(openingUnits))
-  const free = (i: number) => {
-    const k = u.axis === 'h' ? unitKey(u.x + i, u.y, 'h') : unitKey(u.x, u.y + i, 'v')
-    return units.has(k) && !taken.has(k)
-  }
-  if (!free(0)) return null
+  const free = freeAround(floor, u)
+  if (!free || mmOf(free[1] - free[0]) < mmOf(1)) return null
   // As wide as the preset: a sliding door two metres, the usual two panes.
-  const want = presetCells(preset)
-  // Grow from the tapped unit, preferring to centre on it.
-  let start = 0
-  let end = 1
-  while (end - start < want && (free(end) || free(start - 1))) {
-    if (free(start - 1) && (end - start) % 2 === 1) start--
-    else if (free(end)) end++
-    else start--
-  }
+  const len = Math.min(presetCells(preset), free[1] - free[0])
+  const start = clamp(snap(u.at - len / 2, true), free[0], free[1] - len)
   const id = uniqueId(preset.kind, (x) => floor.openings.some((o) => o.id === x))
   const o: HouseOpening = {
     id,
     type: preset.kind,
     axis: u.axis,
-    x: u.axis === 'h' ? u.x + start : u.x,
-    y: u.axis === 'v' ? u.y + start : u.y,
-    len: end - start,
+    x: u.axis === 'h' ? start : u.line,
+    y: u.axis === 'v' ? start : u.line,
+    len,
   }
   applyPreset(o, preset)
   floor.openings.push(o)
@@ -298,15 +296,9 @@ export function nearestFreeWindow(floor: HouseFloor, x: number, y: number, reach
 
 /** Whether an opening would sit wholly on wall, clear of every other opening. */
 export function fitsFree(floor: HouseFloor, o: HouseOpening): boolean {
-  if (o.len < 1) return false
-  const units = wallUnits(floor)
-  return (
-    openingUnits(o).every((k) => units.has(k)) && !floor.openings.some((x) => x.id !== o.id && openingsOverlap(x, o))
-  )
+  if (mmOf(o.len) < mmOf(1)) return false
+  return openingFits(o, Walls.of(floor)) && !floor.openings.some((x) => x.id !== o.id && openingsOverlap(x, o))
 }
-
-/** Openings move and resize in half cells, a quarter metre. */
-const quarter = (v: number) => Math.round(v * 2) / 2
 
 /**
  * Leave the wall at `u` out: the whole stretch of it the same two rooms
@@ -314,34 +306,44 @@ const quarter = (v: number) => Math.round(v * 2) / 2
  * that run into each other usually have nothing between them at all.
  */
 export function addOpenWall(floor: HouseFloor, u: WallUnit): HouseOpening | null {
-  const units = wallUnits(floor)
-  const sides = (i: number) => {
-    const x = u.axis === 'h' ? u.x + i : u.x
-    const y = u.axis === 'v' ? u.y + i : u.y
-    const a = u.axis === 'h' ? roomAt(floor, x + 0.5, y - 0.5) : roomAt(floor, x - 0.5, y + 0.5)
-    const b = u.axis === 'h' ? roomAt(floor, x + 0.5, y + 0.5) : roomAt(floor, x + 0.5, y + 0.5)
+  const free = freeAround(floor, u)
+  if (!free) return null
+  // Which rooms are either side at a point along the wall.
+  const k = 0.01
+  const sides = (t: number) => {
+    const [a, b] =
+      u.axis === 'h'
+        ? [roomAt(floor, t, u.line - k), roomAt(floor, t, u.line + k)]
+        : [roomAt(floor, u.line - k, t), roomAt(floor, u.line + k, t)]
     return `${a?.id ?? ''}|${b?.id ?? ''}`
   }
-  const pair = sides(0)
-  const probe = (i: number): HouseOpening => ({
-    id: '',
+  // Where the rooms either side can change: any room's edge across the wall.
+  const cuts = new Set<number>([free[0], free[1]])
+  for (const r of floor.rooms)
+    for (const q of roomRects(r)) {
+      for (const c of u.axis === 'h' ? [q.x, q.x + q.w] : [q.y, q.y + q.h]) {
+        if (mmOf(c) > mmOf(free[0]) && mmOf(c) < mmOf(free[1])) cuts.add(c)
+      }
+    }
+  const at = [...cuts].sort((a, b) => a - b)
+  const i = Math.max(
+    0,
+    at.findIndex((c, n) => n + 1 < at.length && mmOf(c) <= mmOf(u.at) && mmOf(u.at) <= mmOf(at[n + 1])),
+  )
+  const pair = sides((at[i] + at[i + 1]) / 2)
+  let lo = i
+  let hi = i + 1
+  while (lo > 0 && sides((at[lo - 1] + at[lo]) / 2) === pair) lo--
+  while (hi + 1 < at.length && sides((at[hi] + at[hi + 1]) / 2) === pair) hi++
+  const id = uniqueId('open', (x) => floor.openings.some((o) => o.id === x))
+  const o: HouseOpening = {
+    id,
     type: 'open',
     axis: u.axis,
-    x: u.axis === 'h' ? u.x + i : u.x,
-    y: u.axis === 'v' ? u.y + i : u.y,
-    len: 1,
-  })
-  const free = (i: number) =>
-    units.has(openingUnits(probe(i))[0]) &&
-    sides(i) === pair &&
-    !floor.openings.some((x) => openingsOverlap(x, probe(i)))
-  if (!free(0)) return null
-  let start = 0
-  let end = 1
-  while (free(start - 1)) start--
-  while (free(end)) end++
-  const id = uniqueId('open', (x) => floor.openings.some((o) => o.id === x))
-  const o: HouseOpening = { ...probe(start), id, len: end - start }
+    x: u.axis === 'h' ? at[lo] : u.line,
+    y: u.axis === 'v' ? at[lo] : u.line,
+    len: at[hi] - at[lo],
+  }
   floor.openings.push(o)
   return o
 }
@@ -355,8 +357,13 @@ export function addOpenWall(floor: HouseFloor, u: WallUnit): HouseOpening | null
 export function moveOpening(floor: HouseFloor, o: HouseOpening, x: number, y: number, grab: number): boolean {
   const u = nearestWall(floor, x, y)
   if (!u) return false
-  const start = quarter((u.axis === 'h' ? x : y) - grab)
-  const next: HouseOpening = { ...o, axis: u.axis, x: u.axis === 'h' ? start : u.x, y: u.axis === 'v' ? start : u.y }
+  const start = snap((u.axis === 'h' ? x : y) - grab, true)
+  const next: HouseOpening = {
+    ...o,
+    axis: u.axis,
+    x: u.axis === 'h' ? start : u.line,
+    y: u.axis === 'v' ? start : u.line,
+  }
   // A side is named for the wall's direction, so a turned door opens the default way.
   if (next.axis !== o.axis) delete next.opens
   if (!fitsFree(floor, next)) return false
@@ -365,9 +372,9 @@ export function moveOpening(floor: HouseFloor, o: HouseOpening, x: number, y: nu
   return true
 }
 
-/** Drag one end of an opening along its wall, in quarter metres, never under half a metre long. */
+/** Drag one end of an opening along its wall, snapped, never under half a metre long. */
 export function resizeOpening(floor: HouseFloor, o: HouseOpening, end: 'start' | 'end', x: number, y: number): boolean {
-  const at = quarter(o.axis === 'h' ? x : y)
+  const at = snap(o.axis === 'h' ? x : y, true)
   const s0 = o.axis === 'h' ? o.x : o.y
   const s1 = s0 + o.len
   const start = end === 'start' ? Math.min(at, s1 - 1) : s0
@@ -385,23 +392,10 @@ export function resizeOpening(floor: HouseFloor, o: HouseOpening, end: 'start' |
 
 // ─── Radiators ──────────────────────────────────────────────────────────────
 
-/** The wall units a radiator covers, even partly. */
-function spanUnits(r: Pick<HouseRadiator, 'x' | 'y' | 'axis' | 'len'>): string[] {
-  const s = r.axis === 'h' ? r.x : r.y
-  const out: string[] = []
-  for (let i = Math.floor(s); i < Math.ceil(s + r.len); i++) {
-    out.push(r.axis === 'h' ? unitKey(i, r.y, 'h') : unitKey(r.x, i, 'v'))
-  }
-  return out
-}
-
-const sameLine = (a: { axis: string; x: number; y: number }, b: { axis: string; x: number; y: number }) =>
-  a.axis === b.axis && (a.axis === 'h' ? a.y === b.y : a.x === b.x)
-const spanOf = (r: { axis: string; x: number; y: number; len: number }): [number, number] => {
-  const s = r.axis === 'h' ? r.x : r.y
-  return [s, s + r.len]
-}
-const crosses = (a: [number, number], b: [number, number]) => a[0] < b[1] && b[0] < a[1]
+const sameLine = (a: { axis: string; line: number }, b: { axis: string; line: number }) =>
+  a.axis === b.axis && same(a.line, b.line)
+const lineOf = (r: Pick<HouseRadiator, 'axis' | 'x' | 'y'>) => ({ axis: r.axis, line: openingLine(r) })
+const crosses = (a: [number, number], b: [number, number]) => mmOf(a[0]) < mmOf(b[1]) && mmOf(b[0]) < mmOf(a[1])
 
 /**
  * Whether a radiator sits wholly on wall: not across a doorway or an open
@@ -409,19 +403,21 @@ const crosses = (a: [number, number], b: [number, number]) => a[0] < b[1] && b[0
  * where radiators usually are, so a window is fine.
  */
 export function radiatorFits(floor: HouseFloor, r: HouseRadiator): boolean {
-  if (r.len < 1) return false
-  const units = wallUnits(floor)
-  if (!spanUnits(r).every((k) => units.has(k))) return false
-  const span = spanOf(r)
-  if (floor.openings.some((o) => o.type !== 'window' && sameLine(o, r) && crosses(spanOf(o), span))) return false
+  if (mmOf(r.len) < mmOf(1)) return false
+  if (!openingFits(r, Walls.of(floor))) return false
+  const span = openingSpan(r)
+  if (
+    floor.openings.some((o) => o.type !== 'window' && sameLine(lineOf(o), lineOf(r)) && crosses(openingSpan(o), span))
+  )
+    return false
   return !(floor.radiators ?? []).some(
-    (x) => x.id !== r.id && x.side === r.side && sameLine(x, r) && crosses(spanOf(x), span),
+    (x) => x.id !== r.id && x.side === r.side && sameLine(lineOf(x), lineOf(r)) && crosses(openingSpan(x), span),
   )
 }
 
 /** The side of the wall at `u` that a point is on, as a radiator names it. */
 function sideOf(u: WallUnit, x: number, y: number): HouseRadiator['side'] {
-  return u.axis === 'h' ? (y < u.y ? 'up' : 'down') : x < u.x ? 'left' : 'right'
+  return u.axis === 'h' ? (y < u.line ? 'up' : 'down') : x < u.line ? 'left' : 'right'
 }
 const flip = (s: HouseRadiator['side']): HouseRadiator['side'] =>
   ({ up: 'down', down: 'up', left: 'right', right: 'left' })[s] as HouseRadiator['side']
@@ -433,14 +429,10 @@ const flip = (s: HouseRadiator['side']): HouseRadiator['side'] =>
  */
 export function addRadiator(floor: HouseFloor, u: WallUnit, x: number, y: number): HouseRadiator | null {
   let side = sideOf(u, x, y)
-  const probe = (s: HouseRadiator['side']): HouseRadiator => ({ id: '', x: u.x, y: u.y, axis: u.axis, len: 1, side: s })
   const inRoom = (s: HouseRadiator['side']) => {
-    const r = probe(s)
     const [nx, ny] = s === 'up' ? [0, -1] : s === 'down' ? [0, 1] : s === 'left' ? [-1, 0] : [1, 0]
-    return (
-      roomAt(floor, r.x + (r.axis === 'h' ? 0.5 : 0) + nx * 0.5, r.y + (r.axis === 'v' ? 0.5 : 0) + ny * 0.5)?.kind ===
-      'room'
-    )
+    const [px, py] = u.axis === 'h' ? [u.at, u.line] : [u.line, u.at]
+    return roomAt(floor, px + nx * 0.5, py + ny * 0.5)?.kind === 'room'
   }
   if (!inRoom(side)) side = flip(side)
   if (!inRoom(side)) return null
@@ -450,12 +442,12 @@ export function addRadiator(floor: HouseFloor, u: WallUnit, x: number, y: number
   )
   const centre = u.axis === 'h' ? x : y
   for (const len of [CELLS_PER_M, 1.5, 1]) {
-    const start = Math.round((centre - len / 2) * 2) / 2
+    const start = snap(centre - len / 2, true)
     const r: HouseRadiator = {
       id,
       axis: u.axis,
-      x: u.axis === 'h' ? start : u.x,
-      y: u.axis === 'v' ? start : u.y,
+      x: u.axis === 'h' ? start : u.line,
+      y: u.axis === 'v' ? start : u.line,
       len,
       side,
     }
@@ -471,21 +463,21 @@ export function addRadiator(floor: HouseFloor, u: WallUnit, x: number, y: number
 export function moveRadiator(floor: HouseFloor, r: HouseRadiator, x: number, y: number, grab: number): boolean {
   const u = nearestWall(floor, x, y)
   if (!u) return false
-  const start = Math.round(((u.axis === 'h' ? x : y) - grab) * 2) / 2
+  const start = snap((u.axis === 'h' ? x : y) - grab, true)
   const next: HouseRadiator = {
     ...r,
     axis: u.axis,
-    x: u.axis === 'h' ? start : u.x,
-    y: u.axis === 'v' ? start : u.y,
+    x: u.axis === 'h' ? start : u.line,
+    y: u.axis === 'v' ? start : u.line,
     // Along the same wall it keeps its side. Onto another, it takes the side the pointer is on.
-    side: u.axis === r.axis && sameLine(u, r) ? r.side : sideOf(u, x, y),
+    side: sameLine(u, lineOf(r)) ? r.side : sideOf(u, x, y),
   }
   if (!radiatorFits(floor, next)) return false
   Object.assign(r, next)
   return true
 }
 
-/** Drag one end of a radiator, in quarter metres, never under half a metre. */
+/** Drag one end of a radiator, snapped, never under half a metre. */
 export function resizeRadiator(
   floor: HouseFloor,
   r: HouseRadiator,
@@ -493,8 +485,8 @@ export function resizeRadiator(
   x: number,
   y: number,
 ): boolean {
-  const at = Math.round((r.axis === 'h' ? x : y) * 2) / 2
-  const [s0, s1] = spanOf(r)
+  const at = snap(r.axis === 'h' ? x : y, true)
+  const [s0, s1] = openingSpan(r)
   const start = end === 'start' ? Math.min(at, s1 - 1) : s0
   const stop = end === 'end' ? Math.max(at, s0 + 1) : s1
   const next: HouseRadiator = {
@@ -554,7 +546,7 @@ const FURNITURE_SIZE: Record<HouseFurnitureKind, [number, number]> = {
 
 const AREA_PIECES = new Set<HouseFurnitureKind>(['pergola', 'rug', 'parasol'])
 
-const halfCell = (v: number) => Math.round(v * 2) / 2
+const halfCell = (v: number) => snap(v, true)
 
 /** Keep a piece inside the plot, moving it rather than shrinking it. */
 function keepInPlot(plan: HousePlan, f: HouseFurniture): void {
@@ -592,7 +584,7 @@ export function addFurniture(
   return f
 }
 
-/** Move a piece in quarter metres, `grab` being where on it the pointer took it. */
+/** Move a piece, snapped, `grab` being where on it the pointer took it. */
 export function moveFurniture(
   plan: HousePlan,
   f: HouseFurniture,
@@ -605,7 +597,7 @@ export function moveFurniture(
   keepInPlot(plan, f)
 }
 
-/** Drag a corner of a piece, in quarter metres, never under a quarter metre a side. */
+/** Drag a corner of a piece, snapped, never under a quarter metre a side. */
 export function resizeFurniture(
   plan: HousePlan,
   f: HouseFurniture,
@@ -659,7 +651,7 @@ export function unplace(plan: HousePlan, ref: string): void {
 }
 
 /**
- * Put a device on a floor at (x,y), snapped to half cells. A shutter dropped
+ * Put a device on a floor at (x,y), snapped. A shutter dropped
  * near a window attaches to it, which is where it is drawn from then on.
  */
 export function place(plan: HousePlan, floor: HouseFloor, device: LiveDevice, x: number, y: number): void {
@@ -668,8 +660,8 @@ export function place(plan: HousePlan, floor: HouseFloor, device: LiveDevice, x:
   const p = {
     ...(existing ?? {}),
     ref: device.ref,
-    x: clamp(Math.round(x * 2) / 2, 0, plan.plot.w),
-    y: clamp(Math.round(y * 2) / 2, 0, plan.plot.h),
+    x: clamp(snap(x, true), 0, plan.plot.w),
+    y: clamp(snap(y, true), 0, plan.plot.h),
   }
   detach(p)
   if (device.kind === 'shutter') {
@@ -699,10 +691,10 @@ export function replacePlan(target: HousePlan, source: HousePlan): void {
 export function tidy(plan: HousePlan): HousePlan {
   const rooms = new Set(plan.floors.flatMap((f) => f.rooms.map((r) => r.id)))
   for (const f of plan.floors) {
-    const units = wallUnits(f)
+    const walls = Walls.of(f)
     const kept = new Set<string>()
     f.openings = f.openings.filter((o) => {
-      const ok = openingFits(o, units)
+      const ok = openingFits(o, walls)
       // A door turned into a window or an open wall is no longer a glass door.
       if (o.type !== 'door') delete o.glass
       if (o.type === 'open') delete o.spec
@@ -780,6 +772,12 @@ function furnitureBackMark(floor: HouseFloor, f: HouseFurniture): string {
   return out
 }
 
+/** An edge as a path, in screen units. */
+function spanPath(e: WallSpan): string {
+  const [x1, y1, x2, y2] = e.axis === 'h' ? [e.start, e.line, e.end, e.line] : [e.line, e.start, e.line, e.end]
+  return `M${r1(x1 * S)},${r1(y1 * S)}L${r1(x2 * S)},${r1(y2 * S)}`
+}
+
 const metres = (cells: number) => String(Math.round((cells / CELLS_PER_M) * 100) / 100)
 
 export function renderEditor(
@@ -803,8 +801,8 @@ export function renderEditor(
   if (below) {
     for (const room of below.rooms.filter((x) => x.kind === 'room')) {
       let d = ''
-      for (const u of roomOutline(room)) {
-        d += `M${u.x * S},${u.y * S}L${(u.axis === 'h' ? u.x + 1 : u.x) * S},${(u.axis === 'v' ? u.y + 1 : u.y) * S}`
+      for (const e of roomOutline(room)) {
+        d += spanPath(e)
       }
       h += `<path class="hv-eghost" d="${d}"/>`
     }
@@ -817,8 +815,8 @@ export function renderEditor(
     const nfs = Math.min(fs, (q.w * S - 10 * U) / Math.max(1, r.name.length * 0.62))
     const size = rects.length > 1 ? `${metres(roomArea(r) / CELLS_PER_M)} m²` : `${metres(r.w)} × ${metres(r.h)} m`
     let edge = ''
-    for (const u of roomOutline(r)) {
-      edge += `M${u.x * S},${u.y * S}L${(u.axis === 'h' ? u.x + 1 : u.x) * S},${(u.axis === 'v' ? u.y + 1 : u.y) * S}`
+    for (const e of roomOutline(r)) {
+      edge += spanPath(e)
     }
     h +=
       `<g class="hv-eroom hv-k-${r.kind}${o.selectedRoom === r.id ? ' hv-sel' : ''}" data-room="${esc(r.id)}">` +

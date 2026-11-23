@@ -501,7 +501,7 @@ export const api = {
      * than overwrite their work.
      */
     save: async (
-      plan: HousePlan | null,
+      plan: HouseModel | HousePlan | null,
       rev: number,
     ): Promise<{ ok: true; house: StoredHouse } | { ok: false; conflict: StoredHouse }> => {
       const res = await fetch(`${BASE}/house`, {
