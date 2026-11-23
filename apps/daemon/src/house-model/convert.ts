@@ -14,7 +14,8 @@
  * work in millimetres themselves.
  */
 
-import { Cells, Grid, rectLoops, rectangles, type Rect } from './cells.js'
+import { Cells, Grid, area, rectLoops, rectangles, type Rect } from './cells.js'
+import { overlapLength, wallLinesOf, type WallLine } from './edges.js'
 import * as V1 from './v1.js'
 import {
   DEFAULTS,
@@ -63,13 +64,10 @@ const axisOf = (a: Point, b: Point): 'h' | 'v' | null => (a[1] === b[1] ? 'h' : 
 
 // ─── Walls ──────────────────────────────────────────────────────────────────
 
-interface Line {
-  axis: 'h' | 'v'
-  /** The y of a line along x, or the x of one along y, in millimetres. */
-  line: number
-  start: number
-  end: number
-  inner: boolean
+/** A room's outline and holes, in millimetres. */
+function roomLoops(r: V1.HouseRoom): Point[][] {
+  if (r.outline) return [r.outline.map(([x, y]): Point => [mm(x), mm(y)])]
+  return rectLoops(V1.roomRects(r).map(mmRect))
 }
 
 /**
@@ -77,82 +75,28 @@ interface Line {
  * merged into straight runs. A run is cut where it changes from a wall
  * between two rooms (inner, thin) to one with a room on one side only
  * (outer, thick), as those are different walls in a building.
- *
- * Worked on a grid cut at every room corner, so each cell is wholly in a
- * room or not, whatever the rooms measure.
  */
-export function wallLines(floor: V1.HouseFloor): Line[] {
-  const walled = floor.rooms.filter((r) => r.kind === 'room').map((r) => V1.roomRects(r).map(mmRect))
-  const g = Grid.of(walled.flat())
-  const each = walled.map((rects) => g.cells(rects))
-  const all = new Cells()
-  for (const c of each) for (const [i, j] of c) all.add(i, j)
-  const units = new Map<string, { axis: 'h' | 'v'; line: number; at: number; inner: boolean }>()
-  for (const c of each) {
-    for (const [i, j] of c) {
-      for (const jj of [j, j + 1]) {
-        // The edge between cell rows jj - 1 and jj, if this room is on one side only.
-        if (c.has(i, jj - 1) && c.has(i, jj)) continue
-        units.set(`h${i},${jj}`, { axis: 'h', line: jj, at: i, inner: all.has(i, jj - 1) && all.has(i, jj) })
-      }
-      for (const ii of [i, i + 1]) {
-        if (c.has(ii - 1, j) && c.has(ii, j)) continue
-        units.set(`v${ii},${j}`, { axis: 'v', line: ii, at: j, inner: all.has(ii - 1, j) && all.has(ii, j) })
-      }
-    }
-  }
-  const sorted = [...units.values()].sort((a, b) =>
-    a.axis !== b.axis ? (a.axis === 'h' ? -1 : 1) : a.line - b.line || a.at - b.at,
-  )
-  const lines: Line[] = []
-  for (const u of sorted) {
-    const cur = lines[lines.length - 1]
-    if (cur && cur.axis === u.axis && cur.line === u.line && cur.end === u.at && cur.inner === u.inner) cur.end++
-    else lines.push({ axis: u.axis, line: u.line, start: u.at, end: u.at + 1, inner: u.inner })
-  }
-  // From grid indices back to millimetres.
-  return lines.map((l) => {
-    const [along, across] = l.axis === 'h' ? [g.xs, g.ys] : [g.ys, g.xs]
-    return { ...l, line: across.at[l.line], start: along.at[l.start], end: along.at[l.end] }
-  })
+export function wallLines(floor: V1.HouseFloor): WallLine[] {
+  return wallLinesOf(floor.rooms.filter((r) => r.kind === 'room').map(roomLoops))
 }
 
-const lineEnds = (l: Line): [Point, Point] =>
-  l.axis === 'h'
-    ? [
-        [l.start, l.line],
-        [l.end, l.line],
-      ]
-    : [
-        [l.line, l.start],
-        [l.line, l.end],
-      ]
+const lineEnds = (l: WallLine): [Point, Point] => [l.a, l.b]
 
 /** How far two walls on the same line overlap, in millimetres. 0 when they are not on one line. */
 function overlap(a: Pick<Wall, 'a' | 'b'>, b: Pick<Wall, 'a' | 'b'>): number {
-  const ax = axisOf(a.a, a.b)
-  if (!ax || ax !== axisOf(b.a, b.b)) return 0
-  const k = ax === 'h' ? 1 : 0
-  if (a.a[k] !== b.a[k]) return 0
-  const i = ax === 'h' ? 0 : 1
-  const lo1 = Math.min(a.a[i], a.b[i])
-  const hi1 = Math.max(a.a[i], a.b[i])
-  const lo2 = Math.min(b.a[i], b.b[i])
-  const hi2 = Math.max(b.a[i], b.b[i])
-  return Math.max(0, Math.min(hi1, hi2) - Math.max(lo1, lo2))
+  return overlapLength([a.a, a.b], [b.a, b.b])
 }
 
 /** The wall spec on a wall's line that overlaps it most: what the editor set on it. */
 function specFor(floor: V1.HouseFloor, shape: Pick<Wall, 'a' | 'b'>): V1.HouseWallSpec | undefined {
   return (floor.walls ?? [])
     .map((w) => {
-      const [a, b] = lineEnds({
-        axis: w.axis,
-        line: mm(w.axis === 'h' ? w.y : w.x),
-        start: mm(w.axis === 'h' ? w.x : w.y),
-        end: mm((w.axis === 'h' ? w.x : w.y) + w.len),
-        inner: false,
-      })
+      const a: Point = [mm(w.x), mm(w.y)]
+      const b: Point = w.to
+        ? [mm(w.to[0]), mm(w.to[1])]
+        : w.axis === 'h'
+          ? [mm(w.x + w.len), mm(w.y)]
+          : [mm(w.x), mm(w.y + w.len)]
       return { w, o: overlap({ a, b }, shape) }
     })
     .filter((x) => x.o > 0)
@@ -190,8 +134,9 @@ function makeWalls(floor: V1.HouseFloor, prev: Wall[]): Wall[] {
       .filter((x) => x.o > 0)
       .sort((x, y) => y.o - x.o)[0]?.w
     const taken = (x: string) => used.has(x) || reserved.has(x)
-    let id = before && !reserved.has(before.id) ? before.id : `w${l.axis}${a[0]}_${a[1]}`
-    for (let n = 2; taken(id); n++) id = `w${l.axis}${a[0]}_${a[1]}_${n}`
+    const kind = l.axis ?? 's'
+    let id = before && !reserved.has(before.id) ? before.id : `w${kind}${a[0]}_${a[1]}`
+    for (let n = 2; taken(id); n++) id = `w${kind}${a[0]}_${a[1]}_${n}`
     used.add(id)
     // What the editor set wins, then what the wall had.
     const spec = specFor(floor, shape)
@@ -290,6 +235,12 @@ function tidyOpening<T extends Door | Window>(o: T): T {
 // ─── Spaces ─────────────────────────────────────────────────────────────────
 
 function makeSpace(r: V1.HouseRoom): Space {
+  if (r.outline) {
+    // Drawn corner by corner: the corners are the shape, clockwise on screen.
+    const outline = r.outline.map(([x, y]): Point => [mm(x), mm(y)])
+    if (area(outline) < 0) outline.reverse()
+    return { id: r.id, name: r.name, kind: r.kind, outline }
+  }
   const rects = V1.roomRects(r).map(mmRect)
   const [outline, ...holes] = rectLoops(rects)
   const s: Space = { id: r.id, name: r.name, kind: r.kind, outline }
@@ -436,8 +387,30 @@ function sameCells(a: Cells, b: Cells): boolean {
   return true
 }
 
+/** Whether an outline is a plain rectangle. */
+function isRectangle(loop: Point[]): boolean {
+  return loop.length === 4 && loop.every((p, i) => !!axisOf(p, loop[(i + 1) % 4]))
+}
+
 function roomOf(s: Space): V1.HouseRoom {
   const holes = s.holes ?? []
+  // A shape the editor did not draw as rectangles, and that is not one:
+  // a room drawn corner by corner. Its corners say what it is.
+  if (!s.rects && !holes.length && !isRectangle(s.outline)) {
+    const xs = s.outline.map((p) => p[0])
+    const ys = s.outline.map((p) => p[1])
+    const [x0, y0] = [Math.min(...xs), Math.min(...ys)]
+    return {
+      id: s.id,
+      name: s.name,
+      kind: s.kind,
+      x: cells(x0),
+      y: cells(y0),
+      w: cells(Math.max(...xs) - x0),
+      h: cells(Math.max(...ys) - y0),
+      outline: s.outline.map(([x, y]) => [cells(x), cells(y)]),
+    }
+  }
   const g = Grid.of(s.rects ?? [], [s.outline, ...holes])
   const shape = g.inside(s.outline, holes)
   // The rectangles the editor drew it as, while they still make this shape.
@@ -556,8 +529,22 @@ export function toV1(p: Plan): V1.HousePlan {
         height: w.height,
       }))
     const specs = s.walls.flatMap((w): V1.HouseWallSpec[] => {
+      if (drawn.includes(w)) return []
       const axis = axisOf(w.a, w.b)
-      if (!axis || drawn.includes(w)) return []
+      if (!axis) {
+        // A slanted edge of a room drawn corner by corner.
+        return [
+          {
+            axis: 'h',
+            x: cells(w.a[0]),
+            y: cells(w.a[1]),
+            len: 0,
+            to: [cells(w.b[0]), cells(w.b[1])],
+            thickness: w.thickness,
+            height: w.height,
+          },
+        ]
+      }
       const i = axis === 'h' ? 0 : 1
       const lo = Math.min(w.a[i], w.b[i])
       const len = cells(Math.abs(w.b[i] - w.a[i]))

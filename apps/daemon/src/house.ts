@@ -20,6 +20,7 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs'
 import { dirname } from 'path'
 import { Logger } from '@nubisco/openbridge-logger'
+import { area as loopArea, inside, onEdge } from './house-model/cells.js'
 import { fromV1, toV1 } from './house-model/convert.js'
 import { PlanError, validatePlan } from './house-model/validate.js'
 import { LEAVES, type Covering, type Plan } from './house-model/v2.js'
@@ -365,7 +366,8 @@ export function validateHousePlan(raw: unknown): HousePlan {
 
 // ─── Rooms of devices ───────────────────────────────────────────────────────
 
-const area = (r: HouseRoom) => roomRects(r).reduce((a, q) => a + q.w * q.h, 0)
+const area = (r: HouseRoom) =>
+  r.outline ? Math.abs(loopArea(r.outline)) : roomRects(r).reduce((a, q) => a + q.w * q.h, 0)
 
 /**
  * The room a point is in. Rooms can sit inside rooms (an en-suite drawn in a
@@ -378,6 +380,7 @@ function innermost(rooms: HouseRoom[]): HouseRoom | undefined {
 }
 
 function contains(r: HouseRoom, x: number, y: number): boolean {
+  if (r.outline) return inside([x, y], r.outline) || onEdge([x, y], r.outline)
   return roomRects(r).some((q) => x >= q.x && x <= q.x + q.w && y >= q.y && y <= q.y + q.h)
 }
 

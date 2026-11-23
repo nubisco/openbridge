@@ -7,7 +7,7 @@
  * turns the few lengths that are really metres (wall height, how high a lamp
  * hangs) into cells.
  */
-import { rectLoops } from '@house-model/cells'
+import { area as loopArea, inside, onEdge, rectLoops } from '@house-model/cells'
 import type {
   HouseFloor,
   HouseFurniture,
@@ -197,7 +197,36 @@ export function roomRects(r: HouseRoom): HouseRect[] {
 
 /** Whether a point is in a room, edges included. */
 export function roomContains(r: HouseRoom, x: number, y: number): boolean {
+  if (r.outline) return inside([x, y], r.outline) || onEdge([x, y], r.outline)
   return roomRects(r).some((q) => x >= q.x && x <= q.x + q.w && y >= q.y && y <= q.y + q.h)
+}
+
+/**
+ * Polygons that together fill a room: each rectangle of a room drawn as
+ * rectangles, or the outline of one drawn corner by corner.
+ */
+export function roomShapes(r: HouseRoom): Point[][] {
+  if (r.outline) return [r.outline]
+  return roomRects(r).map((q) => [
+    [q.x, q.y],
+    [q.x + q.w, q.y],
+    [q.x + q.w, q.y + q.h],
+    [q.x, q.y + q.h],
+  ])
+}
+
+/** A room's outline and holes, as closed loops. */
+export function roomLoops(r: HouseRoom): Point[][] {
+  return r.outline ? [r.outline] : rectLoops(roomRects(r), CELL_MM)
+}
+
+/** The slanted edges of a room drawn corner by corner. Walls too, but no door goes in one. */
+export function roomSlants(r: HouseRoom): Array<[Point, Point]> {
+  if (!r.outline) return []
+  const o = r.outline
+  return o
+    .map((a, i): [Point, Point] => [a, o[(i + 1) % o.length]])
+    .filter(([a, b]) => !same(a[0], b[0]) && !same(a[1], b[1]))
 }
 
 /** The box around a room. */
@@ -214,7 +243,8 @@ export function roomBox(r: HouseRoom): HouseRect {
 }
 
 /** Area in cells. Parts never overlap, so it is a plain sum. */
-export const roomArea = (r: HouseRoom) => roomRects(r).reduce((a, q) => a + q.w * q.h, 0)
+export const roomArea = (r: HouseRoom) =>
+  r.outline ? Math.abs(loopArea(r.outline)) : roomRects(r).reduce((a, q) => a + q.w * q.h, 0)
 
 /**
  * The outline of a room as straight edges: every stretch of rectangle edge
@@ -223,9 +253,11 @@ export const roomArea = (r: HouseRoom) => roomRects(r).reduce((a, q) => a + q.w 
  */
 export function roomOutline(r: HouseRoom): WallSpan[] {
   const out: WallSpan[] = []
-  for (const loop of rectLoops(roomRects(r), CELL_MM)) {
+  for (const loop of roomLoops(r)) {
     loop.forEach((a, i) => {
       const b = loop[(i + 1) % loop.length]
+      // A slanted edge is a wall too, but not one a door can go in.
+      if (!same(a[0], b[0]) && !same(a[1], b[1])) return
       if (same(a[1], b[1])) out.push({ axis: 'h', line: a[1], start: Math.min(a[0], b[0]), end: Math.max(a[0], b[0]) })
       else out.push({ axis: 'v', line: a[0], start: Math.min(a[1], b[1]), end: Math.max(a[1], b[1]) })
     })
@@ -310,7 +342,21 @@ export function wallRuns(floor: HouseFloor, walls = Walls.of(floor)): WallRun[] 
     }
     if (mmOf(at) < mmOf(end)) runs.push(run(at, end, null))
   }
-  // Walls drawn at an angle: plain wall, end to end.
+  // Slanted edges of walled rooms, once each where two rooms share one, and
+  // walls drawn at an angle: plain wall, end to end.
+  const seen = new Set<string>()
+  for (const r of floor.rooms) {
+    if (r.kind !== 'room') continue
+    for (const [a, b] of roomSlants(r)) {
+      const k = [a, b]
+        .map((p) => `${mmOf(p[0])},${mmOf(p[1])}`)
+        .sort()
+        .join('|')
+      if (seen.has(k)) continue
+      seen.add(k)
+      runs.push({ type: 'wall', opening: null, axis: 'h', x1: a[0], y1: a[1], x2: b[0], y2: b[1] })
+    }
+  }
   for (const d of floor.drawnWalls ?? []) {
     if (drawnAxis(d)) continue
     runs.push({ type: 'wall', opening: null, axis: 'h', x1: d.a[0], y1: d.a[1], x2: d.b[0], y2: d.b[1] })

@@ -37,6 +37,8 @@ import {
   r1,
   roomArea,
   roomAt,
+  roomContains,
+  roomShapes,
   roomOutline,
   roomRects,
   roomsOutsideIn,
@@ -52,7 +54,9 @@ import {
   type WallUnit,
 } from './geometry'
 import { DEFAULTS } from '@house-model/v2'
+import { area as loopArea } from '@house-model/cells'
 import { wallLines } from '@house-model/convert'
+import { overlapLength } from '@house-model/edges'
 import type { HouseDrawnWall, HouseFloor as FloorV1 } from '@house-model/v1'
 import { coveringDraws } from './coverings'
 import { KIND_LETTER, type LiveDevice } from './live'
@@ -159,6 +163,7 @@ const touches = (a: HouseRect, b: HouseRect) => {
  * applied while dragging so the editor never shows a shape it would refuse.
  */
 export function shapeValid(r: HouseRoom): boolean {
+  if (r.outline) return polygonValid(r.outline)
   const shape: HouseRect[] = [r]
   for (const q of r.parts ?? []) {
     if (q.w < 1 || q.h < 1) return false
@@ -166,6 +171,74 @@ export function shapeValid(r: HouseRoom): boolean {
     shape.push(q)
   }
   return true
+}
+
+const copyPoint = (p: Point): Point => [p[0], p[1]]
+
+/** Whether two segments cross, touching ends not counted. */
+function crossing(a: Point, b: Point, c: Point, d: Point): boolean {
+  const o = (p: Point, q: Point, r: Point) => Math.sign((q[0] - p[0]) * (r[1] - p[1]) - (q[1] - p[1]) * (r[0] - p[0]))
+  return o(a, b, c) * o(a, b, d) < 0 && o(c, d, a) * o(c, d, b) < 0
+}
+
+/**
+ * Whether corners make a room: three or more, at least a quarter of a
+ * square metre inside, and no edge crossing another.
+ */
+export function polygonValid(pts: Point[]): boolean {
+  if (pts.length < 3) return false
+  if (pts.some((p, i) => same(p[0], pts[(i + 1) % pts.length][0]) && same(p[1], pts[(i + 1) % pts.length][1])))
+    return false
+  if (Math.abs(loopArea(pts)) < 1) return false
+  const n = pts.length
+  for (let i = 0; i < n; i++)
+    for (let j = i + 2; j < n; j++) {
+      if (i === 0 && j === n - 1) continue
+      if (crossing(pts[i], pts[(i + 1) % n], pts[j], pts[(j + 1) % n])) return false
+    }
+  return true
+}
+
+/** Fit a room drawn corner by corner's box to its corners, clockwise on screen. */
+function fitBox(r: HouseRoom): void {
+  if (!r.outline) return
+  if (loopArea(r.outline) < 0) r.outline.reverse()
+  const xs = r.outline.map((p) => p[0])
+  const ys = r.outline.map((p) => p[1])
+  r.x = Math.min(...xs)
+  r.y = Math.min(...ys)
+  r.w = toMm(Math.max(...xs) - r.x)
+  r.h = toMm(Math.max(...ys) - r.y)
+}
+
+/** A room drawn corner by corner. Null when the corners do not make one. */
+export function addPolygonRoom(
+  plan: HousePlan,
+  floor: HouseFloor,
+  corners: Point[],
+  kind: HouseRoom['kind'] = 'room',
+): HouseRoom | null {
+  if (!polygonValid(corners)) return null
+  const r = addRoom(plan, floor, { x: 0, y: 0, w: 1, h: 1 }, kind)
+  r.outline = corners.map(copyPoint)
+  fitBox(r)
+  return r
+}
+
+/** Move one corner of a room drawn corner by corner, where the room still holds together. */
+export function moveCorner(r: HouseRoom, i: number, p: Point): boolean {
+  if (!r.outline) return false
+  const next = r.outline.map((q, j) => (j === i ? copyPoint(p) : q))
+  if (!polygonValid(next)) return false
+  r.outline = next
+  fitBox(r)
+  return true
+}
+
+/** Put a room where a snapshot had it, moved by (dx, dy): its rectangles, or its corners. */
+export function shiftRoom(r: HouseRoom, from: { o: HouseRect[]; outline?: Point[] }, dx: number, dy: number): void {
+  roomRects(r).forEach((q, i) => Object.assign(q, { x: toMm(from.o[i].x + dx), y: toMm(from.o[i].y + dy) }))
+  if (from.outline) r.outline = from.outline.map((p) => [toMm(p[0] + dx), toMm(p[1] + dy)])
 }
 
 /** Join a rectangle to a room as a wing. False when it would not make one piece. */
@@ -192,15 +265,15 @@ export function removePart(r: HouseRoom, index: number): void {
 export function roomPayload(floor: HouseFloor, r: HouseRoom) {
   // Rooms drawn inside this one move with it: an en-suite goes where its
   // bedroom goes.
-  const within = (q: HouseRect) =>
-    roomRects(r).some((p) => q.x >= p.x && q.y >= p.y && q.x + q.w <= p.x + p.w && q.y + q.h <= p.y + p.h)
-  const inner = floor.rooms.filter((x) => x !== r && roomRects(x).every(within))
+  const inner = floor.rooms.filter(
+    (x) => x !== r && roomShapes(x).every((loop) => loop.every(([px, py]) => roomContains(r, px, py))),
+  )
   const group = new Set<HouseRoom>([r, ...inner])
   // The outlines of the rooms that move, so their doors and radiators go too.
   const edge = new Walls([...group].flatMap(roomOutline))
   const onEdge = (o: Pick<HouseOpening, 'axis' | 'x' | 'y' | 'len'>) => openingFits(o, edge)
   return {
-    rooms: inner.map((x) => ({ room: x, o: roomRects(x).map((q) => ({ ...q })) })),
+    rooms: inner.map((x) => ({ room: x, o: roomRects(x).map((q) => ({ ...q })), outline: x.outline?.map(copyPoint) })),
     openings: floor.openings.filter(onEdge).map((o) => ({ o, x: o.x, y: o.y })),
     radiators: (floor.radiators ?? []).filter(onEdge).map((r) => ({ o: r, x: r.x, y: r.y })),
     furniture: (floor.furniture ?? [])
@@ -325,11 +398,11 @@ export function addOpenWall(floor: HouseFloor, u: WallUnit): HouseOpening | null
   // Where the rooms either side can change: any room's edge across the wall.
   const cuts = new Set<number>([free[0], free[1]])
   for (const r of floor.rooms)
-    for (const q of roomRects(r)) {
-      for (const c of u.axis === 'h' ? [q.x, q.x + q.w] : [q.y, q.y + q.h]) {
+    for (const loop of roomShapes(r))
+      for (const p of loop) {
+        const c = u.axis === 'h' ? p[0] : p[1]
         if (mmOf(c) > mmOf(free[0]) && mmOf(c) < mmOf(free[1])) cuts.add(c)
       }
-    }
   const at = [...cuts].sort((a, b) => a - b)
   const i = Math.max(
     0,
@@ -406,11 +479,15 @@ export interface FloorWall {
   key: string
   /** The drawn wall this is, for one drawn on its own. */
   drawn?: HouseDrawnWall
-  /** Null for a drawn wall at an angle. */
+  /** Null for a wall at an angle. */
   axis: 'h' | 'v' | null
+  /** For one along x or y: the line it is on, and where it starts and ends along it. 0 at an angle. */
   line: number
   start: number
   end: number
+  /** Its ends. */
+  a: Point
+  b: Point
   /** Between two rooms, rather than with a room on one side only. */
   inner: boolean
   /** Millimetres. */
@@ -429,7 +506,9 @@ export function floorWalls(floor: HouseFloor): FloorWall[] {
       axis,
       line: axis ? d.a[1 - i] : 0,
       start: axis ? Math.min(d.a[i], d.b[i]) : 0,
-      end: axis ? Math.max(d.a[i], d.b[i]) : Math.hypot(d.b[0] - d.a[0], d.b[1] - d.a[1]),
+      end: axis ? Math.max(d.a[i], d.b[i]) : 0,
+      a: d.a,
+      b: d.b,
       inner: false,
       thickness: d.thickness,
       height: d.height,
@@ -438,16 +517,21 @@ export function floorWalls(floor: HouseFloor): FloorWall[] {
   return [...fromRooms(floor), ...drawn]
 }
 
+const toCells = (p: Point): Point => [p[0] / CELL_MM, p[1] / CELL_MM]
+const toMmPoint = (p: Point): Point => [mmOf(p[0]), mmOf(p[1])]
+
 function fromRooms(floor: HouseFloor): FloorWall[] {
   return wallLines({ ...floor, drawnWalls: undefined } as unknown as FloorV1).map((l) => {
-    const [line, start, end] = [l.line / CELL_MM, l.start / CELL_MM, l.end / CELL_MM]
-    const spec = specOn(floor, l.axis, line, start, end)
+    const [a, b] = [toCells(l.a), toCells(l.b)]
+    const spec = specOn(floor, a, b)
     return {
-      key: `${l.axis}${l.line}_${l.start}`,
+      key: `${l.axis ?? 's'}${l.a[0]}_${l.a[1]}_${l.b[0]}`,
       axis: l.axis,
-      line,
-      start,
-      end,
+      line: l.line / CELL_MM,
+      start: l.start / CELL_MM,
+      end: l.end / CELL_MM,
+      a,
+      b,
       inner: l.inner,
       thickness: spec?.thickness ?? (l.inner ? DEFAULTS.innerWall : DEFAULTS.outerWall),
       height: spec?.height ?? DEFAULTS.wallHeight,
@@ -455,14 +539,26 @@ function fromRooms(floor: HouseFloor): FloorWall[] {
   })
 }
 
-/** The spec on a line that overlaps a stretch of it most. */
-function specOn(floor: HouseFloor, axis: 'h' | 'v', line: number, start: number, end: number) {
-  let best: NonNullable<HouseFloor['walls']>[number] | undefined
+type WallSpec = NonNullable<HouseFloor['walls']>[number]
+
+/** A spec's two ends, in cells. */
+function specEnds(w: WallSpec): [Point, Point] {
+  if (w.to) return [[w.x, w.y], w.to]
+  return [[w.x, w.y], w.axis === 'h' ? [w.x + w.len, w.y] : [w.x, w.y + w.len]]
+}
+
+/** How far a spec runs along a wall, in millimetres. */
+const specOverlap = (w: WallSpec, a: Point, b: Point) => {
+  const [p, q] = specEnds(w)
+  return overlapLength([toMmPoint(p), toMmPoint(q)], [toMmPoint(a), toMmPoint(b)])
+}
+
+/** The spec that runs along a wall most. */
+function specOn(floor: HouseFloor, a: Point, b: Point) {
+  let best: WallSpec | undefined
   let most = 0
   for (const w of floor.walls ?? []) {
-    if (w.axis !== axis || !same(openingLine(w), line)) continue
-    const [s, e] = openingSpan(w)
-    const o = mmOf(Math.min(e, end)) - mmOf(Math.max(s, start))
+    const o = specOverlap(w, a, b)
     if (o > most) {
       most = o
       best = w
@@ -477,20 +573,21 @@ export function setWall(floor: HouseFloor, w: FloorWall, patch: { thickness?: nu
     Object.assign(w.drawn, patch)
     return
   }
-  if (!w.axis) return
-  const keep = (floor.walls ?? []).filter((s) => {
-    if (s.axis !== w.axis || !same(openingLine(s), w.line)) return true
-    const [a, b] = openingSpan(s)
-    return mmOf(b) <= mmOf(w.start) || mmOf(a) >= mmOf(w.end)
-  })
-  keep.push({
-    axis: w.axis,
-    x: w.axis === 'h' ? w.start : w.line,
-    y: w.axis === 'v' ? w.start : w.line,
-    len: toMm(w.end - w.start),
-    thickness: patch.thickness ?? w.thickness,
-    height: patch.height ?? w.height,
-  })
+  const keep = (floor.walls ?? []).filter((s) => specOverlap(s, w.a, w.b) <= 0)
+  const thickness = patch.thickness ?? w.thickness
+  const height = patch.height ?? w.height
+  keep.push(
+    w.axis
+      ? {
+          axis: w.axis,
+          x: w.axis === 'h' ? w.start : w.line,
+          y: w.axis === 'v' ? w.start : w.line,
+          len: toMm(w.end - w.start),
+          thickness,
+          height,
+        }
+      : { axis: 'h', x: w.a[0], y: w.a[1], len: 0, to: [w.b[0], w.b[1]], thickness, height },
+  )
   floor.walls = keep
 }
 
@@ -499,8 +596,7 @@ export function setWall(floor: HouseFloor, w: FloorWall, patch: { thickness?: nu
 /** Where a drawn wall's end can catch: a room's corner, or another drawn wall's end. */
 function catchPoints(floor: HouseFloor, except?: string): Point[] {
   const out: Point[] = []
-  for (const r of floor.rooms)
-    for (const q of roomRects(r)) out.push([q.x, q.y], [q.x + q.w, q.y], [q.x, q.y + q.h], [q.x + q.w, q.y + q.h])
+  for (const r of floor.rooms) for (const loop of roomShapes(r)) out.push(...loop)
   for (const d of floor.drawnWalls ?? []) if (d.id !== except) out.push(d.a, d.b)
   return out
 }
@@ -511,11 +607,13 @@ function catchPoints(floor: HouseFloor, except?: string): Point[] {
  * a few degrees of straight across or down is made exactly so, which is
  * what doors need and what was almost certainly meant.
  */
-export function wallPoint(floor: HouseFloor, x: number, y: number, from?: Point, except?: string): Point {
+export function wallPoint(floor: HouseFloor, x: number, y: number, from?: Point, except?: string, skip?: Point): Point {
   const reach = 0.4
   let p: Point = [snap(x, true), snap(y, true)]
   let best = reach
   for (const c of catchPoints(floor, except)) {
+    // The corner being dragged does not catch on where it is now.
+    if (skip && same(c[0], skip[0]) && same(c[1], skip[1])) continue
     const d = Math.hypot(c[0] - x, c[1] - y)
     if (d < best) {
       best = d
@@ -938,6 +1036,8 @@ export interface EditorDrawOptions {
   draft: Pick<HouseRoom, 'x' | 'y' | 'w' | 'h'> | null
   /** A wall being drawn, end to end. */
   draftWall?: { a: Point; b: Point } | null
+  /** A room being drawn corner by corner: the corners so far, and where the next would go. */
+  draftPolygon?: { pts: Point[]; next: Point | null } | null
   /** Screen pixels per editor unit, so labels and handles keep their size. */
   unit: number
   /** How far the blueprint is zoomed in, 1 at the fitted view. Markers and handles keep their size on screen. */
@@ -978,6 +1078,11 @@ function furnitureBackMark(floor: HouseFloor, f: HouseFurniture): string {
   return out
 }
 
+/** A closed loop as a path, in screen units. */
+function loopPath(loop: Point[]): string {
+  return loop.map((p, i) => `${i ? 'L' : 'M'}${r1(p[0] * S)},${r1(p[1] * S)}`).join('') + 'Z'
+}
+
 /** An edge as a path, in screen units. */
 function spanPath(e: WallSpan): string {
   const [x1, y1, x2, y2] = e.axis === 'h' ? [e.start, e.line, e.end, e.line] : [e.line, e.start, e.line, e.end]
@@ -1006,11 +1111,7 @@ export function renderEditor(
   const below = plan.floors.filter((f) => f.level < floor.level).sort((a, b) => b.level - a.level)[0]
   if (below) {
     for (const room of below.rooms.filter((x) => x.kind === 'room')) {
-      let d = ''
-      for (const e of roomOutline(room)) {
-        d += spanPath(e)
-      }
-      h += `<path class="hv-eghost" d="${d}"/>`
+      h += `<path class="hv-eghost" d="${room.outline ? loopPath(room.outline) : roomOutline(room).map(spanPath).join('')}"/>`
     }
   }
   for (const r of roomsOutsideIn(floor.rooms)) {
@@ -1019,14 +1120,16 @@ export function renderEditor(
     const rects = roomRects(r)
     const q = rects.reduce((a, b) => (b.w * b.h > a.w * a.h ? b : a))
     const nfs = Math.min(fs, (q.w * S - 10 * U) / Math.max(1, r.name.length * 0.62))
-    const size = rects.length > 1 ? `${metres(roomArea(r) / CELLS_PER_M)} m²` : `${metres(r.w)} × ${metres(r.h)} m`
-    let edge = ''
-    for (const e of roomOutline(r)) {
-      edge += spanPath(e)
-    }
+    const size =
+      rects.length > 1 || r.outline ? `${metres(roomArea(r) / CELLS_PER_M)} m²` : `${metres(r.w)} × ${metres(r.h)} m`
+    // A room drawn corner by corner is its outline, slanted edges and all.
+    const edge = r.outline ? loopPath(r.outline) : roomOutline(r).map(spanPath).join('')
+    const fill = r.outline
+      ? `<polygon points="${r.outline.map((p) => `${r1(p[0] * S)},${r1(p[1] * S)}`).join(' ')}"/>`
+      : rects.map((p) => `<rect x="${p.x * S}" y="${p.y * S}" width="${p.w * S}" height="${p.h * S}"/>`).join('')
     h +=
       `<g class="hv-eroom hv-k-${r.kind}${o.selectedRoom === r.id ? ' hv-sel' : ''}" data-room="${esc(r.id)}">` +
-      rects.map((p) => `<rect x="${p.x * S}" y="${p.y * S}" width="${p.w * S}" height="${p.h * S}"/>`).join('') +
+      fill +
       `<path class="hv-eedge" d="${edge}"/>` +
       `<text x="${r1(q.x * S + 7 * U)}" y="${r1(q.y * S + nfs * 1.5)}" font-size="${r1(nfs)}">${esc(r.name)}</text>` +
       (q.h * S > nfs * 3.2
@@ -1067,10 +1170,10 @@ export function renderEditor(
       `<line class="hv-ewhit" data-wall="${esc(fw.key)}" ${cc}/>`
     )
   }
-  // Walls drawn at an angle, end to end.
+  // Walls at an angle, end to end.
   for (const fw of walls) {
-    if (!fw.drawn || fw.axis) continue
-    const { a, b } = fw.drawn
+    if (fw.axis) continue
+    const { a, b } = fw
     h += wallLine(fw, `x1="${r1(a[0] * S)}" y1="${r1(a[1] * S)}" x2="${r1(b[0] * S)}" y2="${r1(b[1] * S)}"`)
   }
   for (const w of wallRuns(floor)) {
@@ -1202,6 +1305,20 @@ export function renderEditor(
     if (len > 0)
       h += `<text class="hv-edraft-label" x="${r1(((a[0] + b[0]) / 2) * S)}" y="${r1(((a[1] + b[1]) / 2) * S - fs)}" font-size="${r1(fs)}">${metres(len)} m</text>`
   }
+  if (o.draftPolygon) {
+    const { pts, next } = o.draftPolygon
+    const all = next ? [...pts, next] : pts
+    h += `<polyline class="hv-edraftwall" points="${all.map((p) => `${r1(p[0] * S)},${r1(p[1] * S)}`).join(' ')}"/>`
+    pts.forEach((p, i) => {
+      h += `<circle class="hv-eh${i === 0 ? ' hv-alt' : ''}" cx="${r1(p[0] * S)}" cy="${r1(p[1] * S)}" r="${r1(fit(5, 6))}"/>`
+    })
+    const last = pts[pts.length - 1]
+    if (next && last) {
+      const len = Math.hypot(next[0] - last[0], next[1] - last[1])
+      if (len > 0)
+        h += `<text class="hv-edraft-label" x="${r1(((last[0] + next[0]) / 2) * S)}" y="${r1(((last[1] + next[1]) / 2) * S - fs)}" font-size="${r1(fs)}">${metres(len)} m</text>`
+    }
+  }
   const sw = walls.find((w) => w.key === o.selectedWall)?.drawn
   if (sw && o.showHandles) {
     for (const [end, p] of [
@@ -1212,7 +1329,12 @@ export function renderEditor(
     }
   }
   const sel = floor.rooms.find((r) => r.id === o.selectedRoom)
-  if (sel && o.showHandles) {
+  if (sel?.outline && o.showHandles) {
+    // A room drawn corner by corner: a handle on each corner, `data-corner` its index.
+    sel.outline.forEach((p, i) => {
+      h += `<circle class="hv-eh" data-corner="${i}" cx="${r1(p[0] * S)}" cy="${r1(p[1] * S)}" r="${r1(fit(7, 9))}"/>`
+    })
+  } else if (sel && o.showHandles) {
     // Every part has its own corners: `data-handle` is `<part>:<corner>`,
     // part 0 being the main rectangle.
     roomRects(sel).forEach((q, i) => {

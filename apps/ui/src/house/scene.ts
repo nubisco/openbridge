@@ -17,7 +17,7 @@ import type {
   HousePlan,
   HouseRoom,
 } from '@/api'
-import { Grid } from '@house-model/cells'
+import { Grid, area as loopArea } from '@house-model/cells'
 import {
   CELLS_PER_M,
   ISO_FLOOR_MATRIX,
@@ -43,6 +43,8 @@ import {
   roomTempColor,
   roomOutline,
   roomRects,
+  roomShapes,
+  roomSlants,
   roomsOutsideIn,
   wallRuns,
   CELL_MM,
@@ -388,9 +390,30 @@ export function resting(d: { on?: boolean; supply?: number; return?: number }): 
  * and larger x) of every cell a room covers, merged into straight runs.
  */
 function slab(o: SceneOptions, floor: HouseFloor): string {
-  // On a grid cut at every room corner, so each cell is wholly floor or not.
-  const rects = floor.rooms.flatMap(roomRects)
-  if (!rects.length) return ''
+  // Rooms drawn corner by corner: the faces of their edges that face the
+  // viewer (whose outside is towards +x or +y).
+  let poly2 = ''
+  const t0 = 0.35
+  for (const r of floor.rooms) {
+    if (!r.outline) continue
+    const loop = loopArea(r.outline) < 0 ? r.outline.slice().reverse() : r.outline
+    loop.forEach((a, i) => {
+      const b = loop[(i + 1) % loop.length]
+      // Clockwise on screen, the outside of a→b is (dy, -dx).
+      const nx = b[1] - a[1]
+      const ny = a[0] - b[0]
+      if (nx <= 0 && ny <= 0) return
+      poly2 += `<polygon class="hv-slab${nx > ny ? ' hv-r' : ''}" points="${poly(o, [
+        [a[0], a[1], 0],
+        [b[0], b[1], 0],
+        [b[0], b[1], -t0],
+        [a[0], a[1], -t0],
+      ])}"/>`
+    })
+  }
+  // The rest on a grid cut at every room corner, so each cell is wholly floor or not.
+  const rects = floor.rooms.filter((r) => !r.outline).flatMap(roomRects)
+  if (!rects.length) return poly2
   const g = Grid.of(rects, [], CELL_MM)
   const cells = g.cells(rects)
   const t = 0.35
@@ -426,7 +449,7 @@ function slab(o: SceneOptions, floor: HouseFloor): string {
       [x, y1, -t],
     ])}"/>`
   }
-  return out
+  return out + poly2
 }
 
 /**
@@ -1024,13 +1047,11 @@ export function renderFloor(
   // Biggest first, so a room drawn inside another is painted on top of it.
   for (const r of roomsOutsideIn(floor.rooms)) {
     const rects = roomRects(r)
-    const shapes = rects.map((q) =>
-      poly(o, [
-        [q.x, q.y, 0],
-        [q.x + q.w, q.y, 0],
-        [q.x + q.w, q.y + q.h, 0],
-        [q.x, q.y + q.h, 0],
-      ]),
+    const shapes = roomShapes(r).map((loop) =>
+      poly(
+        o,
+        loop.map(([x, y]): [number, number, number] => [x, y, 0]),
+      ),
     )
     defs += `<clipPath id="hv-cp-${svgId(floor.id)}-${svgId(r.id)}">${shapes.map((pts) => `<polygon points="${pts}"/>`).join('')}</clipPath>`
     // The floor is always drawn. An overlay is a tint laid over it, so the
@@ -1083,6 +1104,11 @@ export function renderFloor(
       const b = e.axis === 'h' ? project(o.mode, e.end, e.line) : project(o.mode, e.line, e.end)
       outline += `M${r1(a[0])},${r1(a[1])}L${r1(b[0])},${r1(b[1])}`
     }
+    for (const [p, q] of roomSlants(r)) {
+      const a = project(o.mode, p[0], p[1])
+      const b = project(o.mode, q[0], q[1])
+      outline += `M${r1(a[0])},${r1(a[1])}L${r1(b[0])},${r1(b[1])}`
+    }
     base += `<path class="hv-room-edge hv-k-${r.kind}" d="${outline}"/>`
     if (r.kind === 'pool') water += poolWater(o, floor, r, shapes, placed, lit, roomOf)
     if (o.labels) {
@@ -1112,15 +1138,13 @@ export function renderFloor(
     const clip = r ? ` clip-path="url(#hv-cp-${svgId(floor.id)}-${svgId(r.id)})"` : ''
     if (r) {
       const wash = { ceiling: 0.34, wall: 0.26, floor: 0.22, table: 0.14 }[mount] * (0.35 + 0.65 * k)
-      glow += `<g class="hv-wash" fill="${color}" fill-opacity="${wash.toFixed(2)}"${clip}>${roomRects(r)
+      glow += `<g class="hv-wash" fill="${color}" fill-opacity="${wash.toFixed(2)}"${clip}>${roomShapes(r)
         .map(
-          (q) =>
-            `<polygon points="${poly(o, [
-              [q.x, q.y, 0],
-              [q.x + q.w, q.y, 0],
-              [q.x + q.w, q.y + q.h, 0],
-              [q.x, q.y + q.h, 0],
-            ])}"/>`,
+          (loop) =>
+            `<polygon points="${poly(
+              o,
+              loop.map(([x, y]): [number, number, number] => [x, y, 0]),
+            )}"/>`,
         )
         .join('')}</g>`
     }

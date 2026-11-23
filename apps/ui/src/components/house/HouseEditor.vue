@@ -169,7 +169,10 @@
               <NbField v-slot="{ id }" label="Type" orientation="stack">
                 <NbSelect :id="id" v-model="room.kind" :options="ROOM_KINDS" size="sm" />
               </NbField>
-              <div class="house-editor__pair">
+              <p v-if="room.outline" class="house-editor__muted">
+                {{ metres(roomArea(room) / CELLS_PER_M) }} m², drawn corner by corner. Drag a corner to move it.
+              </p>
+              <div v-else class="house-editor__pair">
                 <NbField
                   v-slot="{ id }"
                   :label="room.parts?.length ? 'Main part width (m)' : 'Width (m)'"
@@ -215,7 +218,9 @@
                 />
               </div>
               <div class="house-editor__row">
+                <span v-if="room.outline" />
                 <NbButton
+                  v-else
                   size="sm"
                   :variant="wingFor === room.id ? 'primary' : 'secondary'"
                   :aria-pressed="wingFor === room.id"
@@ -752,6 +757,9 @@ import {
   setDrawnLength,
   wallPoint,
   onDrawnWall,
+  addPolygonRoom,
+  moveCorner,
+  shiftRoom,
   shapeValid,
 } from '@/house/editor'
 import { KIND_LABEL, LOOK_LABEL, type LiveDevice } from '@/house/live'
@@ -902,6 +910,29 @@ const armed = ref<string | null>(null)
 const draft = ref<Pick<HouseRoom, 'x' | 'y' | 'w' | 'h'> | null>(null)
 /** A wall being drawn with the Wall tool. */
 const draftWall = ref<{ a: Point; b: Point } | null>(null)
+/** The corners of a room being drawn corner by corner. */
+const polyDraft = ref<Point[] | null>(null)
+
+/** A tap while drawing a room corner by corner: the next corner, or the first again to close it. */
+function tapCorner(at: { x: number; y: number }) {
+  const pts = polyDraft.value ?? []
+  const c = wallPoint(floor.value, at.x, at.y, pts[pts.length - 1])
+  const near = (q: Point | undefined) => !!q && Math.hypot(c[0] - q[0], c[1] - q[1]) < 0.4
+  if (pts.length >= 3 && (near(pts[0]) || near(pts[pts.length - 1]))) return finishPolygon()
+  if (near(pts[pts.length - 1])) return
+  polyDraft.value = [...pts, c]
+}
+
+function finishPolygon() {
+  const pts = polyDraft.value
+  polyDraft.value = null
+  if (!pts || pts.length < 3) return
+  const r = addPolygonRoom(props.plan, floor.value, pts, isAreaTool(tool.value) ? tool.value : 'room')
+  if (!r) return void toast.warning('Those corners do not make a room: edges cross, or it is too small.')
+  clearSelection()
+  selRoom.value = r.id
+  settle()
+}
 const svgEl = ref<SVGSVGElement | null>(null)
 const unit = ref(1)
 
@@ -917,15 +948,14 @@ const wall = computed(() =>
 const wallText = computed(() => {
   const w = wall.value
   if (!w) return ''
-  if (w.drawn || !w.axis) return 'A wall drawn on its own. Drag it to move it, or an end to move that end.'
-  const mid = (w.start + w.end) / 2
-  const k = 0.01
-  const [a, b] =
-    w.axis === 'h'
-      ? [roomAt(floor.value, mid, w.line - k), roomAt(floor.value, mid, w.line + k)]
-      : [roomAt(floor.value, w.line - k, mid), roomAt(floor.value, w.line + k, mid)]
+  if (w.drawn) return 'A wall drawn on its own. Drag it to move it, or an end to move that end.'
+  // The rooms just either side of its middle.
+  const [mx, my] = [(w.a[0] + w.b[0]) / 2, (w.a[1] + w.b[1]) / 2]
+  const len = Math.hypot(w.b[0] - w.a[0], w.b[1] - w.a[1])
+  const [nx, ny] = [(-(w.b[1] - w.a[1]) / len) * 0.01, ((w.b[0] - w.a[0]) / len) * 0.01]
+  const [a, b] = [roomAt(floor.value, mx + nx, my + ny), roomAt(floor.value, mx - nx, my - ny)]
   const walled = [a, b].filter((r) => r?.kind === 'room').map((r) => r!.name)
-  const long = `${metres(w.end - w.start)} m long`
+  const long = `${metres(len)} m long`
   if (w.inner && walled.length === 2) return `Between ${walled[0]} and ${walled[1]}, ${long}.`
   return walled.length ? `Outside wall of ${walled[0]}, ${long}.` : `A wall ${long}.`
 })
@@ -1066,6 +1096,13 @@ function typing(t: EventTarget | null) {
 }
 function onKeyDown(e: KeyboardEvent) {
   if (typing(e.target)) return
+  // Enter closes a room being drawn corner by corner, Escape gives it up.
+  if (polyDraft.value && (e.key === 'Enter' || e.key === 'Escape')) {
+    if (e.key === 'Enter') finishPolygon()
+    else polyDraft.value = null
+    e.preventDefault()
+    return
+  }
   // Space presses a focused button, so it pans only over the page or the canvas.
   if (e.code === 'Space') {
     const t = e.target
@@ -1105,6 +1142,14 @@ const markup = computed(() =>
     selectedWall: selWall.value,
     draft: draft.value,
     draftWall: draftWall.value,
+    draftPolygon: polyDraft.value
+      ? {
+          pts: polyDraft.value,
+          next: pointerAt.value
+            ? wallPoint(floor.value, pointerAt.value.x, pointerAt.value.y, polyDraft.value[polyDraft.value.length - 1])
+            : null,
+        }
+      : null,
     unit: unit.value,
     zoom: zoom.value,
     showHandles: tool.value === 'select',
@@ -1117,8 +1162,8 @@ const help = computed(() => {
   return {
     select: 'Drag a room to move it, or its corners to resize it. Drag a device to move it. Tap anything to edit it.',
     wall: 'Drag from one end of a wall to the other: a garden wall, a partition, a fence. Rooms bring their own walls. Its ends catch on corners and other walls.',
-    room: 'Drag on the grid to draw a room. It snaps to the step chosen below. Draw one inside another for a room within a room.',
-    outdoor: 'Drag on the grid to draw a garden or a lawn. It has no walls.',
+    room: 'Drag to draw a rectangular room, or tap its corners one by one for any shape and tap the first again (or press Enter) to close it. Draw one inside another for a room within a room.',
+    outdoor: 'Drag to draw a garden or a lawn, or tap its corners one by one. It has no walls.',
     paved:
       'Drag on the grid to draw paving: a terrace, a path, a drive, or the deck round the pool. Draw the pool inside it.',
     pool: 'Drag on the grid to draw a pool.',
@@ -1140,6 +1185,7 @@ function setTool(id: string) {
   tool.value = id as Tool
   armed.value = null
   wingFor.value = null
+  polyDraft.value = null
 }
 
 /** The room the next rectangle drawn joins as a wing, while adding one. */
@@ -1498,7 +1544,7 @@ function setPlot(axis: 'w' | 'h', v: number | null) {
 // ─── Pointer ────────────────────────────────────────────────────────────────
 
 type Drag =
-  | { type: 'draw'; x0: number; y0: number }
+  | { type: 'draw'; x0: number; y0: number; at: { x: number; y: number } }
   | {
       type: 'resize'
       room: HouseRoom
@@ -1511,10 +1557,12 @@ type Drag =
       type: 'move'
       r: HouseRoom
       start: { x: number; y: number }
-      /** Where each part started, main rectangle first. */
+      /** Where each part started, main rectangle first, and the corners of a room drawn by them. */
       o: HouseRect[]
+      outline?: Point[]
       payload: ReturnType<typeof roomPayload>
     }
+  | { type: 'corner'; room: HouseRoom; i: number }
   | { type: 'device'; ref: string }
   | { type: 'omove'; o: HouseOpening; grab: number }
   | { type: 'oresize'; o: HouseOpening; end: 'start' | 'end' }
@@ -1653,7 +1701,7 @@ function onDown(e: PointerEvent) {
   } else if (isAreaTool(tool.value) || wingFor.value) {
     const x0 = clamp(snapTo(p.x), 0, pw)
     const y0 = clamp(snapTo(p.y), 0, ph)
-    drag = { type: 'draw', x0, y0 }
+    drag = { type: 'draw', x0, y0, at: p }
     draft.value = { x: x0, y: y0, w: 0, h: 0 }
   } else if (tool.value === 'door' || tool.value === 'window' || tool.value === 'open') {
     if (!grabOpening(t, p)) {
@@ -1696,7 +1744,10 @@ function onDown(e: PointerEvent) {
     const rm = t?.closest('[data-room]')
     const wl = t?.closest('[data-wall]')
     const wend = t?.closest('[data-whandle]')?.getAttribute('data-whandle')
-    if (wend && wall.value?.drawn) {
+    const corner = t?.closest('[data-corner]')?.getAttribute('data-corner')
+    if (corner && room.value?.outline) {
+      drag = { type: 'corner', room: room.value, i: Number(corner) }
+    } else if (wend && wall.value?.drawn) {
       drag = { type: 'wend', d: wall.value.drawn, end: wend === 'b' ? 'b' : 'a' }
     } else if (handle && room.value) {
       const [index, corner] = (handle.getAttribute('data-handle') as string).split(':')
@@ -1726,7 +1777,14 @@ function onDown(e: PointerEvent) {
       if (!r) return
       clearSelection()
       selRoom.value = r.id
-      drag = { type: 'move', r, start: p, o: roomRects(r).map((q) => ({ ...q })), payload: roomPayload(floor.value, r) }
+      drag = {
+        type: 'move',
+        r,
+        start: p,
+        o: roomRects(r).map((q) => ({ ...q })),
+        outline: r.outline?.map((q): Point => [q[0], q[1]]),
+        payload: roomPayload(floor.value, r),
+      }
     } else {
       // A tap on a wall opening in the select tool edits it.
       const u = nearestWall(floor.value, p.x, p.y, 0.6)
@@ -1826,12 +1884,15 @@ function onMove(e: PointerEvent) {
     const dx = clamp(snapTo(p.x - start.x), -box.x, pw - box.x2)
     const dy = clamp(snapTo(p.y - start.y), -box.y, ph - box.y2)
     const by = (q: { x: number; y: number }) => ({ x: toMm(q.x + dx), y: toMm(q.y + dy) })
-    roomRects(r).forEach((q, i) => Object.assign(q, by(o[i])))
-    for (const q of payload.rooms) roomRects(q.room).forEach((x, i) => Object.assign(x, by(q.o[i])))
+    shiftRoom(r, { o, outline: drag.outline }, dx, dy)
+    for (const q of payload.rooms) shiftRoom(q.room, q, dx, dy)
     for (const q of payload.openings) Object.assign(q.o, by(q))
     for (const q of payload.radiators) Object.assign(q.o, by(q))
     for (const q of payload.furniture) Object.assign(q.o, by(q))
     for (const q of payload.placements) Object.assign(q.p, by(q))
+  } else if (drag.type === 'corner') {
+    const cur = drag.room.outline?.[drag.i]
+    moveCorner(drag.room, drag.i, wallPoint(floor.value, p.x, p.y, undefined, undefined, cur))
   } else if (drag.type === 'omove') {
     moveOpening(floor.value, drag.o, p.x, p.y, drag.grab)
   } else if (drag.type === 'oresize') {
@@ -1893,11 +1954,13 @@ function onUp(e?: PointerEvent) {
   } else if (drag?.type === 'draw') {
     const d = draft.value
     draft.value = null
-    if (d && d.w >= 1 && d.h >= 1) {
+    // A drag draws a rectangle. A tap puts down a corner, for a room drawn
+    // corner by corner, and so does every tap once one has started.
+    if (d && d.w >= 1 && d.h >= 1 && !polyDraft.value) {
       const r = addRoom(props.plan, floor.value, d, isAreaTool(tool.value) ? tool.value : 'room')
       clearSelection()
       selRoom.value = r.id
-    }
+    } else tapCorner(e ? toGrid(e) : drag.at)
   }
   drag = null
   // Every tap or drag is a step of its own, however quickly the next follows.

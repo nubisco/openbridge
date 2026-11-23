@@ -225,6 +225,18 @@ export function area(loop: Point[]): number {
   return s / 2
 }
 
+/** Whether a point lies on a polygon's edge, within `eps`. */
+export function onEdge(p: Point, loop: Point[], eps = 1e-6): boolean {
+  return loop.some((a, i) => {
+    const b = loop[(i + 1) % loop.length]
+    const dx = b[0] - a[0]
+    const dy = b[1] - a[1]
+    const len2 = dx * dx + dy * dy
+    const t = len2 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / len2)) : 0
+    return Math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy)) <= eps
+  })
+}
+
 /** Whether a point is inside a polygon (even-odd rule), not counting its edge. */
 export function inside(p: Point, loop: Point[]): boolean {
   let hit = false

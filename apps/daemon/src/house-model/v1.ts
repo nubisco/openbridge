@@ -32,6 +32,12 @@ export interface HouseRoom {
    * with no wall inside it.
    */
   parts?: HouseRect[]
+  /**
+   * The room's corners in order, for a room drawn corner by corner: any
+   * shape, slanted edges included. Then it is the shape, `x`, `y`, `w` and
+   * `h` are the box around it, and there are no parts.
+   */
+  outline?: Array<[number, number]>
 }
 
 export interface HouseRect {
@@ -210,6 +216,8 @@ export interface HouseWallSpec {
   len: number
   thickness: number
   height: number
+  /** For a slanted wall: it runs from (x, y) to here, and `axis` and `len` mean nothing. */
+  to?: [number, number]
 }
 
 /**

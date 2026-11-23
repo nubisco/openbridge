@@ -223,7 +223,16 @@ step.
       thickness and height. A version 1 floor carries them as `drawnWalls`,
       and the plan's walls that follow no room edge come back as them. One
       along x or y holds doors, windows and radiators, which move with it.
-      Then rooms of any shape.
+      Then rooms of any shape (shipped). Decided by Jose on 2026-11-23: any
+      polygon. With a room tool, a drag still draws a rectangle, and taps put
+      down corners one by one (tap the first again, or Enter, to close).
+      Corners are dragged afterwards. A version 1 room carries them as
+      `outline`, the rectangle being the box around it. Walls are now found
+      from room edges rather than cells (`house-model/edges.ts`), so slanted
+      edges are walls too, settable like any other, though doors and windows
+      go only on straight ones until the editor works on version 2. A space
+      that is not a rectangle and has no rectangles hint comes back as a
+      room drawn corner by corner.
    4. The ruler, and resizing the plan to match it (see house-ui.md).
 5. **The 3D view in millimetres.** Walls drawn with their real thickness, rooms
    of any shape.
