@@ -1,3 +1,10 @@
+# [1.38.0](https://github.com/nubisco/openbridge/compare/v1.37.0...v1.38.0) (2026-11-23)
+
+
+### Features
+
+* **house:** a Wall tool for walls that follow no room ([#57](https://github.com/nubisco/openbridge/issues/57)) ([a948348](https://github.com/nubisco/openbridge/commit/a9483481f2c65c31c185d810db02b3dc0f88965c))
+
 # [1.37.0](https://github.com/nubisco/openbridge/compare/v1.36.0...v1.37.0) (2026-11-23)
 
 
