@@ -243,4 +243,15 @@ step.
       half of each wall.
 5. **The 3D view in millimetres.** Walls drawn with their real thickness, rooms
    of any shape.
+   Started on 2026-11-23 (Jose chose it after stage 4). Walls are solids
+   standing on their outline: as thick as they are built and as high as
+   their own height (at the drawing's half scale, or no higher than the cut
+   with the walls low), so a garden wall stands lower than the house.
+   Corners are mitred where two walls meet, at any angle and either
+   thickness. A wall between rooms stops at a corner of outside walls, one
+   against the side of another reaches into it, and a corner whose other
+   wall is a door or window there is closed square. Doors and windows sit in
+   the middle of the wall's thickness, with solid wall above and below. The
+   2D live plan draws the same outlines, so it shows real thickness too.
+   Rooms of any shape already draw, slanted edges included, since stage 4.
 6. **IFC import.** Then, extracting the shared package for Keystone.

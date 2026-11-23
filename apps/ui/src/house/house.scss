@@ -144,22 +144,29 @@
   stroke-width: 0.8;
   pointer-events: none;
 }
-.hv-caprim {
+// A wall's top and the end the view sees, as a solid as thick as it is built.
+.hv-walltop {
+  fill: #fbf9f4;
   stroke: #9a8f80;
-  stroke-width: 5.5;
-  stroke-linecap: square;
+  stroke-width: 0.8;
+  stroke-linejoin: round;
   pointer-events: none;
 }
-.hv-cap {
-  stroke: #fbf9f4;
-  stroke-width: 3.2;
-  stroke-linecap: square;
-  pointer-events: none;
+.hv-wall.hv-wallend {
+  fill: rgba(226, 219, 206, 0.92);
 }
 .hv-wall2d {
   stroke: #5e554a;
   stroke-width: 5;
-  stroke-linecap: square;
+  stroke-linecap: butt;
+  pointer-events: none;
+}
+// A wall in the plan view, as thick as it is built, corners mitred.
+.hv-wallsolid2d {
+  fill: #5e554a;
+  stroke: #5e554a;
+  stroke-width: 0.6;
+  stroke-linejoin: round;
   pointer-events: none;
 }
 .hv-glass2d {
