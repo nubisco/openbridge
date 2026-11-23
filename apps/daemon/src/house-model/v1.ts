@@ -198,6 +198,20 @@ export interface HouseFurniture {
   back?: 'up' | 'down' | 'left' | 'right'
 }
 
+/**
+ * What the editor set on a wall: its thickness and height, in millimetres.
+ * The wall itself follows the room edges, so this is keyed by where it is:
+ * the wall on that line that overlaps it most takes it.
+ */
+export interface HouseWallSpec {
+  axis: 'h' | 'v'
+  x: number
+  y: number
+  len: number
+  thickness: number
+  height: number
+}
+
 export interface HouseFloor {
   id: string
   name: string
@@ -210,6 +224,8 @@ export interface HouseFloor {
   radiators?: HouseRadiator[]
   /** Absent on a plan saved before furniture existed. */
   furniture?: HouseFurniture[]
+  /** Thickness and height of walls, from version 2 or as the editor set them. */
+  walls?: HouseWallSpec[]
 }
 
 export interface HousePlan {

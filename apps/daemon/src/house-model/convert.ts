@@ -142,6 +142,23 @@ function overlap(a: Pick<Wall, 'a' | 'b'>, b: Pick<Wall, 'a' | 'b'>): number {
   return Math.max(0, Math.min(hi1, hi2) - Math.max(lo1, lo2))
 }
 
+/** The wall spec on a wall's line that overlaps it most: what the editor set on it. */
+function specFor(floor: V1.HouseFloor, shape: Pick<Wall, 'a' | 'b'>): V1.HouseWallSpec | undefined {
+  return (floor.walls ?? [])
+    .map((w) => {
+      const [a, b] = lineEnds({
+        axis: w.axis,
+        line: mm(w.axis === 'h' ? w.y : w.x),
+        start: mm(w.axis === 'h' ? w.x : w.y),
+        end: mm((w.axis === 'h' ? w.x : w.y) + w.len),
+        inner: false,
+      })
+      return { w, o: overlap({ a, b }, shape) }
+    })
+    .filter((x) => x.o > 0)
+    .sort((x, y) => y.o - x.o)[0]?.w
+}
+
 function makeWalls(floor: V1.HouseFloor, prev: Wall[]): Wall[] {
   // A wall's id must not clash with a door's or radiator's on the same storey.
   const reserved = new Set([...floor.openings, ...(floor.radiators ?? [])].map((x) => x.id))
@@ -160,12 +177,14 @@ function makeWalls(floor: V1.HouseFloor, prev: Wall[]): Wall[] {
     let id = before && !reserved.has(before.id) ? before.id : `w${l.axis}${a[0]}_${a[1]}`
     for (let n = 2; taken(id); n++) id = `w${l.axis}${a[0]}_${a[1]}_${n}`
     used.add(id)
+    // What the editor set wins, then what the wall had.
+    const spec = specFor(floor, shape)
     walls.push({
       id,
       a,
       b,
-      thickness: before?.thickness ?? (l.inner ? DEFAULTS.innerWall : DEFAULTS.outerWall),
-      height: before?.height ?? DEFAULTS.wallHeight,
+      thickness: spec?.thickness ?? before?.thickness ?? (l.inner ? DEFAULTS.innerWall : DEFAULTS.outerWall),
+      height: spec?.height ?? before?.height ?? DEFAULTS.wallHeight,
     })
   }
   return walls
@@ -505,6 +524,16 @@ export function toV1(p: Plan): V1.HousePlan {
       return out
     })
     if (furniture.length) floor.furniture = furniture
+    const specs = s.walls.flatMap((w): V1.HouseWallSpec[] => {
+      const axis = axisOf(w.a, w.b)
+      if (!axis) return []
+      const i = axis === 'h' ? 0 : 1
+      const lo = Math.min(w.a[i], w.b[i])
+      const len = cells(Math.abs(w.b[i] - w.a[i]))
+      const at = axis === 'h' ? { x: cells(lo), y: cells(w.a[1]) } : { x: cells(w.a[0]), y: cells(lo) }
+      return [{ axis, ...at, len, thickness: w.thickness, height: w.height }]
+    })
+    if (specs.length) floor.walls = specs
     return floor
   })
   return {
