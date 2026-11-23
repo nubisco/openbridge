@@ -1,3 +1,10 @@
+# [1.39.0](https://github.com/nubisco/openbridge/compare/v1.38.0...v1.39.0) (2026-11-23)
+
+
+### Features
+
+* **house:** rooms of any shape, drawn corner by corner ([#58](https://github.com/nubisco/openbridge/issues/58)) ([ea3f4d8](https://github.com/nubisco/openbridge/commit/ea3f4d87a8f4bccd46aee311423b678a1c9dd072))
+
 # [1.38.0](https://github.com/nubisco/openbridge/compare/v1.37.0...v1.38.0) (2026-11-23)
 
 
