@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
-import { Cells, area, cellLoops, rectangles } from '../house-model/cells.js'
+import { Cells, Grid, area, cellLoops, rectangles } from '../house-model/cells.js'
 import { fromV1, toV1 } from '../house-model/convert.js'
 import { PlanError, validatePlan } from '../house-model/validate.js'
 import type { Door, Plan, Window } from '../house-model/v2.js'
@@ -172,13 +172,15 @@ describe('the version 1 view of a version 2 plan', () => {
     expect(fromV1(toV1(once), once).plan).toEqual(once)
   })
 
-  it('splits a room into rectangles itself when it has no hint', () => {
+  it('keeps a room it has no rectangles for by its corners', () => {
     const plan = fromV1(v1()).plan
     const living = storey(plan, 'g').spaces.find((s) => s.id === 'living')!
     delete living.rects
     const room = toV1(plan).floors[0].rooms.find((r) => r.id === 'living')!
-    expect(Cells.of([room, ...(room.parts ?? [])]).size).toBe(10 * 6 + 4 * 4)
-    expect(room).toMatchObject({ x: 2, y: 2, w: 10, h: 6, parts: [{ x: 2, y: 8, w: 4, h: 4 }] })
+    expect(room).toMatchObject({ x: 2, y: 2, w: 10, h: 10 })
+    expect(room.parts).toBeUndefined()
+    expect(room.outline).toEqual(living.outline.map(([x, y]) => [x / 500, y / 500]))
+    expect(fromV1(toV1(plan), plan).plan).toEqual(plan)
   })
 })
 
@@ -248,10 +250,84 @@ describe('plans measured to the millimetre', () => {
   })
 
   it('splits a shape into rectangles by their real size', () => {
-    const plan = fromV1(fine()).plan
-    delete storey(plan, 'g').spaces.find((s) => s.id === 'a')!.rects
-    const room = toV1(plan).floors[0].rooms.find((r) => r.id === 'a')!
-    expect(room).toMatchObject({ x: 2.034, y: 2, w: 8.246, h: 6.002, parts: [{ x: 2.034, y: 8.002, w: 3.1, h: 2.5 }] })
+    const outline = storey(fromV1(fine()).plan, 'g').spaces.find((s) => s.id === 'a')!.outline
+    const g = Grid.of([], [outline])
+    expect(rectangles(g.inside(outline, []), g).map((r) => g.rect(r))).toEqual([
+      { x: 1017, y: 1000, w: 4123, h: 3001 },
+      { x: 1017, y: 4001, w: 1550, h: 1250 },
+    ])
+  })
+})
+
+describe('rooms drawn corner by corner', () => {
+  // A room with a slanted side (a bay), beside a plain rectangle it shares a wall with.
+  function bay(): HousePlan {
+    return {
+      version: 1,
+      grid: 0.5,
+      plot: { w: 30, h: 20 },
+      floors: [
+        {
+          id: 'g',
+          name: 'Ground floor',
+          level: 0,
+          rooms: [
+            {
+              id: 'bay',
+              name: 'Bay',
+              kind: 'room',
+              x: 2,
+              y: 2,
+              w: 8,
+              h: 7,
+              outline: [
+                [2, 2],
+                [8, 2],
+                [10, 5],
+                [8, 8],
+                [6, 9],
+                [2, 9],
+              ],
+            },
+            { id: 'next', name: 'Next', kind: 'room', x: 2, y: 9, w: 4, h: 4 },
+          ],
+          openings: [],
+          placements: [],
+        },
+      ],
+    }
+  }
+
+  it('keeps its corners, and makes a wall of every edge, slanted ones too', () => {
+    const plan = validatePlan(fromV1(bay()).plan)
+    const g = storey(plan, 'g')
+    expect(g.spaces[0].outline).toEqual([
+      [1000, 1000],
+      [4000, 1000],
+      [5000, 2500],
+      [4000, 4000],
+      [3000, 4500],
+      [1000, 4500],
+    ])
+    const slanted = g.walls.filter((w) => w.a[0] !== w.b[0] && w.a[1] !== w.b[1])
+    expect(slanted.map((w) => [w.a, w.b, w.thickness])).toEqual([
+      [[4000, 1000], [5000, 2500], 300],
+      [[3000, 4500], [4000, 4000], 300],
+      [[4000, 4000], [5000, 2500], 300],
+    ])
+    // The bottom edge: between the bay and the room below for 2 m, outside after.
+    const bottom = g.walls.filter((w) => w.a[1] === 4500 && w.b[1] === 4500)
+    expect(bottom.map((w) => [w.a[0], w.b[0], w.thickness])).toEqual([[1000, 3000, 100]])
+    expect(fromV1(toV1(plan), plan).plan).toEqual(plan)
+  })
+
+  it('lets the editor set a slanted wall', () => {
+    const plan = fromV1(bay()).plan
+    const view = toV1(plan)
+    const spec = view.floors[0].walls!.find((w) => w.to && w.x === 8 && w.y === 2)!
+    spec.thickness = 220
+    const after = storey(fromV1(view, plan).plan, 'g').walls
+    expect(after.find((w) => w.a[0] === 4000 && w.a[1] === 1000 && w.b[0] === 5000)?.thickness).toBe(220)
   })
 })
 

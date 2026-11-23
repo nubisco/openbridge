@@ -265,6 +265,8 @@ export interface HouseRoom extends HouseRect {
   kind: HouseRoomKind
   /** More rectangles joined along an edge, for an L or U shaped room. */
   parts?: HouseRect[]
+  /** The corners of a room drawn corner by corner. Then it is the shape, and the rectangle is the box around it. */
+  outline?: Array<[number, number]>
 }
 
 export interface HouseOpening {

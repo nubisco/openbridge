@@ -507,7 +507,8 @@
   stroke: rgba(120, 180, 255, 0.4);
   stroke-width: calc(1.5px / var(--hv-zoom, 1));
 }
-.hv-eroom rect {
+.hv-eroom rect,
+.hv-eroom polygon {
   fill: rgba(110, 165, 255, 0.14);
 }
 // The outline is drawn once over the parts, so an L shows no seam.
@@ -517,30 +518,35 @@
   stroke-width: calc(1px / var(--hv-zoom, 1));
   pointer-events: none;
 }
-.hv-tool-select .hv-eroom rect {
+.hv-tool-select .hv-eroom rect,
+.hv-tool-select .hv-eroom polygon {
   cursor: move;
 }
-.hv-eroom.hv-k-outdoor rect {
+.hv-eroom.hv-k-outdoor rect,
+.hv-eroom.hv-k-outdoor polygon {
   fill: rgba(90, 210, 150, 0.1);
 }
 .hv-eroom.hv-k-outdoor .hv-eedge {
   stroke: rgba(110, 230, 170, 0.5);
   stroke-dasharray: calc(5px / var(--hv-zoom, 1)) calc(5px / var(--hv-zoom, 1));
 }
-.hv-eroom.hv-k-paved rect {
+.hv-eroom.hv-k-paved rect,
+.hv-eroom.hv-k-paved polygon {
   fill: rgba(220, 225, 235, 0.12);
 }
 .hv-eroom.hv-k-paved .hv-eedge {
   stroke: rgba(225, 230, 240, 0.6);
   stroke-dasharray: calc(2px / var(--hv-zoom, 1)) calc(4px / var(--hv-zoom, 1));
 }
-.hv-eroom.hv-k-pool rect {
+.hv-eroom.hv-k-pool rect,
+.hv-eroom.hv-k-pool polygon {
   fill: rgba(40, 170, 255, 0.35);
 }
 .hv-eroom.hv-k-pool .hv-eedge {
   stroke: rgba(140, 230, 255, 0.9);
 }
-.hv-eroom.hv-sel rect {
+.hv-eroom.hv-sel rect,
+.hv-eroom.hv-sel polygon {
   fill: rgba(60, 207, 192, 0.2);
 }
 .hv-eroom.hv-sel .hv-eedge {
