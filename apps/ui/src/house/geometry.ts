@@ -7,6 +7,7 @@
  * turns the few lengths that are really metres (wall height, how high a lamp
  * hangs) into cells.
  */
+import { rectLoops } from '@house-model/cells'
 import type {
   HouseFloor,
   HouseFurniture,
@@ -49,15 +50,121 @@ export function project(mode: ViewMode, x: number, y: number, z = 0): Point {
 export const ISO_FLOOR_MATRIX = `matrix(${C},${SN},${-C},${SN},0,0)`
 
 // ─── Walls ──────────────────────────────────────────────────────────────────
+// Positions are cells, measured to the millimetre (a cell is 500 mm), so
+// they are fractions like 4.568. Two of them are the same place when they
+// round to the same millimetre, which also absorbs the float noise of sums
+// like x + w.
 
-/** One cell-long piece of wall. `h` runs along x from (x,y), `v` along y. */
-export interface WallUnit {
-  x: number
-  y: number
-  axis: 'h' | 'v'
+/** Millimetres per cell. */
+export const CELL_MM = 500
+/** The millimetre a position falls on, for comparing positions. */
+export const mmOf = (v: number) => Math.round(v * CELL_MM)
+/**
+ * The editor's snapping step in cells: 1 is the half metre grid, 0.2 is
+ * 10 cm, 0.02 is 1 cm and 0.002 a millimetre (no snapping).
+ */
+let snapStep = 1
+export function setSnap(cells: number): void {
+  snapStep = cells
+}
+export const snapStepNow = () => snapStep
+
+/**
+ * A position snapped to the step. Doors, windows, radiators, furniture and
+ * devices (`fine`) go by half the step on the half metre grid, as they always
+ * have, so a door can sit a quarter metre from a corner.
+ */
+export function snap(v: number, fine = false): number {
+  const step = fine && snapStep >= 1 ? snapStep / 2 : snapStep
+  return toMm(Math.round(v / step) * step)
 }
 
-export const unitKey = (x: number, y: number, axis: 'h' | 'v') => `${x},${y},${axis}`
+/** The same place, to the millimetre. */
+export const same = (a: number, b: number) => mmOf(a) === mmOf(b)
+/** A position, cleaned to the millimetre it means. */
+export const toMm = (v: number) => mmOf(v) / CELL_MM
+
+/**
+ * A straight piece of wall line: `h` runs along x at y = `line`, `v` along y
+ * at x = `line`, from `start` to `end`.
+ */
+export interface WallSpan {
+  axis: 'h' | 'v'
+  line: number
+  start: number
+  end: number
+}
+
+/** A point on a wall, as `nearestWall` finds it: on line `line`, `at` along it. */
+export interface WallUnit {
+  axis: 'h' | 'v'
+  line: number
+  at: number
+}
+
+const lineKey = (axis: 'h' | 'v', line: number) => `${axis}${mmOf(line)}`
+
+/** Spans on one line, sorted, overlapping and touching ones merged. */
+function merge(spans: Array<[number, number]>): Array<[number, number]> {
+  const out: Array<[number, number]> = []
+  for (const [s, e] of spans.slice().sort((a, b) => a[0] - b[0])) {
+    const last = out[out.length - 1]
+    if (last && mmOf(s) <= mmOf(last[1])) last[1] = Math.max(last[1], e)
+    else out.push([s, e])
+  }
+  return out
+}
+
+/**
+ * The walls of a floor: every stretch of wall line, merged, keyed by line.
+ * Walls are the outlines of rooms that have them, and an edge two rooms
+ * share is one wall.
+ */
+export class Walls {
+  private readonly lines = new Map<string, Array<[number, number]>>()
+  readonly spans: WallSpan[] = []
+
+  /** Any edges, merged where they run on along one line. */
+  constructor(edges: WallSpan[]) {
+    const raw = new Map<string, { axis: 'h' | 'v'; line: number; spans: Array<[number, number]> }>()
+    for (const e of edges) {
+      const k = lineKey(e.axis, e.line)
+      const entry = raw.get(k) ?? { axis: e.axis, line: e.line, spans: [] }
+      entry.spans.push([e.start, e.end])
+      raw.set(k, entry)
+    }
+    for (const [k, { axis, line, spans }] of raw) {
+      const merged = merge(spans)
+      this.lines.set(k, merged)
+      for (const [start, end] of merged) this.spans.push({ axis, line, start, end })
+    }
+  }
+
+  /** A floor's walls: the outlines of its rooms that have walls. */
+  static of(floor: HouseFloor): Walls {
+    return new Walls(floor.rooms.filter((r) => r.kind === 'room').flatMap(roomOutline))
+  }
+
+  /** The stretch of wall that holds all of `[s, e]` on a line, if one does. */
+  holding(axis: 'h' | 'v', line: number, s: number, e: number): [number, number] | undefined {
+    return this.lines.get(lineKey(axis, line))?.find(([a, b]) => mmOf(a) <= mmOf(s) && mmOf(e) <= mmOf(b))
+  }
+
+  /** The wall point nearest (x, y), within `reach` cells. */
+  nearest(x: number, y: number, reach: number): WallUnit | null {
+    let best: WallUnit | null = null
+    let bd = reach
+    for (const w of this.spans) {
+      const at = clamp(w.axis === 'h' ? x : y, w.start, w.end)
+      const d = w.axis === 'h' ? Math.hypot(x - at, y - w.line) : Math.hypot(x - w.line, y - at)
+      if (d < bd) {
+        bd = d
+        best = { axis: w.axis, line: w.line, at }
+      }
+    }
+    return best
+  }
+}
 
 // ─── Room shapes ────────────────────────────────────────────────────────────
 
@@ -70,10 +177,6 @@ export function roomRects(r: HouseRoom): HouseRect[] {
 export function roomContains(r: HouseRoom, x: number, y: number): boolean {
   return roomRects(r).some((q) => x >= q.x && x <= q.x + q.w && y >= q.y && y <= q.y + q.h)
 }
-
-/** Whether the cell whose corner is (cx, cy) is inside a room. */
-const cellIn = (r: HouseRoom, cx: number, cy: number) =>
-  roomRects(r).some((q) => cx >= q.x && cx < q.x + q.w && cy >= q.y && cy < q.y + q.h)
 
 /** The box around a room. */
 export function roomBox(r: HouseRoom): HouseRect {
@@ -92,75 +195,51 @@ export function roomBox(r: HouseRoom): HouseRect {
 export const roomArea = (r: HouseRoom) => roomRects(r).reduce((a, q) => a + q.w * q.h, 0)
 
 /**
- * The outline of a room as wall units: every rectangle edge that has the room
- * on one side only. The edge where an L's two parts meet has the room on both
- * sides, so it is not a wall.
+ * The outline of a room as straight edges: every stretch of rectangle edge
+ * that has the room on one side only. The edge where an L's two parts meet
+ * has the room on both sides, so it is not a wall.
  */
-export function roomOutline(r: HouseRoom): WallUnit[] {
-  const out: WallUnit[] = []
-  for (const q of roomRects(r)) {
-    for (let i = 0; i < q.w; i++) {
-      const x = q.x + i
-      if (!cellIn(r, x, q.y - 1)) out.push({ x, y: q.y, axis: 'h' })
-      if (!cellIn(r, x, q.y + q.h)) out.push({ x, y: q.y + q.h, axis: 'h' })
-    }
-    for (let j = 0; j < q.h; j++) {
-      const y = q.y + j
-      if (!cellIn(r, q.x - 1, y)) out.push({ x: q.x, y, axis: 'v' })
-      if (!cellIn(r, q.x + q.w, y)) out.push({ x: q.x + q.w, y, axis: 'v' })
-    }
+export function roomOutline(r: HouseRoom): WallSpan[] {
+  const out: WallSpan[] = []
+  for (const loop of rectLoops(roomRects(r), CELL_MM)) {
+    loop.forEach((a, i) => {
+      const b = loop[(i + 1) % loop.length]
+      if (same(a[1], b[1])) out.push({ axis: 'h', line: a[1], start: Math.min(a[0], b[0]), end: Math.max(a[0], b[0]) })
+      else out.push({ axis: 'v', line: a[0], start: Math.min(a[1], b[1]), end: Math.max(a[1], b[1]) })
+    })
   }
   return out
 }
 
-/**
- * Every wall unit on a floor. Walls are the outlines of rooms that have them,
- * and an edge two rooms share is one wall, so this is a set.
- */
-export function wallUnits(floor: HouseFloor): Map<string, WallUnit> {
-  const units = new Map<string, WallUnit>()
-  for (const r of floor.rooms) {
-    if (r.kind !== 'room') continue
-    for (const u of roomOutline(r)) units.set(unitKey(u.x, u.y, u.axis), u)
-  }
-  return units
-}
-
-/** Where an opening starts and ends along its wall, in cells. */
 /** Whether a shutter can sit on an opening: a window, a sliding door, or a glass door. */
 export function takesShutter(o: HouseOpening): boolean {
   return o.type === 'window' || o.type === 'slider' || (o.type === 'door' && o.glass === true)
 }
 
-export function openingSpan(o: HouseOpening): [number, number] {
+/** Where an opening starts and ends along its wall, in cells. */
+export function openingSpan(o: Pick<HouseOpening, 'axis' | 'x' | 'y' | 'len'>): [number, number] {
   const s = o.axis === 'h' ? o.x : o.y
   return [s, s + o.len]
 }
 
-/**
- * The wall units an opening covers, even partly: one that starts a quarter
- * metre into a unit still needs that unit to be wall.
- */
-export function openingUnits(o: HouseOpening): string[] {
-  const [s, e] = openingSpan(o)
-  const out: string[] = []
-  for (let i = Math.floor(s); i < Math.ceil(e); i++) {
-    out.push(o.axis === 'h' ? unitKey(i, o.y, 'h') : unitKey(o.x, i, 'v'))
-  }
-  return out
-}
+/** The line an opening (or radiator) sits on. */
+export const openingLine = (o: Pick<HouseOpening, 'axis' | 'x' | 'y'>) => (o.axis === 'h' ? o.y : o.x)
 
 /** Whether two openings claim the same stretch of the same wall line. */
-export function openingsOverlap(a: HouseOpening, b: HouseOpening): boolean {
-  if (a.axis !== b.axis || (a.axis === 'h' ? a.y !== b.y : a.x !== b.x)) return false
+export function openingsOverlap(
+  a: Pick<HouseOpening, 'axis' | 'x' | 'y' | 'len'>,
+  b: Pick<HouseOpening, 'axis' | 'x' | 'y' | 'len'>,
+): boolean {
+  if (a.axis !== b.axis || !same(openingLine(a), openingLine(b))) return false
   const [s1, e1] = openingSpan(a)
   const [s2, e2] = openingSpan(b)
-  return s1 < e2 && s2 < e1
+  return mmOf(s1) < mmOf(e2) && mmOf(s2) < mmOf(e1)
 }
 
-/** Whether an opening still sits entirely on wall, after rooms moved under it. */
-export function openingFits(o: HouseOpening, units: Map<string, WallUnit>): boolean {
-  return openingUnits(o).every((k) => units.has(k))
+/** Whether an opening sits entirely on wall, after rooms moved under it. */
+export function openingFits(o: Pick<HouseOpening, 'axis' | 'x' | 'y' | 'len'>, walls: Walls): boolean {
+  const [s, e] = openingSpan(o)
+  return !!walls.holding(o.axis, openingLine(o), s, e)
 }
 
 export interface WallRun {
@@ -176,49 +255,33 @@ export interface WallRun {
 
 /**
  * Walls merged into straight runs, cut where doors and windows sit. Drawing a
- * run as one shape instead of one per cell keeps the scene to a few hundred
- * nodes and joins without seams. An opening may start or end part way into a
- * cell, so the cuts fall wherever the openings say, not on the grid.
+ * run as one shape keeps the scene to a few hundred nodes and joins without
+ * seams.
  */
-export function wallRuns(floor: HouseFloor): WallRun[] {
-  const units = wallUnits(floor)
+export function wallRuns(floor: HouseFloor, walls = Walls.of(floor)): WallRun[] {
   // Openings that still fit, first come first served where two overlap.
   const kept: HouseOpening[] = []
   for (const o of floor.openings) {
-    if (openingFits(o, units) && !kept.some((k) => openingsOverlap(k, o))) kept.push(o)
+    if (openingFits(o, walls) && !kept.some((k) => openingsOverlap(k, o))) kept.push(o)
   }
   const runs: WallRun[] = []
-  for (const axis of ['h', 'v'] as const) {
-    const list = [...units.values()]
-      .filter((u) => u.axis === axis)
-      .sort((a, b) => (axis === 'h' ? a.y - b.y || a.x - b.x : a.x - b.x || a.y - b.y))
-    // Unbroken stretches of wall on one line, as [line, start, end].
-    const lines: Array<[number, number, number]> = []
-    for (const u of list) {
-      const line = axis === 'h' ? u.y : u.x
-      const at = axis === 'h' ? u.x : u.y
-      const cur = lines[lines.length - 1]
-      if (cur && cur[0] === line && cur[2] === at) cur[2] = at + 1
-      else lines.push([line, at, at + 1])
-    }
-    const run = (line: number, a: number, b: number, o: HouseOpening | null): WallRun =>
+  for (const { axis, line, start, end } of walls.spans) {
+    const run = (a: number, b: number, o: HouseOpening | null): WallRun =>
       axis === 'h'
         ? { type: o ? o.type : 'wall', opening: o, axis, x1: a, y1: line, x2: b, y2: line }
         : { type: o ? o.type : 'wall', opening: o, axis, x1: line, y1: a, x2: line, y2: b }
-    for (const [line, start, end] of lines) {
-      const inside = kept
-        .filter((o) => o.axis === axis && (axis === 'h' ? o.y : o.x) === line)
-        .map((o) => ({ o, span: openingSpan(o) }))
-        .filter(({ span }) => span[0] >= start && span[1] <= end)
-        .sort((a, b) => a.span[0] - b.span[0])
-      let at = start
-      for (const { o, span } of inside) {
-        if (span[0] > at) runs.push(run(line, at, span[0], null))
-        runs.push(run(line, span[0], span[1], o))
-        at = span[1]
-      }
-      if (at < end) runs.push(run(line, at, end, null))
+    const inside = kept
+      .filter((o) => o.axis === axis && same(openingLine(o), line))
+      .map((o) => ({ o, span: openingSpan(o) }))
+      .filter(({ span }) => mmOf(span[0]) >= mmOf(start) && mmOf(span[1]) <= mmOf(end))
+      .sort((a, b) => a.span[0] - b.span[0])
+    let at = start
+    for (const { o, span } of inside) {
+      if (mmOf(span[0]) > mmOf(at)) runs.push(run(at, span[0], null))
+      runs.push(run(span[0], span[1], o))
+      at = span[1]
     }
+    if (mmOf(at) < mmOf(end)) runs.push(run(at, end, null))
   }
   return runs
 }

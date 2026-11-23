@@ -64,7 +64,7 @@
           @pointermove="onMove"
           @pointerup="onUp"
           @pointercancel="onUp"
-          @pointerleave="cursor = null"
+          @pointerleave="((cursor = null), (pointerAt = null))"
           @wheel="onWheel"
           v-html="markup"
         />
@@ -128,8 +128,12 @@
           <span class="house-editor__zoom-level" aria-live="polite">{{ Math.round(zoom * 100) }}%</span>
         </div>
       </div>
-      <div class="house-editor__help" data-nb-appearance="rounded">
-        <NbMessage variant="helper">{{ help }}</NbMessage>
+      <div class="house-editor__status" data-nb-appearance="rounded">
+        <NbMessage class="house-editor__help" variant="helper">{{ help }}</NbMessage>
+        <span v-if="!phone" class="house-editor__where" aria-live="off">{{ where }}</span>
+        <NbField v-slot="{ id }" label="Snap" orientation="row" class="house-editor__snap">
+          <NbSelect :id="id" v-model="snapMm" :options="SNAP_OPTIONS" size="sm" />
+        </NbField>
       </div>
     </div>
 
@@ -223,7 +227,7 @@
                     :model-value="opening.len / CELLS_PER_M"
                     :min="0.5"
                     :max="20"
-                    :step="0.25"
+                    :step="lengthStep"
                     size="sm"
                     @update:model-value="setOpeningLength"
                   />
@@ -362,7 +366,7 @@
                   :model-value="radiator.len / CELLS_PER_M"
                   :min="0.5"
                   :max="5"
-                  :step="0.25"
+                  :step="lengthStep"
                   size="sm"
                   @update:model-value="setRadiatorLength"
                 />
@@ -390,7 +394,7 @@
                   :model-value="piece.w / CELLS_PER_M"
                   :min="0.25"
                   :max="20"
-                  :step="0.25"
+                  :step="lengthStep"
                   size="sm"
                   @update:model-value="(v: number | null) => setPieceSize('w', v)"
                 />
@@ -401,7 +405,7 @@
                   :model-value="piece.d / CELLS_PER_M"
                   :min="0.25"
                   :max="20"
-                  :step="0.25"
+                  :step="lengthStep"
                   size="sm"
                   @update:model-value="(v: number | null) => setPieceSize('d', v)"
                 />
@@ -502,7 +506,7 @@
                     :model-value="(placed.length ?? 4) / CELLS_PER_M"
                     :min="0.5"
                     :max="20"
-                    :step="0.5"
+                    :step="plotStep"
                     size="sm"
                     @update:model-value="setGateLength"
                   />
@@ -547,7 +551,7 @@
                     :model-value="plan.plot.w / CELLS_PER_M"
                     :min="minPlot.w / CELLS_PER_M"
                     :max="200"
-                    :step="0.5"
+                    :step="plotStep"
                     size="sm"
                     @update:model-value="(v: number | null) => setPlot('w', v)"
                   />
@@ -558,7 +562,7 @@
                     :model-value="plan.plot.h / CELLS_PER_M"
                     :min="minPlot.h / CELLS_PER_M"
                     :max="200"
-                    :step="0.5"
+                    :step="plotStep"
                     size="sm"
                     @update:model-value="(v: number | null) => setPlot('h', v)"
                   />
@@ -616,6 +620,7 @@ import type {
 } from '@/api'
 import {
   CELLS_PER_M,
+  CELL_MM,
   FURNITURE_BACK,
   FURNITURE_HEIGHT,
   S,
@@ -626,6 +631,9 @@ import {
   radiatorRoom,
   roomArea,
   roomRects,
+  setSnap,
+  snap as snapTo,
+  toMm,
 } from '@/house/geometry'
 import {
   FURNITURE_NAME,
@@ -698,7 +706,10 @@ const props = defineProps<{
   devices: Map<string, LiveDevice>
   allDevices: LiveDevice[]
   initialFloor: string | null
+  /** The snapping step, in millimetres, as the plan stores it. */
+  snap: number
 }>()
+const emit = defineEmits<{ 'update:snap': [mm: number] }>()
 
 const { phone } = usePhoneLayout()
 const inspector = useInspectorStore()
@@ -999,7 +1010,8 @@ const help = computed(() => {
   }[tool.value]
 })
 
-const metres = (cells: number) => String(Math.round((cells / CELLS_PER_M) * 100) / 100)
+/** Metres to the millimetre, without trailing zeros. */
+const metres = (cells: number) => String(Math.round(cells * CELL_MM) / 1000)
 
 function setTool(id: string) {
   tool.value = id as Tool
@@ -1073,11 +1085,7 @@ function deleteRoom() {
 function setRadiatorLength(v: number | null) {
   const r = radiator.value
   if (!r || v === null) return
-  const want = clamp(Math.round(v * CELLS_PER_M * 2) / 2, 1, 10)
-  let len = r.len
-  const step = want > len ? 0.5 : -0.5
-  while (len !== want && radiatorFits(floor.value, { ...r, len: len + step })) len += step
-  r.len = len
+  r.len = longestFitting(r.len, clamp(toMm(v * CELLS_PER_M), 1, 10), (len) => radiatorFits(floor.value, { ...r, len }))
 }
 
 function flipRadiator() {
@@ -1096,7 +1104,7 @@ function deleteRadiator() {
 function setPieceSize(side: 'w' | 'd', v: number | null) {
   const f = piece.value
   if (!f || v === null) return
-  const cells = clamp(Math.round(v * CELLS_PER_M * 2) / 2, 0.5, side === 'w' ? props.plan.plot.w : props.plan.plot.h)
+  const cells = clamp(toMm(v * CELLS_PER_M), 0.5, side === 'w' ? props.plan.plot.w : props.plan.plot.h)
   f[side] = cells
   // Grown past the plot's edge, it moves back onto it.
   if (side === 'w') f.x = clamp(f.x, 0, props.plan.plot.w - f.w)
@@ -1151,12 +1159,8 @@ function deleteOpening() {
 function setOpeningLength(v: number | null) {
   const o = opening.value
   if (!o || v === null) return
-  // In quarter metres, growing only along wall and never over another opening.
-  const want = clamp(Math.round(v * CELLS_PER_M * 2) / 2, 1, 40)
-  let len = o.len
-  const step = want > len ? 0.5 : -0.5
-  while (len !== want && fitsFree(floor.value, { ...o, len: len + step })) len += step
-  o.len = len
+  // Growing only along wall and never over another opening.
+  o.len = longestFitting(o.len, clamp(toMm(v * CELLS_PER_M), 1, 40), (len) => fitsFree(floor.value, { ...o, len }))
 }
 
 /** Lights, shutters and gates are drawn from what they report. Everything else can say what it is. */
@@ -1301,7 +1305,7 @@ function setColor(c: string) {
 }
 
 function setGateLength(v: number | null) {
-  if (placed.value && v !== null) placed.value.length = clamp(Math.round(v * CELLS_PER_M), 1, 40)
+  if (placed.value && v !== null) placed.value.length = clamp(toMm(v * CELLS_PER_M), 1, 40)
 }
 
 function setGateAxis(axis: 'h' | 'v') {
@@ -1469,8 +1473,8 @@ function onDown(e: PointerEvent) {
   if (armed.value) return placeAt(armed.value, p)
 
   if (isAreaTool(tool.value) || wingFor.value) {
-    const x0 = clamp(Math.round(p.x), 0, pw)
-    const y0 = clamp(Math.round(p.y), 0, ph)
+    const x0 = clamp(snapTo(p.x), 0, pw)
+    const y0 = clamp(snapTo(p.y), 0, ph)
     drag = { type: 'draw', x0, y0 }
     draft.value = { x: x0, y: y0, w: 0, h: 0 }
   } else if (tool.value === 'door' || tool.value === 'window' || tool.value === 'open') {
@@ -1492,8 +1496,8 @@ function onDown(e: PointerEvent) {
   } else if (tool.value === 'furniture') {
     if (!grabFurniture(t, p)) {
       clearSelection()
-      const x0 = clamp(Math.round(p.x * 2) / 2, 0, pw)
-      const y0 = clamp(Math.round(p.y * 2) / 2, 0, ph)
+      const x0 = clamp(snapTo(p.x, true), 0, pw)
+      const y0 = clamp(snapTo(p.y, true), 0, ph)
       drag = { type: 'fdraw', x0, y0 }
       draft.value = { x: x0, y: y0, w: 0, h: 0 }
     }
@@ -1551,7 +1555,10 @@ function onDown(e: PointerEvent) {
 
 function onMove(e: PointerEvent) {
   const box = canvasEl.value?.getBoundingClientRect()
-  if (box && e.pointerType !== 'touch') cursor.value = [e.clientX - box.left, e.clientY - box.top]
+  if (box && e.pointerType !== 'touch') {
+    cursor.value = [e.clientX - box.left, e.clientY - box.top]
+    pointerAt.value = toGrid(e)
+  }
   if (touches.has(e.pointerId)) touches.set(e.pointerId, [e.clientX, e.clientY])
   if (pinch) {
     if (touches.size !== 2) return
@@ -1573,8 +1580,8 @@ function onMove(e: PointerEvent) {
   const pw = props.plan.plot.w
   const ph = props.plan.plot.h
   if (drag.type === 'draw') {
-    const x = clamp(Math.round(p.x), 0, pw)
-    const y = clamp(Math.round(p.y), 0, ph)
+    const x = clamp(snapTo(p.x), 0, pw)
+    const y = clamp(snapTo(p.y), 0, ph)
     draft.value = {
       x: Math.min(x, drag.x0),
       y: Math.min(y, drag.y0),
@@ -1582,8 +1589,8 @@ function onMove(e: PointerEvent) {
       h: Math.abs(y - drag.y0),
     }
   } else if (drag.type === 'fdraw') {
-    const x = clamp(Math.round(p.x * 2) / 2, 0, pw)
-    const y = clamp(Math.round(p.y * 2) / 2, 0, ph)
+    const x = clamp(snapTo(p.x, true), 0, pw)
+    const y = clamp(snapTo(p.y, true), 0, ph)
     draft.value = {
       x: Math.min(x, drag.x0),
       y: Math.min(y, drag.y0),
@@ -1597,14 +1604,14 @@ function onMove(e: PointerEvent) {
   } else if (drag.type === 'resize') {
     const { o, r, corner, room: owner } = drag
     let { x1, y1, x2, y2 } = o
-    if (corner.includes('w')) x1 = clamp(Math.round(p.x), 0, x2 - 1)
-    if (corner.includes('e')) x2 = clamp(Math.round(p.x), x1 + 1, pw)
-    if (corner.includes('n')) y1 = clamp(Math.round(p.y), 0, y2 - 1)
-    if (corner.includes('s')) y2 = clamp(Math.round(p.y), y1 + 1, ph)
+    if (corner.includes('w')) x1 = clamp(snapTo(p.x), 0, x2 - 1)
+    if (corner.includes('e')) x2 = clamp(snapTo(p.x), x1 + 1, pw)
+    if (corner.includes('n')) y1 = clamp(snapTo(p.y), 0, y2 - 1)
+    if (corner.includes('s')) y2 = clamp(snapTo(p.y), y1 + 1, ph)
     // A size that would split the room or overlap its own parts is not taken:
     // the part stays at the last size that kept the room in one piece.
     const before = { x: r.x, y: r.y, w: r.w, h: r.h }
-    Object.assign(r, { x: x1, y: y1, w: x2 - x1, h: y2 - y1 })
+    Object.assign(r, { x: x1, y: y1, w: toMm(x2 - x1), h: toMm(y2 - y1) })
     if (!shapeValid(owner)) Object.assign(r, before)
   } else if (drag.type === 'move') {
     const { r, o, start, payload } = drag
@@ -1615,16 +1622,16 @@ function onMove(e: PointerEvent) {
       x2: Math.max(...o.map((q) => q.x + q.w)),
       y2: Math.max(...o.map((q) => q.y + q.h)),
     }
-    const dx = clamp(Math.round(p.x - start.x), -box.x, pw - box.x2)
-    const dy = clamp(Math.round(p.y - start.y), -box.y, ph - box.y2)
-    roomRects(r).forEach((q, i) => Object.assign(q, { x: o[i].x + dx, y: o[i].y + dy }))
-    for (const q of payload.rooms) {
-      roomRects(q.room).forEach((x, i) => Object.assign(x, { x: q.o[i].x + dx, y: q.o[i].y + dy }))
-    }
-    for (const q of payload.openings) Object.assign(q.o, { x: q.x + dx, y: q.y + dy })
-    for (const q of payload.radiators) Object.assign(q.o, { x: q.x + dx, y: q.y + dy })
-    for (const q of payload.furniture) Object.assign(q.o, { x: q.x + dx, y: q.y + dy })
-    for (const q of payload.placements) Object.assign(q.p, { x: q.x + dx, y: q.y + dy })
+    // Moved by whole steps, so a room off the grid keeps its offset from it.
+    const dx = clamp(snapTo(p.x - start.x), -box.x, pw - box.x2)
+    const dy = clamp(snapTo(p.y - start.y), -box.y, ph - box.y2)
+    const by = (q: { x: number; y: number }) => ({ x: toMm(q.x + dx), y: toMm(q.y + dy) })
+    roomRects(r).forEach((q, i) => Object.assign(q, by(o[i])))
+    for (const q of payload.rooms) roomRects(q.room).forEach((x, i) => Object.assign(x, by(q.o[i])))
+    for (const q of payload.openings) Object.assign(q.o, by(q))
+    for (const q of payload.radiators) Object.assign(q.o, by(q))
+    for (const q of payload.furniture) Object.assign(q.o, by(q))
+    for (const q of payload.placements) Object.assign(q.p, by(q))
   } else if (drag.type === 'omove') {
     moveOpening(floor.value, drag.o, p.x, p.y, drag.grab)
   } else if (drag.type === 'oresize') {
@@ -1639,7 +1646,7 @@ function onMove(e: PointerEvent) {
     const pl = floor.value.placements.find((x) => x.ref === ref)
     if (!pl) return
     if (d) place(props.plan, floor.value, d, p.x, p.y)
-    else Object.assign(pl, { x: clamp(Math.round(p.x * 2) / 2, 0, pw), y: clamp(Math.round(p.y * 2) / 2, 0, ph) })
+    else Object.assign(pl, { x: clamp(snapTo(p.x, true), 0, pw), y: clamp(snapTo(p.y, true), 0, ph) })
   }
 }
 
@@ -1747,7 +1754,7 @@ function dropItem(item: LibraryItem, p: { x: number; y: number }) {
   if (item.type === 'furniture') {
     const pw = props.plan.plot.w
     const ph = props.plan.plot.h
-    const at = { x: clamp(Math.round(p.x * 2) / 2, 0, pw), y: clamp(Math.round(p.y * 2) / 2, 0, ph) }
+    const at = { x: clamp(snapTo(p.x, true), 0, pw), y: clamp(snapTo(p.y, true), 0, ph) }
     const f = addFurniture(props.plan, floor.value, item.kind, at)
     clearSelection()
     selFurniture.value = f.id
@@ -1843,6 +1850,50 @@ watch(
   { deep: true },
 )
 onBeforeUnmount(() => clearTimeout(previewTimer))
+
+// ─── Snapping ───────────────────────────────────────────────────────────────
+
+const SNAP_OPTIONS = [
+  { label: '0.5 m', value: 500 },
+  { label: '10 cm', value: 100 },
+  { label: '1 cm', value: 10 },
+  { label: 'Off', value: 1 },
+]
+const snapMm = computed({
+  get: () => (SNAP_OPTIONS.some((o) => o.value === props.snap) ? props.snap : 500),
+  set: (v: number) => emit('update:snap', v),
+})
+watch(snapMm, (v) => setSnap(v / CELL_MM), { immediate: true })
+/** What the size fields step by, in metres: the snap, or half of it on the half metre grid. */
+const lengthStep = computed(() => (snapMm.value >= 500 ? 0.25 : snapMm.value / 1000))
+const plotStep = computed(() => snapMm.value / 1000)
+
+/**
+ * The longest length from `from` towards `want` that still fits, to the
+ * millimetre. Fitting is all or nothing past the first obstacle, so a
+ * binary search finds the edge in a dozen tries.
+ */
+function longestFitting(from: number, want: number, fits: (len: number) => boolean): number {
+  if (fits(want)) return want
+  let ok = Math.round(from * CELL_MM)
+  let bad = Math.round(want * CELL_MM)
+  if (!fits(ok / CELL_MM)) return from
+  while (Math.abs(bad - ok) > 1) {
+    const mid = Math.round((ok + bad) / 2)
+    if (fits(mid / CELL_MM)) ok = mid
+    else bad = mid
+  }
+  return ok / CELL_MM
+}
+
+/** Where the pointer is on the plan, snapped as a door or device would be, for the status strip. */
+const pointerAt = ref<{ x: number; y: number } | null>(null)
+const where = computed(() => {
+  const p = pointerAt.value
+  if (!p) return ''
+  const m = (v: number) => (snapTo(v, true) / CELLS_PER_M).toFixed(snapMm.value === 1 ? 3 : 2)
+  return `x ${m(p.x)} m, y ${m(p.y)} m`
+})
 
 // ─── Undo and redo ──────────────────────────────────────────────────────────
 // A step is the plan once a change has settled: a drag counts when it ends,
@@ -2112,24 +2163,48 @@ $ruler: 20px;
   font-variant-numeric: tabular-nums;
 }
 
-.house-editor__help {
+.house-editor__status {
   position: absolute;
   left: calc(var(--nb-spacing-12) + #{$ruler});
   bottom: var(--nb-spacing-12);
-  max-width: min(640px, calc(100% - 24px));
+  display: flex;
+  align-items: center;
+  gap: var(--nb-spacing-12);
+  max-width: calc(100% - #{$ruler} - var(--nb-spacing-12) * 2);
   // On a page surface, so it reads on the blueprint in light and dark.
-  padding: var(--nb-spacing-4) var(--nb-spacing-12);
+  padding: var(--nb-spacing-4) var(--nb-spacing-4) var(--nb-spacing-4) var(--nb-spacing-12);
   border-radius: var(--nb-radius-control);
   background: var(--nb-c-layer-1);
   border: 1px solid var(--nb-c-border);
 
   .is-phone & {
     position: static;
+    flex-wrap: wrap;
+    max-width: none;
     margin-top: var(--nb-spacing-8);
     padding: 0;
     background: none;
     border: 0;
   }
+}
+
+.house-editor__help {
+  flex: 0 1 560px;
+  min-width: 0;
+}
+
+// Where the pointer is, in metres from the plot's corner.
+.house-editor__where {
+  min-width: 9.5em;
+  color: var(--nb-c-text-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.house-editor__snap {
+  flex: none;
+  margin: 0;
 }
 
 .house-editor__side {

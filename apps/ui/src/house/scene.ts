@@ -17,6 +17,7 @@ import type {
   HousePlan,
   HouseRoom,
 } from '@/api'
+import { Grid } from '@house-model/cells'
 import {
   CELLS_PER_M,
   ISO_FLOOR_MATRIX,
@@ -44,6 +45,7 @@ import {
   roomRects,
   roomsOutsideIn,
   wallRuns,
+  CELL_MM,
   waterColor,
   type Point,
   type ViewMode,
@@ -386,45 +388,44 @@ export function resting(d: { on?: boolean; supply?: number; return?: number }): 
  * and larger x) of every cell a room covers, merged into straight runs.
  */
 function slab(o: SceneOptions, floor: HouseFloor): string {
-  const cells = new Set<string>()
-  for (const r of floor.rooms)
-    for (const q of roomRects(r))
-      for (let x = q.x; x < q.x + q.w; x++) for (let y = q.y; y < q.y + q.h; y++) cells.add(`${x},${y}`)
+  // On a grid cut at every room corner, so each cell is wholly floor or not.
+  const rects = floor.rooms.flatMap(roomRects)
+  if (!rects.length) return ''
+  const g = Grid.of(rects, [], CELL_MM)
+  const cells = g.cells(rects)
   const t = 0.35
-  const front = new Map<number, number[]>()
-  const side = new Map<number, number[]>()
-  for (const c of cells) {
-    const [x, y] = c.split(',').map(Number)
-    if (!cells.has(`${x},${y + 1}`)) front.set(y + 1, [...(front.get(y + 1) ?? []), x])
-    if (!cells.has(`${x + 1},${y}`)) side.set(x + 1, [...(side.get(x + 1) ?? []), y])
+  // Runs of exposed edge, in grid indices: [line, from, to].
+  const front: Array<[number, number, number]> = []
+  const side: Array<[number, number, number]> = []
+  const extend = (list: Array<[number, number, number]>, line: number, at: number) => {
+    const last = list[list.length - 1]
+    if (last && last[0] === line && last[2] === at) last[2] = at + 1
+    else list.push([line, at, at + 1])
   }
+  const all = [...cells]
+  for (const [i, j] of all.slice().sort((a, b) => a[1] - b[1] || a[0] - b[0]))
+    if (!cells.has(i, j + 1)) extend(front, j + 1, i)
+  for (const [i, j] of all.slice().sort((a, b) => a[0] - b[0] || a[1] - b[1]))
+    if (!cells.has(i + 1, j)) extend(side, i + 1, j)
   let out = ''
-  const runs = (list: number[]) => {
-    const sorted = list.sort((a, b) => a - b)
-    const res: Array<[number, number]> = []
-    for (const v of sorted) {
-      const last = res[res.length - 1]
-      if (last && last[1] === v) last[1] = v + 1
-      else res.push([v, v + 1])
-    }
-    return res
+  for (const [j, i1, i2] of front) {
+    const [y, x1, x2] = [g.ys.at[j], g.xs.at[i1], g.xs.at[i2]]
+    out += `<polygon class="hv-slab" points="${poly(o, [
+      [x1, y, 0],
+      [x2, y, 0],
+      [x2, y, -t],
+      [x1, y, -t],
+    ])}"/>`
   }
-  for (const [y, xs] of front)
-    for (const [x1, x2] of runs(xs))
-      out += `<polygon class="hv-slab" points="${poly(o, [
-        [x1, y, 0],
-        [x2, y, 0],
-        [x2, y, -t],
-        [x1, y, -t],
-      ])}"/>`
-  for (const [x, ys] of side)
-    for (const [y1, y2] of runs(ys))
-      out += `<polygon class="hv-slab hv-r" points="${poly(o, [
-        [x, y1, 0],
-        [x, y2, 0],
-        [x, y2, -t],
-        [x, y1, -t],
-      ])}"/>`
+  for (const [i, j1, j2] of side) {
+    const [x, y1, y2] = [g.xs.at[i], g.ys.at[j1], g.ys.at[j2]]
+    out += `<polygon class="hv-slab hv-r" points="${poly(o, [
+      [x, y1, 0],
+      [x, y2, 0],
+      [x, y2, -t],
+      [x, y1, -t],
+    ])}"/>`
+  }
   return out
 }
 
@@ -1077,9 +1078,9 @@ export function renderFloor(
       if (tint) base += `<polygon class="hv-tint" fill="${tint}" fill-opacity="0.55" points="${pts}"/>`
     }
     let outline = ''
-    for (const u of roomOutline(r)) {
-      const a = project(o.mode, u.x, u.y)
-      const b = project(o.mode, u.axis === 'h' ? u.x + 1 : u.x, u.axis === 'v' ? u.y + 1 : u.y)
+    for (const e of roomOutline(r)) {
+      const a = e.axis === 'h' ? project(o.mode, e.start, e.line) : project(o.mode, e.line, e.start)
+      const b = e.axis === 'h' ? project(o.mode, e.end, e.line) : project(o.mode, e.line, e.end)
       outline += `M${r1(a[0])},${r1(a[1])}L${r1(b[0])},${r1(b[1])}`
     }
     base += `<path class="hv-room-edge hv-k-${r.kind}" d="${outline}"/>`

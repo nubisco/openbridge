@@ -25,6 +25,7 @@
     <!-- ═══ Editing ═══ -->
     <HouseEditor
       v-if="mode === 'edit' && draft"
+      v-model:snap="snap"
       :plan="draft"
       :devices="house.byRef"
       :all-devices="house.devices"
@@ -155,6 +156,8 @@ const { phone } = usePhoneLayout()
 const floor = ref<string>('all')
 const mode = ref<'live' | 'edit'>('live')
 const draft = ref<HousePlan | null>(null)
+/** The editor's snapping step in millimetres, saved with the plan. */
+const snap = ref(500)
 const saving = ref(false)
 
 // The house, live or as a blueprint being edited, runs edge to edge. The empty
@@ -194,11 +197,15 @@ async function activate(ref: string) {
 function startEditing() {
   deselect()
   draft.value = JSON.parse(JSON.stringify(house.plan ?? emptyPlan()))
+  snap.value = house.model?.snap ?? 500
   mode.value = 'edit'
 }
 
 const dirty = computed(
-  () => mode.value === 'edit' && JSON.stringify(draft.value) !== JSON.stringify(house.plan ?? emptyPlan()),
+  () =>
+    mode.value === 'edit' &&
+    (JSON.stringify(draft.value) !== JSON.stringify(house.plan ?? emptyPlan()) ||
+      snap.value !== (house.model?.snap ?? 500)),
 )
 
 async function discard() {
@@ -218,7 +225,7 @@ async function save() {
   if (!draft.value) return
   saving.value = true
   try {
-    const result = await house.save(tidy(draft.value))
+    const result = await house.save(tidy(draft.value), snap.value)
     if (result === 'conflict') {
       toast.error(
         'Someone saved the plan from another tab or device. Their version is loaded, so redo your change on top of it.',
@@ -227,6 +234,7 @@ async function save() {
         },
       )
       draft.value = JSON.parse(JSON.stringify(house.plan ?? emptyPlan()))
+      snap.value = house.model?.snap ?? 500
       return
     }
     toast.success('Plan saved')

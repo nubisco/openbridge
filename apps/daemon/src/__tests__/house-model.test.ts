@@ -182,6 +182,79 @@ describe('the version 1 view of a version 2 plan', () => {
   })
 })
 
+describe('plans measured to the millimetre', () => {
+  // Version 1 shapes with values off the half metre grid, as the editor
+  // draws them once snapping is finer. A cell is 500 mm, so 0.002 is 1 mm.
+  function fine(): HousePlan {
+    return {
+      version: 1,
+      grid: 0.5,
+      plot: { w: 30.002, h: 20 },
+      floors: [
+        {
+          id: 'g',
+          name: 'Ground floor',
+          level: 0,
+          rooms: [
+            // 1017 mm in, 4123 by 3001 mm, with a wing below it.
+            {
+              id: 'a',
+              name: 'A',
+              kind: 'room',
+              x: 2.034,
+              y: 2,
+              w: 8.246,
+              h: 6.002,
+              parts: [{ x: 2.034, y: 8.002, w: 3.1, h: 2.5 }],
+            },
+            // Beside it, sharing 2.4 m of its right wall.
+            { id: 'b', name: 'B', kind: 'room', x: 10.28, y: 3.2, w: 4, h: 4.8 },
+          ],
+          openings: [{ id: 'd', type: 'door', axis: 'v', x: 10.28, y: 4.05, len: 1.638 }],
+          placements: [{ ref: 'device:x', x: 4.568, y: 5.002 }],
+          radiators: [{ id: 'r', axis: 'h', x: 3.3, y: 2, len: 1.71, side: 'down' }],
+          furniture: [{ id: 'f', kind: 'table', x: 3.002, y: 3.5, w: 2.4, d: 1.6 }],
+        },
+      ],
+    }
+  }
+
+  it('converts every value to the millimetre and back', () => {
+    const plan = validatePlan(fromV1(fine()).plan)
+    const g = storey(plan, 'g')
+    expect(g.spaces.find((s) => s.id === 'a')!.outline).toEqual([
+      [1017, 1000],
+      [5140, 1000],
+      [5140, 4001],
+      [2567, 4001],
+      [2567, 5251],
+      [1017, 5251],
+    ])
+    expect(g.openings[0]).toMatchObject({ width: 819 })
+    expect(g.placements[0]).toMatchObject({ x: 2284, y: 2501 })
+    expect(toV1(plan)).toMatchObject(fine())
+    expect(fromV1(toV1(plan), plan).plan).toEqual(plan)
+  })
+
+  it('cuts walls where they change from between rooms to outside', () => {
+    const walls = storey(fromV1(fine()).plan, 'g').walls
+    const right = walls.filter((w) => w.a[0] === 5140 && w.b[0] === 5140)
+    // Room A's right wall: outside above B, between A and B, outside below B.
+    expect(right.map((w) => [w.a[1], w.b[1], w.thickness])).toEqual([
+      [1000, 1600, 300],
+      [1600, 4000, 100],
+      [4000, 4001, 300],
+    ])
+  })
+
+  it('splits a shape into rectangles by their real size', () => {
+    const plan = fromV1(fine()).plan
+    delete storey(plan, 'g').spaces.find((s) => s.id === 'a')!.rects
+    const room = toV1(plan).floors[0].rooms.find((r) => r.id === 'a')!
+    expect(room).toMatchObject({ x: 2.034, y: 2, w: 8.246, h: 6.002, parts: [{ x: 2.034, y: 8.002, w: 3.1, h: 2.5 }] })
+  })
+})
+
 describe('saving from the version 1 editor keeps what it cannot say', () => {
   function edited(): Plan {
     const plan = fromV1(v1()).plan

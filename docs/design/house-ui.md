@@ -17,8 +17,8 @@ controls float over it:
   button and a menu to rename or delete a floor (shipped in 1.30.x, PR #46).
 - View controls bottom right: zoom, fit, turn, 2D or 3D, and one "Show" menu
   for devices, temperature, humidity, room names and walls up or low.
-- A status strip along the bottom while editing: cursor position and what the
-  tool does.
+- A status strip along the bottom while editing: what the tool does, where
+  the pointer is in metres, and the snapping step (shipped in stage 4).
 
 ## The inspector while editing
 
