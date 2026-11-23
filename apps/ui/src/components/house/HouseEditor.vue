@@ -16,6 +16,26 @@
             @click="setTool(t.id)"
           />
         </div>
+        <div class="house-editor__tools" role="group" aria-label="History">
+          <NbButton
+            v-nb-tooltip="{ body: `Undo (${mod} Z)`, position: 'bottom', aria: 'none' }"
+            size="sm"
+            variant="ghost"
+            icon="arrow-u-up-left"
+            aria-label="Undo"
+            :disabled="!canUndo"
+            @click="undo"
+          />
+          <NbButton
+            v-nb-tooltip="{ body: `Redo (${mod} Shift Z)`, position: 'bottom', aria: 'none' }"
+            size="sm"
+            variant="ghost"
+            icon="arrow-u-up-right"
+            aria-label="Redo"
+            :disabled="!canRedo"
+            @click="redo"
+          />
+        </div>
         <NbButton
           v-if="!phone && !(inspector.visible && inspector.mode === 'house-editor')"
           size="sm"
@@ -581,6 +601,7 @@ import HouseOutline, { outlineId, type OutlinePick } from '@/components/house/Ho
 import HouseStage from '@/components/house/HouseStage.vue'
 import type { LibraryItem } from '@/house/library'
 import { RULER_SIZE } from '@/house/ruler'
+import { History } from '@house-model/history'
 import type {
   HouseFloor,
   HouseFurniture,
@@ -636,6 +657,7 @@ import {
   roomPayload,
   unplace,
   renderEditor,
+  replacePlan,
   setPlotSize,
   shapeValid,
 } from '@/house/editor'
@@ -922,7 +944,11 @@ function onKeyDown(e: KeyboardEvent) {
     return
   }
   if (!(e.ctrlKey || e.metaKey) || e.altKey) return
-  if (e.key === '=' || e.key === '+') zoomBy(1.4)
+  const key = e.key.toLowerCase()
+  if (key === 'z' && e.shiftKey) redo()
+  else if (key === 'z') undo()
+  else if (key === 'y') redo()
+  else if (e.key === '=' || e.key === '+') zoomBy(1.4)
   else if (e.key === '-') zoomBy(1 / 1.4)
   else if (e.key === '0') resetView()
   else return
@@ -1659,6 +1685,8 @@ function onUp(e?: PointerEvent) {
     }
   }
   drag = null
+  // Every tap or drag is a step of its own, however quickly the next follows.
+  settle()
 }
 
 // ─── Library ────────────────────────────────────────────────────────────────
@@ -1709,6 +1737,7 @@ function chipUp(e: PointerEvent) {
   const rect = svgEl.value?.getBoundingClientRect()
   if (rect && e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom) {
     dropItem(c.item, toGrid(e))
+    settle()
   }
 }
 
@@ -1814,6 +1843,58 @@ watch(
   { deep: true },
 )
 onBeforeUnmount(() => clearTimeout(previewTimer))
+
+// ─── Undo and redo ──────────────────────────────────────────────────────────
+// A step is the plan once a change has settled: a drag counts when it ends,
+// and typing in a field when it pauses, so neither is a step per key or per
+// pointer move.
+
+const history = new History(JSON.stringify(props.plan))
+const canUndo = ref(false)
+const canRedo = ref(false)
+let historyTimer: ReturnType<typeof setTimeout> | undefined
+const busy = () => !!drag || !!chip || panning.value || !!pinch
+
+function settle() {
+  clearTimeout(historyTimer)
+  historyTimer = undefined
+  history.record(JSON.stringify(props.plan))
+  canUndo.value = history.canUndo
+  canRedo.value = history.canRedo
+}
+function settleLater() {
+  clearTimeout(historyTimer)
+  historyTimer = setTimeout(() => (busy() ? settleLater() : settle()), 400)
+}
+watch(() => props.plan, settleLater, { deep: true })
+onBeforeUnmount(() => clearTimeout(historyTimer))
+
+function restore(state: string | null) {
+  if (state === null) return
+  drag = null
+  draft.value = null
+  replacePlan(props.plan, JSON.parse(state))
+  // What was selected may not be there any more.
+  if (!props.plan.floors.some((f) => f.id === floorId.value)) floorId.value = topFloor().id
+  if (selRoom.value && !room.value) selRoom.value = null
+  if (selOpening.value && !opening.value) selOpening.value = null
+  if (selRadiator.value && !radiator.value) selRadiator.value = null
+  if (selFurniture.value && !piece.value) selFurniture.value = null
+  if (selRef.value && !placed.value) selRef.value = null
+  canUndo.value = history.canUndo
+  canRedo.value = history.canRedo
+}
+function undo() {
+  if (busy()) return
+  // A change still settling is a step of its own, undone first.
+  if (historyTimer) settle()
+  restore(history.undo())
+}
+function redo() {
+  if (busy()) return
+  if (historyTimer) settle()
+  restore(history.redo())
+}
 
 let observer: ResizeObserver | null = null
 onMounted(() => {

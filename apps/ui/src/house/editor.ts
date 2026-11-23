@@ -683,6 +683,15 @@ export function place(plan: HousePlan, floor: HouseFloor, device: LiveDevice, x:
 }
 
 /**
+ * Put another plan's contents into a draft, keeping the draft object itself,
+ * which the editor and the view around it both hold. For undo and redo.
+ */
+export function replacePlan(target: HousePlan, source: HousePlan): void {
+  for (const k of Object.keys(target) as Array<keyof HousePlan>) if (!(k in source)) delete target[k]
+  Object.assign(target, source)
+}
+
+/**
  * Tidy a draft before it is saved. Rooms can be moved out from under a door,
  * and a room a circuit served can be deleted. Those leftovers would fail the
  * daemon's checks, so they are dropped here, where the person is still looking.
