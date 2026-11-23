@@ -365,6 +365,15 @@ export function fromV1(p: V1.HousePlan, previous?: Plan | null): Migration {
       radiators,
       furniture,
       placements,
+      ...(f.dimensions?.length
+        ? {
+            dimensions: f.dimensions.map((d) => ({
+              id: d.id,
+              a: [mm(d.a[0]), mm(d.a[1])] as Point,
+              b: [mm(d.b[0]), mm(d.b[1])] as Point,
+            })),
+          }
+        : {}),
     }
   })
   return {
@@ -552,6 +561,12 @@ export function toV1(p: Plan): V1.HousePlan {
       return [{ axis, ...at, len, thickness: w.thickness, height: w.height }]
     })
     if (specs.length) floor.walls = specs
+    if (s.dimensions?.length)
+      floor.dimensions = s.dimensions.map((d) => ({
+        id: d.id,
+        a: [cells(d.a[0]), cells(d.a[1])],
+        b: [cells(d.b[0]), cells(d.b[1])],
+      }))
     return floor
   })
   return {

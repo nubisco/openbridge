@@ -19,6 +19,7 @@ import * as armchair from '@nubisco/ui/icons/armchair'
 import * as arrowsOutLineHorizontal from '@nubisco/ui/icons/arrows-out-line-horizontal'
 import * as boundingBox from '@nubisco/ui/icons/bounding-box'
 import * as wall from '@nubisco/ui/icons/wall'
+import * as ruler from '@nubisco/ui/icons/ruler'
 import * as columns from '@nubisco/ui/icons/columns'
 import * as cursor from '@nubisco/ui/icons/cursor'
 import * as doorOpen from '@nubisco/ui/icons/door-open'
@@ -82,6 +83,7 @@ export function registerRuntimeIcons(): void {
     'arrows-out-line-horizontal': arrowsOutLineHorizontal,
     'bounding-box': boundingBox,
     wall,
+    ruler,
     columns: columns,
     cursor: cursor,
     'door-open': doorOpen,

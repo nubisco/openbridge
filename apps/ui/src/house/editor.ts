@@ -57,7 +57,7 @@ import { DEFAULTS } from '@house-model/v2'
 import { area as loopArea } from '@house-model/cells'
 import { wallLines } from '@house-model/convert'
 import { overlapLength } from '@house-model/edges'
-import type { HouseDrawnWall, HouseFloor as FloorV1 } from '@house-model/v1'
+import type { HouseDimension, HouseDrawnWall, HouseFloor as FloorV1 } from '@house-model/v1'
 import { coveringDraws } from './coverings'
 import { KIND_LETTER, type LiveDevice } from './live'
 import { applyPreset, claimCovering, detach, presetCells, type OpeningPreset } from './openings'
@@ -608,10 +608,15 @@ function catchPoints(floor: HouseFloor, except?: string): Point[] {
  * what doors need and what was almost certainly meant.
  */
 export function wallPoint(floor: HouseFloor, x: number, y: number, from?: Point, except?: string, skip?: Point): Point {
+  return catchPoint(catchPoints(floor, except), x, y, from, skip)
+}
+
+/** The nearest of `points` within reach of (x, y), else (x, y) snapped, straightened from `from`. */
+function catchPoint(points: Point[], x: number, y: number, from?: Point, skip?: Point): Point {
   const reach = 0.4
   let p: Point = [snap(x, true), snap(y, true)]
   let best = reach
-  for (const c of catchPoints(floor, except)) {
+  for (const c of points) {
     // The corner being dragged does not catch on where it is now.
     if (skip && same(c[0], skip[0]) && same(c[1], skip[1])) continue
     const d = Math.hypot(c[0] - x, c[1] - y)
@@ -689,6 +694,102 @@ export function setDrawnLength(floor: HouseFloor, d: HouseDrawnWall, len: number
 export function removeDrawnWall(floor: HouseFloor, id: string): void {
   floor.drawnWalls = (floor.drawnWalls ?? []).filter((d) => d.id !== id)
   if (!floor.drawnWalls.length) delete floor.drawnWalls
+}
+
+// ─── The Ruler ──────────────────────────────────────────────────────────────
+
+/** Where a dimension's end can catch: corners, wall ends, the ends of doors, windows and radiators, other dimensions. */
+function measurePoints(floor: HouseFloor, except?: string): Point[] {
+  const out = catchPoints(floor)
+  for (const o of [...floor.openings, ...(floor.radiators ?? [])]) {
+    out.push([o.x, o.y], o.axis === 'h' ? [o.x + o.len, o.y] : [o.x, o.y + o.len])
+  }
+  for (const d of floor.dimensions ?? []) if (d.id !== except) out.push(d.a, d.b)
+  return out
+}
+
+/** Where a dimension's end goes for a pointer at (x, y). */
+export function rulerPoint(floor: HouseFloor, x: number, y: number, from?: Point, except?: string): Point {
+  return catchPoint(measurePoints(floor, except), x, y, from)
+}
+
+export const dimensionLength = (d: { a: Point; b: Point }) => Math.hypot(d.b[0] - d.a[0], d.b[1] - d.a[1])
+
+/** Leave a dimension line on the plan, from `a` to `b`. Null when its ends are too close to measure. */
+export function addDimension(floor: HouseFloor, a: Point, b: Point): HouseDimension | null {
+  if (dimensionLength({ a, b }) < 0.1) return null
+  const d: HouseDimension = { id: uniqueId('dim', (v) => (floor.dimensions ?? []).some((x) => x.id === v)), a, b }
+  ;(floor.dimensions ??= []).push(d)
+  return d
+}
+
+export function removeDimension(floor: HouseFloor, id: string): void {
+  floor.dimensions = (floor.dimensions ?? []).filter((d) => d.id !== id)
+  if (!floor.dimensions.length) delete floor.dimensions
+}
+
+/**
+ * Make the whole plan `k` times its size, about the plot's corner: every
+ * position and length across the ground, on every floor. Heights and wall
+ * thicknesses stay. With `keepSizes`, doors, windows, radiators, furniture
+ * and gates move with the plan and keep their size, unless a door or
+ * radiator would then not fit its wall, when it is scaled too.
+ */
+export function resizePlan(plan: HousePlan, k: number, keepSizes: boolean): void {
+  const at = (v: number) => toMm(v * k)
+  const pt = (p: Point): Point => [at(p[0]), at(p[1])]
+  // A rectangle by its corners, so two that touch still touch.
+  const rect = <R extends { x: number; y: number }>(r: R, w: 'w', h: 'h' | 'd') => {
+    const o = r as R & Record<'w' | 'h' | 'd', number>
+    const [x2, y2] = [at(o.x + o[w]), at(o.y + o[h])]
+    o.x = at(o.x)
+    o.y = at(o.y)
+    o[w] = toMm(x2 - o.x)
+    o[h] = toMm(y2 - o.y)
+  }
+  plan.plot = { w: at(plan.plot.w), h: at(plan.plot.h) }
+  for (const f of plan.floors) {
+    for (const r of f.rooms) {
+      if (r.outline) {
+        r.outline = r.outline.map(pt)
+        fitBox(r)
+      } else {
+        rect(r, 'w', 'h')
+        for (const q of r.parts ?? []) rect(q, 'w', 'h')
+      }
+    }
+    for (const w of f.walls ?? []) {
+      const end = w.to ?? (w.axis === 'h' ? [w.x + w.len, w.y] : [w.x, w.y + w.len])
+      const [x, y] = pt([w.x, w.y])
+      const e = pt(end as Point)
+      Object.assign(w, { x, y })
+      if (w.to) w.to = e
+      else w.len = toMm(w.axis === 'h' ? e[0] - x : e[1] - y)
+    }
+    for (const d of f.drawnWalls ?? []) Object.assign(d, { a: pt(d.a), b: pt(d.b) })
+    for (const d of f.dimensions ?? []) Object.assign(d, { a: pt(d.a), b: pt(d.b) })
+    // Everything on a wall: its line scales, and along it either both ends or the middle.
+    const walls = Walls.of(f)
+    for (const o of [...f.openings, ...(f.radiators ?? [])]) {
+      const i = o.axis === 'h' ? 'x' : 'y'
+      const across = o.axis === 'h' ? 'y' : 'x'
+      const scaled = { [across]: at(o[across]), [i]: at(o[i]), len: toMm(at(o[i] + o.len) - at(o[i])) }
+      const kept = { [across]: at(o[across]), [i]: toMm(at(o[i] + o.len / 2) - o.len / 2), len: o.len }
+      Object.assign(o, keepSizes && openingFits({ ...o, ...kept }, walls) ? kept : scaled)
+    }
+    for (const u of f.furniture ?? []) {
+      if (keepSizes) {
+        u.x = toMm(at(u.x + u.w / 2) - u.w / 2)
+        u.y = toMm(at(u.y + u.d / 2) - u.d / 2)
+      } else rect(u, 'w', 'd')
+      keepInPlot(plan, u)
+    }
+    for (const p of f.placements) {
+      p.x = at(p.x)
+      p.y = at(p.y)
+      if (p.length !== undefined && !keepSizes) p.length = at(p.length)
+    }
+  }
 }
 
 // ─── Radiators ──────────────────────────────────────────────────────────────
@@ -1033,6 +1134,9 @@ export interface EditorDrawOptions {
   selectedRadiator?: string | null
   selectedFurniture?: string | null
   selectedWall?: string | null
+  selectedDimension?: string | null
+  /** A dimension being drawn with the Ruler. */
+  draftDimension?: { a: Point; b: Point } | null
   draft: Pick<HouseRoom, 'x' | 'y' | 'w' | 'h'> | null
   /** A wall being drawn, end to end. */
   draftWall?: { a: Point; b: Point } | null
@@ -1296,6 +1400,40 @@ export function renderEditor(
     ]
     for (const [c, x, y] of corners) {
       h += `<circle class="hv-eh${c === 'ne' || c === 'sw' ? ' hv-alt' : ''}" data-fhandle="${c}" cx="${x * S}" cy="${y * S}" r="${r1(fit(6, 8))}"/>`
+    }
+  }
+  // Dimension lines: a thin line with a slash at each end and its length over the middle.
+  const dimension = (d: { a: Point; b: Point }, cls: string, id?: string) => {
+    const len = dimensionLength(d)
+    if (!len) return ''
+    const [ux, uy] = [(d.b[0] - d.a[0]) / len, (d.b[1] - d.a[1]) / len]
+    const t = fit(4, 5) / S
+    const tick = (p: Point) =>
+      `M${r1((p[0] - (ux - uy) * t) * S)},${r1((p[1] - (uy + ux) * t) * S)}L${r1((p[0] + (ux - uy) * t) * S)},${r1((p[1] + (uy + ux) * t) * S)}`
+    const c = `x1="${r1(d.a[0] * S)}" y1="${r1(d.a[1] * S)}" x2="${r1(d.b[0] * S)}" y2="${r1(d.b[1] * S)}"`
+    // The label reads left to right, or bottom to top, never upside down.
+    let deg = (Math.atan2(uy, ux) * 180) / Math.PI
+    if (deg > 90) deg -= 180
+    else if (deg <= -90) deg += 180
+    const [mx, my] = [((d.a[0] + d.b[0]) / 2) * S, ((d.a[1] + d.b[1]) / 2) * S]
+    return (
+      `<g class="${cls}"${id ? ` data-dim="${esc(id)}"` : ''}>` +
+      `<line ${c}/><path d="${tick(d.a)}${tick(d.b)}"/>` +
+      `<text x="${r1(mx)}" y="${r1(my - fs * 0.45)}" font-size="${r1(fs)}" transform="rotate(${r1(deg)} ${r1(mx)} ${r1(my)})">${metres(len)} m</text>` +
+      (id ? `<line class="hv-ehit" ${c}/>` : '') +
+      '</g>'
+    )
+  }
+  for (const d of floor.dimensions ?? [])
+    h += dimension(d, `hv-edim${d.id === o.selectedDimension ? ' hv-sel' : ''}`, d.id)
+  if (o.draftDimension) h += dimension(o.draftDimension, 'hv-edim hv-edim--draft')
+  const sd = (floor.dimensions ?? []).find((d) => d.id === o.selectedDimension)
+  if (sd) {
+    for (const [end, p] of [
+      ['a', sd.a],
+      ['b', sd.b],
+    ] as const) {
+      h += `<circle class="hv-eh" data-dhandle="${end}" cx="${r1(p[0] * S)}" cy="${r1(p[1] * S)}" r="${r1(fit(6, 8))}"/>`
     }
   }
   if (o.draftWall) {
