@@ -398,7 +398,23 @@
               <NbField v-slot="{ id }" label="Real length (m)" orientation="stack">
                 <NbNumberInput :id="id" v-model="dimTarget" :min="0.01" :max="200" :step="0.001" size="sm" />
               </NbField>
-              <template v-if="dimFactor">
+              <template v-if="dimFactor && dimAxis">
+                <NbField v-slot="{ id }" label="To match it" orientation="stack">
+                  <NbSelect :id="id" v-model="dimHow" :options="DIM_HOW" size="sm" />
+                </NbField>
+                <template v-if="dimHow === 'stretch'">
+                  <NbField v-slot="{ id }" label="What moves" orientation="stack">
+                    <NbSelect :id="id" v-model="dimSide" :options="dimSides" size="sm" />
+                  </NbField>
+                  <p class="house-editor__muted">{{ stretchText }}</p>
+                  <div class="house-editor__row house-editor__row--tight">
+                    <NbButton size="sm" variant="primary" icon="arrows-out" @click="stretchToMatch">
+                      Stretch the plan
+                    </NbButton>
+                  </div>
+                </template>
+              </template>
+              <template v-if="dimFactor && (!dimAxis || dimHow === 'scale')">
                 <p class="house-editor__muted">{{ dimFactorText }}</p>
                 <NbCheckbox v-model="keepSizes" label="Keep door, window and furniture sizes" />
                 <div class="house-editor__row house-editor__row--tight">
@@ -728,6 +744,7 @@ import {
   FURNITURE_BACK,
   FURNITURE_HEIGHT,
   S,
+  same,
   clamp,
   flippedSide,
   furnitureHeight,
@@ -792,6 +809,7 @@ import {
   dimensionLength,
   removeDimension,
   resizePlan,
+  stretchPlan,
   rulerPoint,
   addPolygonRoom,
   moveCorner,
@@ -1364,6 +1382,86 @@ async function resizeToMatch() {
   resizePlan(p, k, keepSizes.value)
   settle()
   dimTarget.value = dim.value ? Number(metres(dimLength.value)) : null
+}
+
+/** Along x or y, a tape can stretch the plan at one end. Null at an angle. */
+const dimAxis = computed(() => {
+  const d = dim.value
+  if (!d) return null
+  return same(d.a[1], d.b[1]) ? 'x' : same(d.a[0], d.b[0]) ? 'y' : null
+})
+const DIM_HOW = [
+  { label: 'Stretch the plan at one end', value: 'stretch' },
+  { label: 'Resize the whole plan', value: 'scale' },
+]
+const dimHow = ref<'stretch' | 'scale'>('stretch')
+/** +1: what is past the tape's far end (right or below) moves. -1: what is before its near end. */
+const dimSide = ref<1 | -1>(1)
+const dimSides = computed(() =>
+  dimAxis.value === 'y'
+    ? [
+        { label: 'Below the tape: its bottom end moves', value: 1 },
+        { label: 'Above the tape: its top end moves', value: -1 },
+      ]
+    : [
+        { label: 'Right of the tape: its right end moves', value: 1 },
+        { label: 'Left of the tape: its left end moves', value: -1 },
+      ],
+)
+/** The tape's two ends along its axis: the one that moves, and the one that stays. */
+const dimEnds = computed(() => {
+  const d = dim.value
+  const k = dimAxis.value === 'y' ? 1 : 0
+  if (!d) return null
+  const [lo, hi] = d.a[k] <= d.b[k] ? (['a', 'b'] as const) : (['b', 'a'] as const)
+  return dimSide.value > 0 ? { moving: hi, fixed: lo, k } : { moving: lo, fixed: hi, k }
+})
+/** How far the moving end goes, in cells: out when positive. */
+const stretchBy = computed(() => (dimTarget.value ? toMm(dimTarget.value * CELLS_PER_M - dimLength.value) : 0))
+const stretchText = computed(() => {
+  const by = stretchBy.value
+  const cm = Number((Math.abs(by) * (100 / CELLS_PER_M)).toFixed(1))
+  const far = dimSide.value > 0
+  const [from, way] =
+    dimAxis.value === 'y'
+      ? [far ? "at or below the tape's bottom end" : "at or above the tape's top end", far === by > 0 ? 'down' : 'up']
+      : [
+          far ? "at or right of the tape's right end" : "at or left of the tape's left end",
+          far === by > 0 ? 'right' : 'left',
+        ]
+  return (
+    `Everything ${from}, on every floor, moves ${cm} cm ${way}. Rooms and walls crossing that line ` +
+    `${by > 0 ? 'grow' : 'shrink'} by ${cm} cm. Doors, windows, radiators and furniture keep their size.`
+  )
+})
+
+async function stretchToMatch() {
+  const d = dim.value
+  const ends = dimEnds.value
+  const axis = dimAxis.value
+  if (!d || !ends || !axis || !stretchBy.value) return
+  // Keep the end that stays where it is on screen, even if the plan shifts on its plot.
+  const fixedAt = (p: Point) => {
+    const m = svgEl.value?.getScreenCTM()
+    return m ? new DOMPoint(p[0] * S, p[1] * S).matrixTransform(m) : null
+  }
+  const before = fixedAt(d[ends.fixed])
+  const p = props.plan
+  const stopped = stretchPlan(p, axis, d[ends.moving][ends.k], dimSide.value, stretchBy.value)
+  if (stopped) return void toast.warning(`It cannot stretch that way: ${stopped}`)
+  if (p.plot.w > 200 * CELLS_PER_M || p.plot.h > 200 * CELLS_PER_M) toast.warning('The plot is now over 200 m across.')
+  settle()
+  await nextTick()
+  // The plan's floors are new objects now: the tape is found again by its id.
+  const now = dim.value
+  const after = now ? fixedAt(now[ends.fixed]) : null
+  const m = svgEl.value?.getScreenCTM()
+  if (before && after && m) {
+    const b = home.value
+    const c = center.value ?? [b.x + b.w / 2, b.y + b.h / 2]
+    center.value = [c[0] + (after.x - before.x) / m.a, c[1] + (after.y - before.y) / m.d]
+  }
+  dimTarget.value = Number(metres(dimLength.value))
 }
 
 function deleteDimension() {

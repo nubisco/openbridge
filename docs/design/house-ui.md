@@ -77,3 +77,21 @@ and the plot grows with it. Wall thicknesses stay, as heights do. "Keep
 sizes" also keeps radiators and gates, and a door or radiator that would no
 longer fit its wall at its old size is scaled after all. The Ruler sits next
 to Select, and Select picks a dimension line too.
+
+### Stretching at one end
+
+One scale cannot fix a plan drawn by eye, where each room is off by its own
+amount. So a dimension line along x or y also offers "Stretch the plan at one
+end", and it is the default. Everything at or past the end you choose, on
+every floor, moves by the difference, and the rooms and walls crossing that
+line grow or shrink with it. What is on the other side does not move, so a
+room already put right stays right, and the house comes to scale one
+measurement at a time. Doors, windows, radiators, furniture and devices keep
+their size and go with the side their middle is on. One on a slanted wall
+that the stretch turns keeps its distance from that wall's end on the same
+side. The plot grows if the plan no longer fits it, and the view moves so
+the end that stays does not move on screen.
+
+A shrink is refused, with the plan left as it was, when it would close over
+a room or a drawn wall, or leave a door, window or radiator off its wall. A
+dimension line at an angle only resizes the whole plan. Shipped in 1.45.
