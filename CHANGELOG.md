@@ -1,3 +1,10 @@
+# [1.45.0](https://github.com/nubisco/openbridge/compare/v1.44.0...v1.45.0) (2026-11-24)
+
+
+### Features
+
+* **house:** stretch the plan at one end of a measuring tape ([#65](https://github.com/nubisco/openbridge/issues/65)) ([4e59eee](https://github.com/nubisco/openbridge/commit/4e59eeeb01dd458373020d1ff6b6aa0191d555cb))
+
 # [1.44.0](https://github.com/nubisco/openbridge/compare/v1.43.0...v1.44.0) (2026-11-24)
 
 
