@@ -72,9 +72,9 @@ import {
 } from './geometry'
 import { DEFAULTS } from '@nubisco/bim/v2'
 import { area as loopArea } from '@nubisco/bim/cells'
-import { wallLines } from '@nubisco/bim/convert'
+import { fromV1, wallLines } from '@nubisco/bim/convert'
 import { overlapLength } from '@nubisco/bim/edges'
-import type { HouseDimension, HouseDrawnWall, HouseFloor as FloorV1 } from '@nubisco/bim/v1'
+import type { HouseDimension, HouseDrawnWall, HouseFloor as FloorV1, HousePlan as PlanV1 } from '@nubisco/bim/v1'
 import { coveringDraws } from './coverings'
 import { KIND_LETTER, type LiveDevice } from './live'
 import { applyPreset, claimCovering, detach, presetCells, type OpeningPreset } from './openings'
@@ -856,21 +856,24 @@ export interface Held {
 }
 
 export function holdOnWall(floor: HouseFloor, d: HouseDrawnWall, fixed: Point, moving: Point): Held[] {
+  return onDrawnWall(floor, d).map(({ o }) => holdItem(o, fixed, moving))
+}
+
+/** One thing on a wall from `fixed` to `moving`, said from `fixed`, as `holdOnWall` says it. */
+function holdItem(o: HouseOpening | HouseRadiator, fixed: Point, moving: Point): Held {
   const dir = unit(fixed, moving)
   const left: Point = [dir[1], -dir[0]]
   const dist = (p: Point) => Math.hypot(p[0] - fixed[0], p[1] - fixed[1])
-  return onDrawnWall(floor, d).map(({ o }) => {
-    const a: Point = [o.x, o.y]
-    const b = openingEnd(o)
-    const n = 'side' in o ? radiatorNormal(o) : opensTowards(o)
-    const hinge = 'side' in o || o.hinge !== 'end' ? a : b
-    return {
-      o,
-      from: Math.min(dist(a), dist(b)),
-      hingeNear: dist(hinge) <= Math.min(dist(a), dist(b)) + 1e-9,
-      left: n[0] * left[0] + n[1] * left[1] > 0,
-    }
-  })
+  const a: Point = [o.x, o.y]
+  const b = openingEnd(o)
+  const n = 'side' in o ? radiatorNormal(o) : opensTowards(o)
+  const hinge = 'side' in o || o.hinge !== 'end' ? a : b
+  return {
+    o,
+    from: Math.min(dist(a), dist(b)),
+    hingeNear: dist(hinge) <= Math.min(dist(a), dist(b)) + 1e-9,
+    left: n[0] * left[0] + n[1] * left[1] > 0,
+  }
 }
 
 /** Put what a drawn wall holds back on it, as `holdOnWall` said it, once its end has moved. */
@@ -1018,6 +1021,158 @@ export function resizePlan(plan: HousePlan, k: number, keepSizes: boolean): void
       if (p.length !== undefined && !keepSizes) p.length = at(p.length)
     }
   }
+}
+
+/**
+ * Stretch the plan along x or y at `at`: everything at `at` or beyond it, on
+ * the side `side` says (+1 past it, -1 before it), moves `by` further out
+ * (back in when `by` is negative), on every floor. What is on the other side
+ * stays, and whatever spans `at` grows or shrinks: rooms, walls and the
+ * tapes measuring them. Doors, windows, radiators, furniture and devices
+ * keep their size and go with the side their middle is on, and one on a
+ * slanted wall that turns keeps its distance from that wall's end on the
+ * same side. Heights and thicknesses stay. The plot grows if the plan no
+ * longer fits it.
+ *
+ * Returns what stops it, and then leaves the plan as it was: shrinking over
+ * a room or wall, or something left off its wall.
+ */
+export function stretchPlan(plan: HousePlan, axis: 'x' | 'y', at: number, side: 1 | -1, by: number): string | null {
+  const next: HousePlan = JSON.parse(JSON.stringify(plan))
+  const stopped = stretchAll(next, axis, at, side, by)
+  if (stopped) return stopped
+  // Past the plot's near edge: the whole plan moves back in, and the plot grows to fit.
+  const k = axis === 'x' ? 0 : 1
+  const [lo, hi] = extent(next, k)
+  if (lo < 0) stretchAll(next, axis, lo - 1, 1, -lo)
+  const key = axis === 'x' ? 'w' : 'h'
+  next.plot[key] = Math.max(next.plot[key], toMm(hi - Math.min(lo, 0)))
+  // The daemon's own checks: nothing it would drop or refuse.
+  const lost = (p: HousePlan) => {
+    try {
+      return fromV1(p as unknown as PlanV1).dropped.length
+    } catch {
+      return -1
+    }
+  }
+  // And the editor's own, which is stricter about what is on a wall.
+  const off = (p: HousePlan) =>
+    p.floors.reduce((n, f) => {
+      const walls = Walls.of(f)
+      return n + [...f.openings, ...(f.radiators ?? [])].filter((o) => !openingFits(o, walls)).length
+    }, 0)
+  const before = lost(plan)
+  const after = lost(next)
+  if (before >= 0 && after !== before)
+    return after < 0 ? 'The plan would no longer be valid.' : 'A door, window or radiator would be left off its wall.'
+  if (off(next) > off(plan)) return 'A door, window or radiator would be left off its wall.'
+  replacePlan(plan, next)
+  return null
+}
+
+/** The lowest and highest x (k = 0) or y (k = 1) anything on the plan reaches. */
+function extent(plan: HousePlan, k: 0 | 1): [number, number] {
+  const vs: number[] = []
+  for (const f of plan.floors) {
+    for (const r of f.rooms) for (const q of [r, ...(r.parts ?? [])]) vs.push(k ? q.y : q.x, k ? q.y + q.h : q.x + q.w)
+    for (const d of [...(f.drawnWalls ?? []), ...(f.dimensions ?? [])]) vs.push(d.a[k], d.b[k])
+    for (const u of f.furniture ?? []) vs.push(k ? u.y : u.x, k ? u.y + u.d : u.x + u.w)
+    for (const p of f.placements) vs.push(k ? p.y : p.x)
+  }
+  return vs.length ? [Math.min(...vs), Math.max(...vs)] : [0, 0]
+}
+
+function stretchAll(plan: HousePlan, axis: 'x' | 'y', at: number, side: 1 | -1, by: number): string | null {
+  const i = axis === 'x' ? 0 : 1
+  const key = axis
+  const shift = by * side
+  const cut = mmOf(at)
+  const beyond = (v: number) => (side > 0 ? mmOf(v) >= cut : mmOf(v) <= cut)
+  const mv = (v: number) => (beyond(v) ? toMm(v + shift) : v)
+  const pt = (p: Point): Point => (i === 0 ? [mv(p[0]), p[1]] : [p[0], mv(p[1])])
+  // Where the moving side ends up when it shrinks: what stays must be short of it.
+  const edge = mmOf(at + shift)
+  const inWay = (v: number) => by < 0 && !beyond(v) && (side > 0 ? mmOf(v) >= edge : mmOf(v) <= edge)
+  const name = (n: string, f: HouseFloor) => (plan.floors.length > 1 ? `${n} on the ${f.name}` : n)
+  for (const f of plan.floors) {
+    // Indoors first, so a refusal names the room rather than the garden round it.
+    for (const r of [...f.rooms].sort((p, q) => Number(p.kind === 'outdoor') - Number(q.kind === 'outdoor'))) {
+      const pts =
+        r.outline ??
+        roomRects(r).flatMap((q): Point[] => [
+          [q.x, q.y],
+          [q.x + q.w, q.y + q.h],
+        ])
+      if (pts.some((p) => inWay(p[i]))) return `${name(r.name || 'A room', f)} is in the way.`
+    }
+    for (const d of f.drawnWalls ?? [])
+      if (inWay(d.a[i]) || inWay(d.b[i])) return `${name('A drawn wall', f)} is in the way.`
+    // A slanted wall crossing the cut turns, so what is on it is said
+    // from its end on the same side, before anything moves.
+    const slanted: Array<[Point, Point]> = [
+      ...f.rooms.flatMap((r) => (r.outline ?? []).map((p, j, all): [Point, Point] => [p, all[(j + 1) % all.length]])),
+      ...(f.drawnWalls ?? []).map((d): [Point, Point] => [d.a, d.b]),
+    ].filter(([p, q]) => !same(p[0], q[0]) && !same(p[1], q[1]))
+    const follow: Array<{ held: Held; fixed: Point; moving: Point }> = []
+    for (const o of [...f.openings, ...(f.radiators ?? [])]) {
+      if (!o.to) {
+        if ((o.axis === 'h' ? 0 : 1) !== i) o[key] = mv(o[key])
+        else if (beyond(o[key] + o.len / 2)) o[key] = toMm(o[key] + shift)
+        continue
+      }
+      const ends: [Point, Point] = [[o.x, o.y], o.to]
+      const host = slanted.find(([p, q]) => ends.every((e) => segmentDistance(e, p, q) < 1e-3))
+      const m = openingMiddle(o)
+      if (host && beyond(host[0][i]) !== beyond(host[1][i])) {
+        const [fixed, moving] = beyond(host[0][i]) === beyond(m[i]) ? host : [host[1], host[0]]
+        follow.push({ held: holdItem(o, fixed, moving), fixed: pt(fixed), moving: pt(moving) })
+      } else if (beyond(m[i])) {
+        // Exactly, not rounded: a slanted wall's points are not whole millimetres.
+        o.x = i === 0 ? o.x + shift : o.x
+        o.y = i === 1 ? o.y + shift : o.y
+        o.to = i === 0 ? [o.to[0] + shift, o.to[1]] : [o.to[0], o.to[1] + shift]
+      }
+    }
+    for (const r of f.rooms) {
+      if (r.outline) {
+        r.outline = r.outline.map(pt)
+        fitBox(r)
+        continue
+      }
+      for (const q of [r, ...(r.parts ?? [])]) {
+        const [x1, y1] = pt([q.x, q.y])
+        const [x2, y2] = pt([q.x + q.w, q.y + q.h])
+        Object.assign(q, { x: x1, y: y1, w: toMm(x2 - x1), h: toMm(y2 - y1) })
+      }
+    }
+    for (const w of f.walls ?? []) {
+      const end: Point = w.to ?? (w.axis === 'h' ? [w.x + w.len, w.y] : [w.x, w.y + w.len])
+      const [x, y] = pt([w.x, w.y])
+      const e = pt(end)
+      Object.assign(w, { x, y })
+      if (w.to) w.to = e
+      else w.len = toMm(w.axis === 'h' ? e[0] - x : e[1] - y)
+    }
+    for (const d of f.drawnWalls ?? []) Object.assign(d, { a: pt(d.a), b: pt(d.b) })
+    for (const d of f.dimensions ?? []) Object.assign(d, { a: pt(d.a), b: pt(d.b) })
+    for (const { held, fixed, moving } of follow) followWall([held], fixed, moving)
+    for (const u of f.furniture ?? []) {
+      const size = i === 0 ? u.w : u.d
+      if (beyond(u[key] + size / 2)) u[key] = toMm(u[key] + shift)
+    }
+    for (const p of f.placements) {
+      const len = p.length !== undefined && (p.axis === 'v' ? 1 : 0) === i ? p.length : 0
+      if (beyond(p[key] + len / 2)) p[key] = toMm(p[key] + shift)
+    }
+  }
+  return null
+}
+
+/** How far p is from the segment a to b. */
+function segmentDistance(p: Point, a: Point, b: Point): number {
+  const [dx, dy] = [b[0] - a[0], b[1] - a[1]]
+  const t = clamp(((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy || 1), 0, 1)
+  return Math.hypot(p[0] - a[0] - dx * t, p[1] - a[1] - dy * t)
 }
 
 // ─── Radiators ──────────────────────────────────────────────────────────────
