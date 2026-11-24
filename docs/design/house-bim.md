@@ -295,7 +295,8 @@ step.
    against the side of another reaches into it, and a corner whose other
    wall is a door or window there is closed square. Doors and windows sit in
    the middle of the wall's thickness, with solid wall above and below. The
-   2D live plan draws the same outlines, so it shows real thickness too.
+   2D live plan draws the same outlines, so it shows real thickness too,
+   and so does the editor (since 1.44), so its corners close the same way.
    Rooms of any shape already draw, slanted edges included, since stage 4.
 6. **IFC import.** Shipped, see "The IFC import". Then, extracting the
    shared package for Keystone (shipped as `@nubisco/bim`).
