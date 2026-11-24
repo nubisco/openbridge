@@ -1,3 +1,10 @@
+# [1.44.0](https://github.com/nubisco/openbridge/compare/v1.43.0...v1.44.0) (2026-11-24)
+
+
+### Features
+
+* **house:** the editor draws walls with mitred corners ([#64](https://github.com/nubisco/openbridge/issues/64)) ([670a321](https://github.com/nubisco/openbridge/commit/670a321b1af629a81b6fd86faa1c1dde1225db33))
+
 # [1.43.0](https://github.com/nubisco/openbridge/compare/v1.42.1...v1.43.0) (2026-11-24)
 
 
