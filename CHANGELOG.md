@@ -1,3 +1,10 @@
+# [1.42.0](https://github.com/nubisco/openbridge/compare/v1.41.0...v1.42.0) (2026-11-24)
+
+
+### Features
+
+* **house:** import an IFC file as the drawing ([#61](https://github.com/nubisco/openbridge/issues/61)) ([ea4ad22](https://github.com/nubisco/openbridge/commit/ea4ad2299231a82eeabba71452272e5d015860e9))
+
 # [1.41.0](https://github.com/nubisco/openbridge/compare/v1.40.0...v1.41.0) (2026-11-23)
 
 
