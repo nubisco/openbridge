@@ -12,6 +12,7 @@ import {
   type HousePlan,
 } from '../house.js'
 import { registerHouseRoutes } from '../house-routes.js'
+import { fromV1 } from '@nubisco/bim/convert'
 
 function plan(): HousePlan {
   return {
@@ -289,6 +290,43 @@ describe('roomsByRef', () => {
     const p = plan()
     p.floors[0].placements[0].x = 30
     expect(roomsByRef(p).has('device:lamp')).toBe(false)
+  })
+
+  it('puts a shutter on a window in a slanted wall in the room behind it', () => {
+    // A room with a slanted side facing the garden, a window in that side.
+    const v1: HousePlan = {
+      version: 1,
+      grid: 0.5,
+      plot: { w: 32, h: 22 },
+      floors: [
+        {
+          id: 'g',
+          name: 'Ground floor',
+          level: 0,
+          rooms: [
+            { id: 'garden', name: 'Garden', kind: 'outdoor', x: 0, y: 0, w: 32, h: 22 },
+            {
+              id: 'bay',
+              name: 'Bay',
+              kind: 'room',
+              x: 2,
+              y: 2,
+              w: 14,
+              h: 8,
+              outline: [
+                [2, 2],
+                [10, 2],
+                [16, 10],
+                [2, 10],
+              ],
+            },
+          ],
+          openings: [{ id: 'sw', type: 'window', axis: 'h', x: 11.2, y: 3.6, len: 2, to: [12.4, 5.2] }],
+          placements: [{ ref: 'device:shutter', x: 20, y: 3, opening: 'sw' }],
+        },
+      ],
+    }
+    expect(roomsByRef(fromV1(v1).plan).get('device:shutter')?.id).toBe('bay')
   })
 })
 

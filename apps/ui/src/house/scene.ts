@@ -48,14 +48,11 @@ import {
   roomsOutsideIn,
   wallRuns,
   CELL_MM,
-  mmOf,
-  same,
-  type WallRun,
   waterColor,
   type Point,
   type ViewMode,
 } from './geometry'
-import { floorWalls, type FloorWall } from './editor'
+import { floorWalls, runPieces, type FloorWall } from './editor'
 import { specOf } from './openings'
 import { ROLLS, coveringDraws, type CoveringDraw } from './coverings'
 import { formatPower, stateText, type LiveDevice } from './live'
@@ -1009,29 +1006,6 @@ function coverings3d(
 
 // ─── Walls as solids ────────────────────────────────────────────────────────
 
-/** The walls a run is made of, each with its own thickness and height, end to end along it. */
-function runPieces(run: WallRun, walls: FloorWall[]): Array<{ A: Point; B: Point; w: FloorWall }> {
-  const A: Point = [run.x1, run.y1]
-  const B: Point = [run.x2, run.y2]
-  if (!same(run.x1, run.x2) && !same(run.y1, run.y2)) {
-    const near = (p: Point, q: Point) => same(p[0], q[0]) && same(p[1], q[1])
-    const w = walls.find((x) => !x.axis && ((near(x.a, A) && near(x.b, B)) || (near(x.a, B) && near(x.b, A))))
-    return w ? [{ A, B, w }] : []
-  }
-  const axis = same(run.y1, run.y2) ? 'h' : 'v'
-  const [a, b] = axis === 'h' ? [run.x1, run.x2] : [run.y1, run.y2]
-  const line = axis === 'h' ? run.y1 : run.x1
-  const out: Array<{ A: Point; B: Point; w: FloorWall }> = []
-  for (const w of walls) {
-    if (w.axis !== axis || !same(w.line, line)) continue
-    const s = Math.max(Math.min(a, b), w.start)
-    const e = Math.min(Math.max(a, b), w.end)
-    if (mmOf(e) <= mmOf(s)) continue
-    out.push(axis === 'h' ? { A: [s, line], B: [e, line], w } : { A: [line, s], B: [line, e], w })
-  }
-  return out
-}
-
 const segDist = (p: Point, a: Point, b: Point) => {
   const [dx, dy] = [b[0] - a[0], b[1] - a[1]]
   const t = clamp(((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy || 1), 0, 1)
@@ -1430,9 +1404,8 @@ export function renderFloor(
     }
     const style = hot ? ` style="--hv-water:${water};stroke:${edge}"` : ''
     const fins: string[] = []
-    for (let t = 0.25; t < rad.len - 0.01; t += 0.25) {
-      fins.push(rad.axis === 'h' ? `${a2[0] + t},${a2[1]}` : `${a2[0]},${a2[1] + t}`)
-    }
+    const fd = unit(a2, b2)
+    for (let t = 0.25; t < rad.len - 0.01; t += 0.25) fins.push(`${a2[0] + t * fd[0]},${a2[1] + t * fd[1]}`)
     let svg = ''
     if (iso) {
       const z0 = zm(o, 0.15)
@@ -1525,12 +1498,10 @@ export function renderFloor(
         } else if (w.type === 'slider') {
           // Two leaves on their own tracks, overlapping in the middle.
           const g = 0.12
+          // Set off across the wall: along x that is y, along y it is x.
+          const n: Point = w.axis === 'h' ? [0, 1] : w.axis === 'v' ? [1, 0] : leftOf(unit(A, B))
           const at = (t: number, k: number) =>
-            project(
-              o.mode,
-              lerp(A[0], B[0], t) + (w.axis === 'v' ? k * g : 0),
-              lerp(A[1], B[1], t) + (w.axis === 'h' ? k * g : 0),
-            )
+            project(o.mode, lerp(A[0], B[0], t) + n[0] * k * g, lerp(A[1], B[1], t) + n[1] * k * g)
           svg =
             ln('hv-sill2d', a, c) +
             ln('hv-pane2d hv-slide2d', at(0, -1), at(0.55, -1)) +

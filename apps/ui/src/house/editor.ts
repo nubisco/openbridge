@@ -49,6 +49,23 @@ import {
   takesShutter,
   Walls,
   wallRuns,
+  across,
+  along,
+  lineThrough,
+  radiatorNormal,
+  opensTowards,
+  sideName,
+  type WallRun,
+  onLine,
+  openingEnd,
+  openingMiddle,
+  placedOn,
+  pointAt,
+  rightOf,
+  sameLine,
+  sideNormal,
+  type Line,
+  type OnWall,
   type Point,
   type WallSpan,
   type WallUnit,
@@ -300,7 +317,7 @@ export function nearestWall(floor: HouseFloor, x: number, y: number, reach = 1.4
 /** The opening on that wall at that point, if any. */
 export function openingAt(floor: HouseFloor, u: WallUnit): HouseOpening | undefined {
   return floor.openings.find((o) => {
-    if (o.axis !== u.axis || !same(openingLine(o), u.line)) return false
+    if (!sameLine(openingLine(o), u.line)) return false
     const [s, e] = openingSpan(o)
     return mmOf(s) <= mmOf(u.at) && mmOf(u.at) <= mmOf(e)
   })
@@ -311,11 +328,11 @@ export function openingAt(floor: HouseFloor, u: WallUnit): HouseOpening | undefi
  * doors and windows either side. Null when `u` is on a door or window.
  */
 function freeAround(floor: HouseFloor, u: WallUnit): [number, number] | null {
-  const stretch = Walls.of(floor).holding(u.axis, u.line, u.at, u.at)
+  const stretch = Walls.of(floor).holdingOn(u.line, u.at, u.at)
   if (!stretch) return null
   let [lo, hi] = stretch
   for (const o of floor.openings) {
-    if (o.axis !== u.axis || !same(openingLine(o), u.line)) continue
+    if (!sameLine(openingLine(o), u.line)) continue
     const [s, e] = openingSpan(o)
     if (mmOf(e) <= mmOf(u.at)) lo = Math.max(lo, e)
     else if (mmOf(s) >= mmOf(u.at)) hi = Math.min(hi, s)
@@ -334,16 +351,9 @@ export function addOpening(floor: HouseFloor, u: WallUnit, preset: OpeningPreset
   if (!free || mmOf(free[1] - free[0]) < mmOf(1)) return null
   // As wide as the preset: a sliding door two metres, the usual two panes.
   const len = Math.min(presetCells(preset), free[1] - free[0])
-  const start = clamp(snap(u.at - len / 2, true), free[0], free[1] - len)
+  const start = clamp(snapOn(floor, u, u.at - len / 2), free[0], free[1] - len)
   const id = uniqueId(preset.kind, (x) => floor.openings.some((o) => o.id === x))
-  const o: HouseOpening = {
-    id,
-    type: preset.kind,
-    axis: u.axis,
-    x: u.axis === 'h' ? start : u.line,
-    y: u.axis === 'v' ? start : u.line,
-    len,
-  }
+  const o: HouseOpening = { id, type: preset.kind, ...onLine(u.line, start, len) }
   applyPreset(o, preset)
   floor.openings.push(o)
   return o
@@ -361,8 +371,9 @@ export function nearestFreeWindow(floor: HouseFloor, x: number, y: number, reach
   let bd = reach
   for (const o of floor.openings) {
     if (!takesShutter(o) || taken.has(o.id)) continue
-    const cx = o.axis === 'h' ? clamp(x, o.x, o.x + o.len) : o.x
-    const cy = o.axis === 'v' ? clamp(y, o.y, o.y + o.len) : o.y
+    const l = openingLine(o)
+    const [s, e] = openingSpan(o)
+    const [cx, cy] = pointAt(l, clamp(along(l, [x, y]), s, e))
     const d = Math.hypot(x - cx, y - cy)
     if (d < bd) {
       bd = d
@@ -388,19 +399,19 @@ export function addOpenWall(floor: HouseFloor, u: WallUnit): HouseOpening | null
   if (!free) return null
   // Which rooms are either side at a point along the wall.
   const k = 0.01
+  const n = rightOf(u.line)
   const sides = (t: number) => {
-    const [a, b] =
-      u.axis === 'h'
-        ? [roomAt(floor, t, u.line - k), roomAt(floor, t, u.line + k)]
-        : [roomAt(floor, u.line - k, t), roomAt(floor, u.line + k, t)]
+    const [px, py] = pointAt(u.line, t)
+    const a = roomAt(floor, px - n[0] * k, py - n[1] * k)
+    const b = roomAt(floor, px + n[0] * k, py + n[1] * k)
     return `${a?.id ?? ''}|${b?.id ?? ''}`
   }
-  // Where the rooms either side can change: any room's edge across the wall.
+  // Where the rooms either side can change: any room's corner along the wall.
   const cuts = new Set<number>([free[0], free[1]])
   for (const r of floor.rooms)
     for (const loop of roomShapes(r))
       for (const p of loop) {
-        const c = u.axis === 'h' ? p[0] : p[1]
+        const c = along(u.line, p)
         if (mmOf(c) > mmOf(free[0]) && mmOf(c) < mmOf(free[1])) cuts.add(c)
       }
   const at = [...cuts].sort((a, b) => a - b)
@@ -414,14 +425,7 @@ export function addOpenWall(floor: HouseFloor, u: WallUnit): HouseOpening | null
   while (lo > 0 && sides((at[lo - 1] + at[lo]) / 2) === pair) lo--
   while (hi + 1 < at.length && sides((at[hi] + at[hi + 1]) / 2) === pair) hi++
   const id = uniqueId('open', (x) => floor.openings.some((o) => o.id === x))
-  const o: HouseOpening = {
-    id,
-    type: 'open',
-    axis: u.axis,
-    x: u.axis === 'h' ? at[lo] : u.line,
-    y: u.axis === 'v' ? at[lo] : u.line,
-    len: at[hi] - at[lo],
-  }
+  const o: HouseOpening = { id, type: 'open', ...onLine(u.line, at[lo], at[hi] - at[lo]) }
   floor.openings.push(o)
   return o
 }
@@ -435,38 +439,54 @@ export function addOpenWall(floor: HouseFloor, u: WallUnit): HouseOpening | null
 export function moveOpening(floor: HouseFloor, o: HouseOpening, x: number, y: number, grab: number): boolean {
   const u = nearestWall(floor, x, y)
   if (!u) return false
-  const start = snap((u.axis === 'h' ? x : y) - grab, true)
-  const next: HouseOpening = {
-    ...o,
-    axis: u.axis,
-    x: u.axis === 'h' ? start : u.line,
-    y: u.axis === 'v' ? start : u.line,
-  }
+  const start = snapOn(floor, u, along(u.line, [x, y]) - grab)
+  const next = placedOn(o, onLine(u.line, start, o.len))
   // A side is named for the wall's direction, so a turned door opens the default way.
-  if (next.axis !== o.axis) delete next.opens
+  if (!parallel(openingLine(next), openingLine(o))) delete next.opens
   if (!fitsFree(floor, next)) return false
-  Object.assign(o, next)
-  if (!next.opens) delete o.opens
+  setPlace(o, next)
   return true
 }
 
 /** Drag one end of an opening along its wall, snapped, never under half a metre long. */
 export function resizeOpening(floor: HouseFloor, o: HouseOpening, end: 'start' | 'end', x: number, y: number): boolean {
-  const at = snap(o.axis === 'h' ? x : y, true)
-  const s0 = o.axis === 'h' ? o.x : o.y
-  const s1 = s0 + o.len
-  const start = end === 'start' ? Math.min(at, s1 - 1) : s0
-  const stop = end === 'end' ? Math.max(at, s0 + 1) : s1
-  const next: HouseOpening = {
-    ...o,
-    x: o.axis === 'h' ? start : o.x,
-    y: o.axis === 'v' ? start : o.y,
-    len: stop - start,
-  }
+  const next = resized(floor, o, end, x, y)
   if (!fitsFree(floor, next)) return false
-  Object.assign(o, next)
+  setPlace(o, next)
   return true
 }
+
+/** The same thing with one end moved to where the pointer is along its wall. */
+function resized<T extends OnWall>(floor: HouseFloor, o: T, end: 'start' | 'end', x: number, y: number): T {
+  const l = openingLine(o)
+  const [s0, s1] = openingSpan(o)
+  const at = snapOn(floor, { line: l, at: s0 }, along(l, [x, y]))
+  const start = end === 'start' ? Math.min(at, s1 - 1) : s0
+  const stop = end === 'end' ? Math.max(at, s0 + 1) : s1
+  return placedOn(o, onLine(l, start, stop - start))
+}
+
+/** Put a door or radiator where `next` is, dropping what it no longer has. */
+function setPlace<T extends OnWall & { opens?: string }>(o: T, next: T): void {
+  Object.assign(o, next)
+  if (!next.to) delete o.to
+  if (!next.opens) delete o.opens
+}
+
+/**
+ * A place along a wall, snapped. Along x or y that is the grid. At an angle
+ * it is the distance from the stretch's first end, so a door lands a whole
+ * number of centimetres from the corner rather than off the grid's lines.
+ */
+function snapOn(floor: HouseFloor, u: WallUnit, t: number): number {
+  if (u.line.axis !== 's') return snap(t, true)
+  const s = Walls.of(floor).holdingOn(u.line, u.at, u.at)?.[0] ?? 0
+  return s + snap(t - s, true)
+}
+
+/** Whether two wall lines run the same way, so a door's side means the same on both. */
+const parallel = (a: Line, b: Line) =>
+  a.axis === b.axis && (a.axis !== 's' || Math.abs(a.d[0] * b.d[1] - a.d[1] * b.d[0]) < 1e-6)
 
 // ─── Walls ──────────────────────────────────────────────────────────────────
 // Walls follow the room edges. What the person sets on one (thickness,
@@ -493,6 +513,39 @@ export interface FloorWall {
   /** Millimetres. */
   thickness: number
   height: number
+}
+
+/** The walls a run is made of, each with its own thickness and height, end to end along it. */
+export function runPieces(run: WallRun, walls: FloorWall[]): Array<{ A: Point; B: Point; w: FloorWall }> {
+  const A: Point = [run.x1, run.y1]
+  const B: Point = [run.x2, run.y2]
+  if (!same(run.x1, run.x2) && !same(run.y1, run.y2)) {
+    // At an angle: the slanted walls on its line, each for the stretch of the run it covers.
+    const l = lineThrough(A, B)
+    const [a, b] = [along(l, A), along(l, B)]
+    const out: Array<{ A: Point; B: Point; w: FloorWall }> = []
+    for (const w of walls) {
+      if (w.axis || !sameLine(lineThrough(w.a, w.b), l)) continue
+      const [wa, wb] = [along(l, w.a), along(l, w.b)]
+      const s = Math.max(Math.min(a, b), Math.min(wa, wb))
+      const e = Math.min(Math.max(a, b), Math.max(wa, wb))
+      if (mmOf(e) <= mmOf(s)) continue
+      out.push(a <= b ? { A: pointAt(l, s), B: pointAt(l, e), w } : { A: pointAt(l, e), B: pointAt(l, s), w })
+    }
+    return out
+  }
+  const axis = same(run.y1, run.y2) ? 'h' : 'v'
+  const [a, b] = axis === 'h' ? [run.x1, run.x2] : [run.y1, run.y2]
+  const line = axis === 'h' ? run.y1 : run.x1
+  const out: Array<{ A: Point; B: Point; w: FloorWall }> = []
+  for (const w of walls) {
+    if (w.axis !== axis || !same(w.line, line)) continue
+    const s = Math.max(Math.min(a, b), w.start)
+    const e = Math.min(Math.max(a, b), w.end)
+    if (mmOf(e) <= mmOf(s)) continue
+    out.push(axis === 'h' ? { A: [s, line], B: [e, line], w } : { A: [line, s], B: [line, e], w })
+  }
+  return out
 }
 
 /** Every wall of a floor, cut where it changes from between rooms to outside, as the saved plan cuts them. */
@@ -674,12 +727,70 @@ export function moveDrawnWall(floor: HouseFloor, d: HouseDrawnWall, a: Point, b:
 /** The doors, windows and radiators on a drawn wall, with where they are, so moving it carries them. */
 export function onDrawnWall(floor: HouseFloor, d: HouseDrawnWall) {
   const axis = drawnAxis(d)
-  if (!axis) return []
   const i = axis === 'h' ? 0 : 1
-  const only = new Walls([{ axis, line: d.a[1 - i], start: Math.min(d.a[i], d.b[i]), end: Math.max(d.a[i], d.b[i]) }])
+  const only = axis
+    ? new Walls([{ axis, line: d.a[1 - i], start: Math.min(d.a[i], d.b[i]), end: Math.max(d.a[i], d.b[i]) }])
+    : new Walls([], [[d.a, d.b]])
   return [...floor.openings, ...(floor.radiators ?? [])]
     .filter((x) => openingFits(x, only))
-    .map((o) => ({ o, x: o.x, y: o.y }))
+    .map((o) => ({ o, x: o.x, y: o.y, to: o.to }))
+}
+
+/**
+ * What is on a drawn wall, said from the end that stays while the other is
+ * dragged: how far along, how wide, which end the hinge is at, and which
+ * side it opens to or hangs on, so it can follow the wall round.
+ */
+export interface Held {
+  o: HouseOpening | HouseRadiator
+  from: number
+  hingeNear: boolean
+  left: boolean
+}
+
+export function holdOnWall(floor: HouseFloor, d: HouseDrawnWall, fixed: Point, moving: Point): Held[] {
+  const dir = unit(fixed, moving)
+  const left: Point = [dir[1], -dir[0]]
+  const dist = (p: Point) => Math.hypot(p[0] - fixed[0], p[1] - fixed[1])
+  return onDrawnWall(floor, d).map(({ o }) => {
+    const a: Point = [o.x, o.y]
+    const b = openingEnd(o)
+    const n = 'side' in o ? radiatorNormal(o) : opensTowards(o)
+    const hinge = 'side' in o || o.hinge !== 'end' ? a : b
+    return {
+      o,
+      from: Math.min(dist(a), dist(b)),
+      hingeNear: dist(hinge) <= Math.min(dist(a), dist(b)) + 1e-9,
+      left: n[0] * left[0] + n[1] * left[1] > 0,
+    }
+  })
+}
+
+/** Put what a drawn wall holds back on it, as `holdOnWall` said it, once its end has moved. */
+export function followWall(held: Held[], fixed: Point, moving: Point): void {
+  const dir = unit(fixed, moving)
+  const l = lineThrough(fixed, moving)
+  const forward = l.d[0] * dir[0] + l.d[1] * dir[1] > 0
+  for (const h of held) {
+    const near = along(l, [fixed[0] + dir[0] * h.from, fixed[1] + dir[1] * h.from])
+    const next = placedOn(h.o, onLine(l, forward ? near : near - h.o.len, h.o.len))
+    const n: Point = h.left ? [dir[1], -dir[0]] : [-dir[1], dir[0]]
+    if ('side' in next) next.side = sideName(l, n)
+    else if (next.type === 'door' || next.opens !== undefined || next.hinge !== undefined) {
+      // Only what swings says how: a window or gap that never said keeps saying nothing.
+      next.opens = sideName(l, n)
+      if (h.hingeNear === forward) delete next.hinge
+      else next.hinge = 'end'
+    }
+    Object.assign(h.o, next)
+    if (!next.to) delete h.o.to
+    if (!('side' in next) && next.hinge === undefined) delete (h.o as HouseOpening).hinge
+  }
+}
+
+const unit = (a: Point, b: Point): Point => {
+  const len = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1
+  return [(b[0] - a[0]) / len, (b[1] - a[1]) / len]
 }
 
 /** Make a drawn wall this long, from its first end. */
@@ -701,9 +812,7 @@ export function removeDrawnWall(floor: HouseFloor, id: string): void {
 /** Where a dimension's end can catch: corners, wall ends, the ends of doors, windows and radiators, other dimensions. */
 function measurePoints(floor: HouseFloor, except?: string): Point[] {
   const out = catchPoints(floor)
-  for (const o of [...floor.openings, ...(floor.radiators ?? [])]) {
-    out.push([o.x, o.y], o.axis === 'h' ? [o.x + o.len, o.y] : [o.x, o.y + o.len])
-  }
+  for (const o of [...floor.openings, ...(floor.radiators ?? [])]) out.push([o.x, o.y], openingEnd(o))
   for (const d of floor.dimensions ?? []) if (d.id !== except) out.push(d.a, d.b)
   return out
 }
@@ -771,6 +880,18 @@ export function resizePlan(plan: HousePlan, k: number, keepSizes: boolean): void
     // Everything on a wall: its line scales, and along it either both ends or the middle.
     const walls = Walls.of(f)
     for (const o of [...f.openings, ...(f.radiators ?? [])]) {
+      if (o.to) {
+        // At an angle its ends are not whole millimetres, so it goes back
+        // onto its wall, which moved to whole millimetres, by its middle.
+        const [mx, my] = openingMiddle(o)
+        const u = walls.nearest(mx * k, my * k, 0.5)
+        if (!u) continue
+        const mid = along(u.line, [mx * k, my * k])
+        const kept = onLine(u.line, mid - o.len / 2, o.len)
+        const len = toMm(o.len * k)
+        Object.assign(o, keepSizes && openingFits(kept, walls) ? kept : onLine(u.line, mid - len / 2, len))
+        continue
+      }
       const i = o.axis === 'h' ? 'x' : 'y'
       const across = o.axis === 'h' ? 'y' : 'x'
       const scaled = { [across]: at(o[across]), [i]: at(o[i]), len: toMm(at(o[i] + o.len) - at(o[i])) }
@@ -794,9 +915,6 @@ export function resizePlan(plan: HousePlan, k: number, keepSizes: boolean): void
 
 // ─── Radiators ──────────────────────────────────────────────────────────────
 
-const sameLine = (a: { axis: string; line: number }, b: { axis: string; line: number }) =>
-  a.axis === b.axis && same(a.line, b.line)
-const lineOf = (r: Pick<HouseRadiator, 'axis' | 'x' | 'y'>) => ({ axis: r.axis, line: openingLine(r) })
 const crosses = (a: [number, number], b: [number, number]) => mmOf(a[0]) < mmOf(b[1]) && mmOf(b[0]) < mmOf(a[1])
 
 /**
@@ -807,19 +925,18 @@ const crosses = (a: [number, number], b: [number, number]) => mmOf(a[0]) < mmOf(
 export function radiatorFits(floor: HouseFloor, r: HouseRadiator): boolean {
   if (mmOf(r.len) < mmOf(1)) return false
   if (!openingFits(r, Walls.of(floor))) return false
+  const l = openingLine(r)
   const span = openingSpan(r)
-  if (
-    floor.openings.some((o) => o.type !== 'window' && sameLine(lineOf(o), lineOf(r)) && crosses(openingSpan(o), span))
-  )
-    return false
-  return !(floor.radiators ?? []).some(
-    (x) => x.id !== r.id && x.side === r.side && sameLine(lineOf(x), lineOf(r)) && crosses(openingSpan(x), span),
-  )
+  const on = (x: OnWall) => sameLine(openingLine(x), l) && crosses(openingSpan(x), span)
+  if (floor.openings.some((o) => o.type !== 'window' && on(o))) return false
+  return !(floor.radiators ?? []).some((x) => x.id !== r.id && x.side === r.side && on(x))
 }
 
 /** The side of the wall at `u` that a point is on, as a radiator names it. */
 function sideOf(u: WallUnit, x: number, y: number): HouseRadiator['side'] {
-  return u.axis === 'h' ? (y < u.line ? 'up' : 'down') : x < u.line ? 'left' : 'right'
+  const l = u.line
+  if (l.axis === 's') return across(l, [x, y]) < 0 ? 'left' : 'right'
+  return l.axis === 'h' ? (y < l.o[1] ? 'up' : 'down') : x < l.o[0] ? 'left' : 'right'
 }
 const flip = (s: HouseRadiator['side']): HouseRadiator['side'] =>
   ({ up: 'down', down: 'up', left: 'right', right: 'left' })[s] as HouseRadiator['side']
@@ -831,9 +948,9 @@ const flip = (s: HouseRadiator['side']): HouseRadiator['side'] =>
  */
 export function addRadiator(floor: HouseFloor, u: WallUnit, x: number, y: number): HouseRadiator | null {
   let side = sideOf(u, x, y)
+  const [px, py] = pointAt(u.line, u.at)
   const inRoom = (s: HouseRadiator['side']) => {
-    const [nx, ny] = s === 'up' ? [0, -1] : s === 'down' ? [0, 1] : s === 'left' ? [-1, 0] : [1, 0]
-    const [px, py] = u.axis === 'h' ? [u.at, u.line] : [u.line, u.at]
+    const [nx, ny] = sideNormal(u.line, s)
     return roomAt(floor, px + nx * 0.5, py + ny * 0.5)?.kind === 'room'
   }
   if (!inRoom(side)) side = flip(side)
@@ -842,17 +959,9 @@ export function addRadiator(floor: HouseFloor, u: WallUnit, x: number, y: number
     'radiator',
     (v) => (floor.radiators ?? []).some((r) => r.id === v) || floor.openings.some((o) => o.id === v),
   )
-  const centre = u.axis === 'h' ? x : y
+  const centre = along(u.line, [x, y])
   for (const len of [CELLS_PER_M, 1.5, 1]) {
-    const start = snap(centre - len / 2, true)
-    const r: HouseRadiator = {
-      id,
-      axis: u.axis,
-      x: u.axis === 'h' ? start : u.line,
-      y: u.axis === 'v' ? start : u.line,
-      len,
-      side,
-    }
+    const r: HouseRadiator = { id, ...onLine(u.line, snapOn(floor, u, centre - len / 2), len), side }
     if (radiatorFits(floor, r)) {
       ;(floor.radiators ??= []).push(r)
       return r
@@ -865,17 +974,11 @@ export function addRadiator(floor: HouseFloor, u: WallUnit, x: number, y: number
 export function moveRadiator(floor: HouseFloor, r: HouseRadiator, x: number, y: number, grab: number): boolean {
   const u = nearestWall(floor, x, y)
   if (!u) return false
-  const start = snap((u.axis === 'h' ? x : y) - grab, true)
-  const next: HouseRadiator = {
-    ...r,
-    axis: u.axis,
-    x: u.axis === 'h' ? start : u.line,
-    y: u.axis === 'v' ? start : u.line,
-    // Along the same wall it keeps its side. Onto another, it takes the side the pointer is on.
-    side: sameLine(u, lineOf(r)) ? r.side : sideOf(u, x, y),
-  }
+  const next = placedOn(r, onLine(u.line, snapOn(floor, u, along(u.line, [x, y]) - grab), r.len))
+  // Along the same wall it keeps its side. Onto another, it takes the side the pointer is on.
+  next.side = sameLine(u.line, openingLine(r)) ? r.side : sideOf(u, x, y)
   if (!radiatorFits(floor, next)) return false
-  Object.assign(r, next)
+  setPlace(r, next)
   return true
 }
 
@@ -887,18 +990,9 @@ export function resizeRadiator(
   x: number,
   y: number,
 ): boolean {
-  const at = snap(r.axis === 'h' ? x : y, true)
-  const [s0, s1] = openingSpan(r)
-  const start = end === 'start' ? Math.min(at, s1 - 1) : s0
-  const stop = end === 'end' ? Math.max(at, s0 + 1) : s1
-  const next: HouseRadiator = {
-    ...r,
-    x: r.axis === 'h' ? start : r.x,
-    y: r.axis === 'v' ? start : r.y,
-    len: stop - start,
-  }
+  const next = resized(floor, r, end, x, y)
   if (!radiatorFits(floor, next)) return false
-  Object.assign(r, next)
+  setPlace(r, next)
   return true
 }
 
@@ -1274,32 +1368,18 @@ export function renderEditor(
       `<line class="hv-ewhit" data-wall="${esc(fw.key)}" ${cc}/>`
     )
   }
-  // Walls at an angle, end to end.
-  for (const fw of walls) {
-    if (fw.axis) continue
-    const { a, b } = fw
-    h += wallLine(fw, `x1="${r1(a[0] * S)}" y1="${r1(a[1] * S)}" x2="${r1(b[0] * S)}" y2="${r1(b[1] * S)}"`)
-  }
   for (const w of wallRuns(floor)) {
-    // Angled walls are drawn above.
-    if (w.x1 !== w.x2 && w.y1 !== w.y2) continue
-    const c = `x1="${w.x1 * S}" y1="${w.y1 * S}" x2="${w.x2 * S}" y2="${w.y2 * S}"`
+    const c =
+      w.axis === 's'
+        ? `x1="${r1(w.x1 * S)}" y1="${r1(w.y1 * S)}" x2="${r1(w.x2 * S)}" y2="${r1(w.y2 * S)}"`
+        : `x1="${w.x1 * S}" y1="${w.y1 * S}" x2="${w.x2 * S}" y2="${w.y2 * S}"`
     const sel = w.opening && w.opening.id === o.selectedOpening ? ' hv-sel' : ''
     if (w.type === 'wall') {
       // As thick as it is built, a run of wall may be several walls (a
       // thick outside one meeting a thin one between rooms).
-      const [a, b] = w.axis === 'h' ? [w.x1, w.x2] : [w.y1, w.y2]
-      const line = w.axis === 'h' ? w.y1 : w.x1
-      for (const fw of walls) {
-        if (fw.axis !== w.axis || !same(fw.line, line)) continue
-        const s = Math.max(a, fw.start)
-        const e = Math.min(b, fw.end)
-        if (mmOf(e) <= mmOf(s)) continue
-        const cc =
-          w.axis === 'h'
-            ? `x1="${r1(s * S)}" y1="${r1(line * S)}" x2="${r1(e * S)}" y2="${r1(line * S)}"`
-            : `x1="${r1(line * S)}" y1="${r1(s * S)}" x2="${r1(line * S)}" y2="${r1(e * S)}"`
-        h += wallLine(fw, cc)
+      for (const pc of runPieces(w, walls)) {
+        const [A, B] = [pc.A, pc.B]
+        h += wallLine(pc.w, `x1="${r1(A[0] * S)}" y1="${r1(A[1] * S)}" x2="${r1(B[0] * S)}" y2="${r1(B[1] * S)}"`)
       }
     } else if (w.type === 'window') h += `<line class="hv-ewinb" ${c}/><line class="hv-ewin${sel}" ${c}/>`
     else if (w.type === 'open') h += `<line class="hv-eopen${sel}" ${c}/>`
@@ -1340,14 +1420,22 @@ export function renderEditor(
   }
   // Radiators: a slim panel on the side of the wall they hang on.
   for (const r of floor.radiators ?? []) {
-    const n = r.side === 'up' ? [0, -1] : r.side === 'down' ? [0, 1] : r.side === 'left' ? [-1, 0] : [1, 0]
+    const n = radiatorNormal(r)
     const d = 0.3
+    const sel = o.selectedRadiator === r.id ? ' hv-sel' : ''
+    const e = openingEnd(r)
+    if (r.to) {
+      const pts = [[r.x, r.y], e, [e[0] + n[0] * d, e[1] + n[1] * d], [r.x + n[0] * d, r.y + n[1] * d]]
+      h +=
+        `<polygon class="hv-erad${sel}" points="${pts.map((p) => `${r1(p[0] * S)},${r1(p[1] * S)}`).join(' ')}"/>` +
+        `<line class="hv-ehit" data-radiator="${esc(r.id)}" x1="${r1(r.x * S)}" y1="${r1(r.y * S)}" x2="${r1(e[0] * S)}" y2="${r1(e[1] * S)}"/>`
+      continue
+    }
     const x0 = Math.min(r.x, r.x + n[0] * d)
     const y0 = Math.min(r.y, r.y + n[1] * d)
     const rw = r.axis === 'h' ? r.len : d
     const rh = r.axis === 'v' ? r.len : d
-    const sel = o.selectedRadiator === r.id ? ' hv-sel' : ''
-    const c = `x1="${r.x * S}" y1="${r.y * S}" x2="${(r.axis === 'h' ? r.x + r.len : r.x) * S}" y2="${(r.axis === 'v' ? r.y + r.len : r.y) * S}"`
+    const c = `x1="${r.x * S}" y1="${r.y * S}" x2="${e[0] * S}" y2="${e[1] * S}"`
     h +=
       `<rect class="hv-erad${sel}" x="${r1(x0 * S)}" y="${r1(y0 * S)}" width="${r1(rw * S)}" height="${r1(rh * S)}"/>` +
       `<line class="hv-ehit" data-radiator="${esc(r.id)}" ${c}/>`
@@ -1358,10 +1446,7 @@ export function renderEditor(
     let x = p.x
     let y = p.y
     const attached = p.opening ? floor.openings.find((q) => q.id === p.opening) : undefined
-    if (attached) {
-      x = attached.x + (attached.axis === 'h' ? attached.len / 2 : 0)
-      y = attached.y + (attached.axis === 'v' ? attached.len / 2 : 0)
-    }
+    if (attached) [x, y] = openingMiddle(attached)
     const letter = d ? KIND_LETTER[d.kind] : '?'
     const name = d?.name ?? 'Device no longer on the bridge'
     h +=
@@ -1370,26 +1455,19 @@ export function renderEditor(
   }
   // The selected door's or window's ends, over everything, so a device
   // standing beside it never hides them.
+  // Each end's handle, with the cursor for the way it slides.
+  const endHandles = (x: OnWall, attr: string) => {
+    const cls = x.to ? (x.to[1] < x.y ? ' hv-alt' : '') : ` hv-eoh-${x.axis}`
+    const e = openingEnd(x)
+    return (
+      `<circle class="hv-eh${cls}" ${attr}="start" cx="${r1(x.x * S)}" cy="${r1(x.y * S)}" r="${r1(fit(6, 8))}"/>` +
+      `<circle class="hv-eh${cls}" ${attr}="end" cx="${r1(e[0] * S)}" cy="${r1(e[1] * S)}" r="${r1(fit(6, 8))}"/>`
+    )
+  }
   const so = floor.openings.find((x) => x.id === o.selectedOpening)
-  if (so) {
-    const ends: Array<['start' | 'end', number, number]> = [
-      ['start', so.x, so.y],
-      ['end', so.axis === 'h' ? so.x + so.len : so.x, so.axis === 'v' ? so.y + so.len : so.y],
-    ]
-    for (const [end, x, y] of ends) {
-      h += `<circle class="hv-eh hv-eoh-${so.axis}" data-ohandle="${end}" cx="${x * S}" cy="${y * S}" r="${r1(fit(6, 8))}"/>`
-    }
-  }
+  if (so) h += endHandles(so, 'data-ohandle')
   const sr = (floor.radiators ?? []).find((x) => x.id === o.selectedRadiator)
-  if (sr) {
-    const ends: Array<['start' | 'end', number, number]> = [
-      ['start', sr.x, sr.y],
-      ['end', sr.axis === 'h' ? sr.x + sr.len : sr.x, sr.axis === 'v' ? sr.y + sr.len : sr.y],
-    ]
-    for (const [end, x, y] of ends) {
-      h += `<circle class="hv-eh hv-eoh-${sr.axis}" data-rhandle="${end}" cx="${x * S}" cy="${y * S}" r="${r1(fit(6, 8))}"/>`
-    }
-  }
+  if (sr) h += endHandles(sr, 'data-rhandle')
   const sf = (floor.furniture ?? []).find((x) => x.id === o.selectedFurniture)
   if (sf) {
     const corners: Array<[string, number, number]> = [

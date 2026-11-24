@@ -95,11 +95,59 @@ export interface WallSpan {
   end: number
 }
 
-/** A point on a wall, as `nearestWall` finds it: on line `line`, `at` along it. */
+/** A point on a wall, as `nearestWall` finds it: on `line`, `at` along it. */
 export interface WallUnit {
-  axis: 'h' | 'v'
-  line: number
+  line: Line
   at: number
+}
+
+// ─── Wall lines at any angle ────────────────────────────────────────────────
+
+/**
+ * A wall line in any direction. The point `t` along it is `o + t·d`, `d` a
+ * unit vector, and a point's `t` is its dot product with `d`: along x that is
+ * its x, along y its y, as wall lines have always been measured. A slanted
+ * line runs towards +x, as a slanted door or radiator is written.
+ */
+export interface Line {
+  axis: 'h' | 'v' | 's'
+  o: Point
+  d: Point
+}
+
+export const lineAlongX = (y: number): Line => ({ axis: 'h', o: [0, y], d: [1, 0] })
+export const lineAlongY = (x: number): Line => ({ axis: 'v', o: [x, 0], d: [0, 1] })
+
+/** The line through two points. */
+export function lineThrough(a: Point, b: Point): Line {
+  if (same(a[1], b[1])) return lineAlongX(a[1])
+  if (same(a[0], b[0])) return lineAlongY(a[0])
+  const len = Math.hypot(b[0] - a[0], b[1] - a[1])
+  const k = b[0] > a[0] ? 1 / len : -1 / len
+  const d: Point = [(b[0] - a[0]) * k, (b[1] - a[1]) * k]
+  const t = a[0] * d[0] + a[1] * d[1]
+  return { axis: 's', o: [a[0] - t * d[0], a[1] - t * d[1]], d }
+}
+
+/** How far along a line a point is. */
+export const along = (l: Line, p: Point) => p[0] * l.d[0] + p[1] * l.d[1]
+export const pointAt = (l: Line, t: number): Point => [l.o[0] + t * l.d[0], l.o[1] + t * l.d[1]]
+/** The unit step to a line's right, as a wall names its sides: down along x, left along y. */
+export const rightOf = (l: Line): Point => [-l.d[1], l.d[0]]
+/** How far a point is to a line's right (negative on its left). */
+export const across = (l: Line, p: Point) => {
+  const n = rightOf(l)
+  return (p[0] - l.o[0]) * n[0] + (p[1] - l.o[1]) * n[1]
+}
+
+/** Half a millimetre, in cells: how far off a slanted line a point may be and still be on it. */
+const ON_LINE = 0.001
+
+export function sameLine(a: Line, b: Line): boolean {
+  if (a.axis !== b.axis) return false
+  if (a.axis === 'h') return same(a.o[1], b.o[1])
+  if (a.axis === 'v') return same(a.o[0], b.o[0])
+  return Math.abs(a.d[0] * b.d[1] - a.d[1] * b.d[0]) < 1e-6 && Math.abs(across(a, b.o)) < ON_LINE
 }
 
 const lineKey = (axis: 'h' | 'v', line: number) => `${axis}${mmOf(line)}`
@@ -123,9 +171,11 @@ function merge(spans: Array<[number, number]>): Array<[number, number]> {
 export class Walls {
   private readonly lines = new Map<string, Array<[number, number]>>()
   readonly spans: WallSpan[] = []
+  /** The walls at an angle: stretches of slanted lines, merged where they run on along one. */
+  readonly slants: Array<{ line: Line; start: number; end: number }> = []
 
   /** Any edges, merged where they run on along one line. */
-  constructor(edges: WallSpan[]) {
+  constructor(edges: WallSpan[], slanted: Array<[Point, Point]> = []) {
     const raw = new Map<string, { axis: 'h' | 'v'; line: number; spans: Array<[number, number]> }>()
     for (const e of edges) {
       const k = lineKey(e.axis, e.line)
@@ -138,12 +188,20 @@ export class Walls {
       this.lines.set(k, merged)
       for (const [start, end] of merged) this.spans.push({ axis, line, start, end })
     }
+    const groups: Array<{ line: Line; spans: Array<[number, number]> }> = []
+    for (const [a, b] of slanted) {
+      const l = lineThrough(a, b)
+      let g = groups.find((x) => sameLine(x.line, l))
+      if (!g) groups.push((g = { line: l, spans: [] }))
+      const [s, e] = [along(g.line, a), along(g.line, b)]
+      g.spans.push([Math.min(s, e), Math.max(s, e)])
+    }
+    for (const g of groups) for (const [start, end] of merge(g.spans)) this.slants.push({ line: g.line, start, end })
   }
 
   /**
    * A floor's walls: the outlines of its rooms that have walls, and the
-   * walls drawn on their own along x or y. One drawn at an angle holds no
-   * doors, so it is not among them.
+   * walls drawn on their own, at any angle.
    */
   static of(floor: HouseFloor): Walls {
     const drawn = (floor.drawnWalls ?? []).flatMap((d): WallSpan[] => {
@@ -159,7 +217,19 @@ export class Walls {
         },
       ]
     })
-    return new Walls([...floor.rooms.filter((r) => r.kind === 'room').flatMap(roomOutline), ...drawn])
+    const rooms = floor.rooms.filter((r) => r.kind === 'room')
+    const slanted = [
+      ...rooms.flatMap(roomSlants),
+      ...(floor.drawnWalls ?? []).filter((d) => !drawnAxis(d)).map((d): [Point, Point] => [d.a, d.b]),
+    ]
+    return new Walls([...rooms.flatMap(roomOutline), ...drawn], slanted)
+  }
+
+  /** The stretch of wall on `l` that holds all of `[s, e]` along it, if one does. */
+  holdingOn(l: Line, s: number, e: number): [number, number] | undefined {
+    if (l.axis !== 's') return this.holding(l.axis, l.axis === 'h' ? l.o[1] : l.o[0], s, e)
+    const w = this.slants.find((x) => sameLine(x.line, l) && mmOf(x.start) <= mmOf(s) && mmOf(e) <= mmOf(x.end))
+    return w && [w.start, w.end]
   }
 
   /** The stretch of wall that holds all of `[s, e]` on a line, if one does. */
@@ -176,12 +246,21 @@ export class Walls {
   nearest(x: number, y: number, reach: number): WallUnit | null {
     let best: WallUnit | null = null
     let bd = reach
-    for (const w of this.spans) {
-      const at = clamp(w.axis === 'h' ? x : y, w.start, w.end)
-      const d = w.axis === 'h' ? Math.hypot(x - at, y - w.line) : Math.hypot(x - w.line, y - at)
+    const lines = [
+      ...this.spans.map((w) => ({
+        line: w.axis === 'h' ? lineAlongX(w.line) : lineAlongY(w.line),
+        start: w.start,
+        end: w.end,
+      })),
+      ...this.slants,
+    ]
+    for (const w of lines) {
+      const at = clamp(along(w.line, [x, y]), w.start, w.end)
+      const p = pointAt(w.line, at)
+      const d = Math.hypot(x - p[0], y - p[1])
       if (d < bd) {
         bd = d
-        best = { axis: w.axis, line: w.line, at }
+        best = { line: w.line, at }
       }
     }
     return best
@@ -270,37 +349,63 @@ export function takesShutter(o: HouseOpening): boolean {
   return o.type === 'window' || o.type === 'slider' || (o.type === 'door' && o.glass === true)
 }
 
+/** Where a door, window or radiator is on its wall: along x or y, or from (x, y) to `to` at an angle. */
+export type OnWall = Pick<HouseOpening, 'axis' | 'x' | 'y' | 'len' | 'to'>
+
+/** The line an opening (or radiator) sits on. */
+export const openingLine = (o: OnWall): Line =>
+  o.to ? lineThrough([o.x, o.y], o.to) : o.axis === 'h' ? lineAlongX(o.y) : lineAlongY(o.x)
+
 /** Where an opening starts and ends along its wall, in cells. */
-export function openingSpan(o: Pick<HouseOpening, 'axis' | 'x' | 'y' | 'len'>): [number, number] {
-  const s = o.axis === 'h' ? o.x : o.y
+export function openingSpan(o: OnWall): [number, number] {
+  const s = o.to ? along(openingLine(o), [o.x, o.y]) : o.axis === 'h' ? o.x : o.y
   return [s, s + o.len]
 }
 
-/** The line an opening (or radiator) sits on. */
-export const openingLine = (o: Pick<HouseOpening, 'axis' | 'x' | 'y'>) => (o.axis === 'h' ? o.y : o.x)
+/** An opening's (or radiator's) far end. */
+export const openingEnd = (o: OnWall): Point => o.to ?? (o.axis === 'h' ? [o.x + o.len, o.y] : [o.x, o.y + o.len])
+
+/** An opening's (or radiator's) middle. */
+export function openingMiddle(o: OnWall): Point {
+  if (o.to) return [(o.x + o.to[0]) / 2, (o.y + o.to[1]) / 2]
+  return [o.x + (o.axis === 'h' ? o.len / 2 : 0), o.y + (o.axis === 'v' ? o.len / 2 : 0)]
+}
+
+/** Where something `len` long from `start` along a line is, as a door or radiator says it. */
+export function onLine(l: Line, start: number, len: number): OnWall {
+  if (l.axis === 'h') return { axis: 'h', x: start, y: l.o[1], len }
+  if (l.axis === 'v') return { axis: 'v', x: l.o[0], y: start, len }
+  const [x, y] = pointAt(l, start)
+  return { axis: 'h', x, y, len, to: pointAt(l, start + len) }
+}
+
+/** A door or radiator moved to where `onLine` says, without a slanted end it no longer has. */
+export function placedOn<T extends OnWall>(o: T, at: OnWall): T {
+  const out = { ...o, ...at }
+  if (!at.to) delete out.to
+  return out
+}
 
 /** Whether two openings claim the same stretch of the same wall line. */
-export function openingsOverlap(
-  a: Pick<HouseOpening, 'axis' | 'x' | 'y' | 'len'>,
-  b: Pick<HouseOpening, 'axis' | 'x' | 'y' | 'len'>,
-): boolean {
-  if (a.axis !== b.axis || !same(openingLine(a), openingLine(b))) return false
+export function openingsOverlap(a: OnWall, b: OnWall): boolean {
+  if (!sameLine(openingLine(a), openingLine(b))) return false
   const [s1, e1] = openingSpan(a)
   const [s2, e2] = openingSpan(b)
   return mmOf(s1) < mmOf(e2) && mmOf(s2) < mmOf(e1)
 }
 
 /** Whether an opening sits entirely on wall, after rooms moved under it. */
-export function openingFits(o: Pick<HouseOpening, 'axis' | 'x' | 'y' | 'len'>, walls: Walls): boolean {
+export function openingFits(o: OnWall, walls: Walls): boolean {
   const [s, e] = openingSpan(o)
-  return !!walls.holding(o.axis, openingLine(o), s, e)
+  return !!walls.holdingOn(openingLine(o), s, e)
 }
 
 export interface WallRun {
   /** `wall`, or the opening this run is. */
   type: 'wall' | 'door' | 'window' | 'open' | 'slider'
   opening: HouseOpening | null
-  axis: 'h' | 'v'
+  /** `s` at an angle. */
+  axis: 'h' | 'v' | 's'
   x1: number
   y1: number
   x2: number
@@ -330,7 +435,7 @@ export function wallRuns(floor: HouseFloor, walls = Walls.of(floor)): WallRun[] 
         ? { type: o ? o.type : 'wall', opening: o, axis, x1: a, y1: line, x2: b, y2: line }
         : { type: o ? o.type : 'wall', opening: o, axis, x1: line, y1: a, x2: line, y2: b }
     const inside = kept
-      .filter((o) => o.axis === axis && same(openingLine(o), line))
+      .filter((o) => !o.to && o.axis === axis && same(o.axis === 'h' ? o.y : o.x, line))
       .map((o) => ({ o, span: openingSpan(o) }))
       .filter(({ span }) => mmOf(span[0]) >= mmOf(start) && mmOf(span[1]) <= mmOf(end))
       .sort((a, b) => a.span[0] - b.span[0])
@@ -342,24 +447,24 @@ export function wallRuns(floor: HouseFloor, walls = Walls.of(floor)): WallRun[] 
     }
     if (mmOf(at) < mmOf(end)) runs.push(run(at, end, null))
   }
-  // Slanted edges of walled rooms, once each where two rooms share one, and
-  // walls drawn at an angle: plain wall, end to end.
-  const seen = new Set<string>()
-  for (const r of floor.rooms) {
-    if (r.kind !== 'room') continue
-    for (const [a, b] of roomSlants(r)) {
-      const k = [a, b]
-        .map((p) => `${mmOf(p[0])},${mmOf(p[1])}`)
-        .sort()
-        .join('|')
-      if (seen.has(k)) continue
-      seen.add(k)
-      runs.push({ type: 'wall', opening: null, axis: 'h', x1: a[0], y1: a[1], x2: b[0], y2: b[1] })
+  // Walls at an angle, cut the same way.
+  for (const { line, start, end } of walls.slants) {
+    const run = (a: number, b: number, o: HouseOpening | null): WallRun => {
+      const [p, q] = [pointAt(line, a), pointAt(line, b)]
+      return { type: o ? o.type : 'wall', opening: o, axis: 's', x1: p[0], y1: p[1], x2: q[0], y2: q[1] }
     }
-  }
-  for (const d of floor.drawnWalls ?? []) {
-    if (drawnAxis(d)) continue
-    runs.push({ type: 'wall', opening: null, axis: 'h', x1: d.a[0], y1: d.a[1], x2: d.b[0], y2: d.b[1] })
+    const inside = kept
+      .filter((o) => o.to && sameLine(openingLine(o), line))
+      .map((o) => ({ o, span: openingSpan(o) }))
+      .filter(({ span }) => mmOf(span[0]) >= mmOf(start) && mmOf(span[1]) <= mmOf(end))
+      .sort((a, b) => a.span[0] - b.span[0])
+    let at = start
+    for (const { o, span } of inside) {
+      if (mmOf(span[0]) > mmOf(at)) runs.push(run(at, span[0], null))
+      runs.push(run(span[0], span[1], o))
+      at = span[1]
+    }
+    if (mmOf(at) < mmOf(end)) runs.push(run(at, end, null))
   }
   return runs
 }
@@ -449,11 +554,11 @@ export function drawnBounds(plan: HousePlan, floor: HouseFloor) {
  */
 export function doorSwing(o: HouseOpening) {
   const a: Point = [o.x, o.y]
-  const b: Point = o.axis === 'h' ? [o.x + o.len, o.y] : [o.x, o.y + o.len]
+  const b = openingEnd(o)
   const hinge = o.hinge === 'end' ? b : a
   const free = o.hinge === 'end' ? a : b
-  const sign = o.opens === 'up' || o.opens === 'left' ? -1 : 1
-  const open: Point = o.axis === 'h' ? [hinge[0], hinge[1] + sign * o.len] : [hinge[0] + sign * o.len, hinge[1]]
+  const n = opensTowards(o)
+  const open: Point = [hinge[0] + n[0] * o.len, hinge[1] + n[1] * o.len]
   const at = (t: number): Point => {
     const c = Math.cos((t * Math.PI) / 2)
     const s = Math.sin((t * Math.PI) / 2)
@@ -468,8 +573,20 @@ export function doorSwing(o: HouseOpening) {
   return { hinge, free, open, at, sweep: cross > 0 ? 1 : 0 }
 }
 
+/** The way a door opens, as a unit step across its wall. */
+export function opensTowards(o: Pick<HouseOpening, 'axis' | 'x' | 'y' | 'len' | 'to' | 'opens'>): Point {
+  if (o.to) {
+    const n = rightOf(openingLine(o))
+    return o.opens === 'left' ? [-n[0], -n[1]] : n
+  }
+  const sign = o.opens === 'up' || o.opens === 'left' ? -1 : 1
+  return o.axis === 'h' ? [0, sign] : [sign, 0]
+}
+
 /** The door side flipped: the same door, opening into the other room. */
 export function flippedSide(o: HouseOpening): HouseOpening['opens'] {
+  // At an angle the side is the wall's own, `right` unless said.
+  if (o.to) return o.opens === 'left' ? 'right' : 'left'
   if (o.axis === 'h') return o.opens === 'up' ? 'down' : 'up'
   return o.opens === 'left' ? 'right' : 'left'
 }
@@ -481,25 +598,46 @@ export function flippedSide(o: HouseOpening): HouseOpening['opens'] {
 /** How far a radiator stands off its wall, in cells. */
 export const RADIATOR_DEPTH = 0.25
 
-/** The direction a radiator faces, as a unit step across its wall. */
-export function radiatorNormal(r: Pick<HouseRadiator, 'side'>): Point {
-  return r.side === 'up' ? [0, -1] : r.side === 'down' ? [0, 1] : r.side === 'left' ? [-1, 0] : [1, 0]
+/**
+ * A side of a wall line as a unit step across it. Along x or y the side is
+ * named as seen on the plan (`up`, `down`, `left`, `right`). At an angle it
+ * is the line's own `left` or `right`.
+ */
+export function sideNormal(l: Line, side: HouseRadiator['side']): Point {
+  if (l.axis === 's') {
+    const n = rightOf(l)
+    return side === 'left' ? [-n[0], -n[1]] : n
+  }
+  return side === 'up' ? [0, -1] : side === 'down' ? [0, 1] : side === 'left' ? [-1, 0] : [1, 0]
 }
+
+/** The side of a wall line a step across it points to, named as `sideNormal` names it. */
+export function sideName(l: Line, n: Point): HouseRadiator['side'] {
+  if (l.axis === 'h') return n[1] < 0 ? 'up' : 'down'
+  if (l.axis === 'v') return n[0] < 0 ? 'left' : 'right'
+  const r = rightOf(l)
+  return n[0] * r[0] + n[1] * r[1] < 0 ? 'left' : 'right'
+}
+
+/** The direction a radiator faces, as a unit step across its wall. */
+export const radiatorNormal = (r: Pick<HouseRadiator, 'side' | 'axis' | 'x' | 'y' | 'len' | 'to'>): Point =>
+  sideNormal(openingLine(r), r.side)
 
 /** A radiator's two ends, on the room side, where its pipes connect. */
 export function radiatorEnds(r: HouseRadiator, off = RADIATOR_DEPTH): [Point, Point] {
   const [nx, ny] = radiatorNormal(r)
-  const a: Point = [r.x + nx * off, r.y + ny * off]
-  const b: Point = r.axis === 'h' ? [r.x + r.len + nx * off, r.y + ny * off] : [r.x + nx * off, r.y + r.len + ny * off]
-  return [a, b]
+  const e = openingEnd(r)
+  return [
+    [r.x + nx * off, r.y + ny * off],
+    [e[0] + nx * off, e[1] + ny * off],
+  ]
 }
 
 /** The room a radiator warms: the one on the side it hangs on. */
 export function radiatorRoom(floor: HouseFloor, r: HouseRadiator): HouseRoom | undefined {
   const [nx, ny] = radiatorNormal(r)
-  const mx = r.x + (r.axis === 'h' ? r.len / 2 : 0) + nx * 0.5
-  const my = r.y + (r.axis === 'v' ? r.len / 2 : 0) + ny * 0.5
-  return roomAt(floor, mx, my)
+  const [mx, my] = openingMiddle(r)
+  return roomAt(floor, mx + nx * 0.5, my + ny * 0.5)
 }
 
 /**
@@ -813,8 +951,19 @@ export function rotatePlan(plan: HousePlan, turns: number): HousePlan {
 function quarterTurn(plan: HousePlan): HousePlan {
   // (x, y) goes to (H - y, x): what ran along x now runs along y.
   const H = plan.plot.h
+  const pt = (p: [number, number]): [number, number] => [H - p[1], p[0]]
   const rect = <T extends HouseRect>(r: T): T => ({ ...r, x: H - (r.y + r.h), y: r.x, w: r.h, h: r.w })
+  const otherSide = <S extends string>(s: S | undefined) => (s === 'left' ? 'right' : 'left') as S
+  // At an angle: both ends turn, and if it now runs towards -x it is written
+  // from the other end, its hinge and side swapping with it.
+  const slanted = <T extends OnWall>(o: T, flip: (x: T) => Partial<T>): T => {
+    const a = pt([o.x, o.y])
+    const b = pt(o.to!)
+    if (b[0] > a[0]) return { ...o, x: a[0], y: a[1], to: b }
+    return { ...o, x: b[0], y: b[1], to: a, ...flip(o) }
+  }
   const opening = (o: HouseOpening): HouseOpening => {
+    if (o.to) return slanted(o, (x) => ({ hinge: x.hinge === 'end' ? undefined : 'end', opens: otherSide(x.opens) }))
     if (o.axis === 'h') {
       // Along x becomes along y, same direction: the start end stays the start.
       const opens = o.opens === 'up' ? 'right' : 'left'
@@ -830,9 +979,14 @@ function quarterTurn(plan: HousePlan): HousePlan {
     plot: { w: plan.plot.h, h: plan.plot.w },
     floors: plan.floors.map((f) => ({
       ...f,
-      rooms: f.rooms.map((r) => ({ ...rect(r), parts: r.parts?.map(rect) })),
+      rooms: f.rooms.map((r) => ({
+        ...rect(r),
+        parts: r.parts?.map(rect),
+        ...(r.outline ? { outline: r.outline.map(pt) } : {}),
+      })),
       openings: f.openings.map(opening),
       radiators: f.radiators?.map((r) => {
+        if (r.to) return slanted(r, (x) => ({ side: otherSide(x.side) }))
         if (r.axis === 'h')
           return {
             ...r,
@@ -857,6 +1011,13 @@ function quarterTurn(plan: HousePlan): HousePlan {
         d: u.w,
         ...(u.back ? { back: clockwiseSide(u.back) } : {}),
       })),
+      walls: f.walls?.map((w) => {
+        if (w.to) return { ...w, ...xy(pt([w.x, w.y])), to: pt(w.to) }
+        if (w.axis === 'h') return { ...w, axis: 'v' as const, x: H - w.y, y: w.x }
+        return { ...w, axis: 'h' as const, x: H - w.y - w.len, y: w.x }
+      }),
+      drawnWalls: f.drawnWalls?.map((d) => ({ ...d, a: pt(d.a), b: pt(d.b) })),
+      dimensions: f.dimensions?.map((d) => ({ ...d, a: pt(d.a), b: pt(d.b) })),
       placements: f.placements.map((p) => ({
         ...p,
         x: H - p.y,
@@ -866,6 +1027,8 @@ function quarterTurn(plan: HousePlan): HousePlan {
     })),
   }
 }
+
+const xy = (p: [number, number]) => ({ x: p[0], y: p[1] })
 
 // ─── Colour scales ──────────────────────────────────────────────────────────
 
@@ -896,12 +1059,13 @@ export function hueSatColor(hue: number, sat: number): string {
  * `scale` turns cells into the drawing's units.
  */
 export function sliderPanes(
-  w: { axis: 'h' | 'v'; x1: number; y1: number; x2: number; y2: number },
+  w: { axis: 'h' | 'v' | 's'; x1: number; y1: number; x2: number; y2: number },
   scale: number,
   gap: number,
 ): [string, string] {
   const at = (t: number): [number, number] => [(w.x1 + (w.x2 - w.x1) * t) * scale, (w.y1 + (w.y2 - w.y1) * t) * scale]
-  const off: [number, number] = w.axis === 'h' ? [0, gap] : [gap, 0]
+  const n = rightOf(lineThrough([w.x1, w.y1], [w.x2, w.y2]))
+  const off: [number, number] = w.axis === 'h' ? [0, gap] : w.axis === 'v' ? [gap, 0] : [n[0] * gap, n[1] * gap]
   const seg = (t1: number, t2: number, k: number) => {
     const a = at(t1)
     const b = at(t2)

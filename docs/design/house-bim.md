@@ -214,8 +214,8 @@ WebAssembly), and an import replaces the drawing while keeping the devices.
   file does not have goes back to "Not on the plan yet".
 - Left out, and said so after the import: curtain walls, recesses that are
   not doors or windows, doors and windows in no wall, shapes the reader does
-  not understand. Doors and windows on slanted walls come in, but the editor
-  cannot show them yet. A space edge with no wall in the file becomes a wall,
+  not understand. Doors and windows on slanted walls come in and show like
+  any other. A space edge with no wall in the file becomes a wall,
   because the editor's rooms are walled.
 - Tested in `@nubisco/bim` with `test/fixtures/foreign-house.ifc`, made by IfcOpenShell the way
   Bonsai makes a file (`test/fixtures/make-foreign-ifc.py`): millimetres, an
@@ -263,16 +263,17 @@ step.
       takes it. Next, the Wall tool (shipped): walls drawn on their own, a
       garden wall, a partition, a fence, at any angle, with their own
       thickness and height. A version 1 floor carries them as `drawnWalls`,
-      and the plan's walls that follow no room edge come back as them. One
-      along x or y holds doors, windows and radiators, which move with it.
+      and the plan's walls that follow no room edge come back as them. It
+      holds doors, windows and radiators at any angle, which move with it.
       Then rooms of any shape (shipped). Decided by Jose on 2026-11-23: any
       polygon. With a room tool, a drag still draws a rectangle, and taps put
       down corners one by one (tap the first again, or Enter, to close).
       Corners are dragged afterwards. A version 1 room carries them as
       `outline`, the rectangle being the box around it. Walls are now found
       from room edges rather than cells (`@nubisco/bim/edges`), so slanted
-      edges are walls too, settable like any other, though doors and windows
-      go only on straight ones until the editor works on version 2. A space
+      edges are walls too, settable like any other, and since 2026-11-24
+      they take doors, windows and radiators (see "Doors on slanted walls"
+      below). A space
       that is not a rectangle and has no rectangles hint comes back as a
       room drawn corner by corner.
    4. The ruler, and resizing the plan to match it (see house-ui.md),
@@ -297,4 +298,23 @@ step.
    2D live plan draws the same outlines, so it shows real thickness too.
    Rooms of any shape already draw, slanted edges included, since stage 4.
 6. **IFC import.** Shipped, see "The IFC import". Then, extracting the
-   shared package for Keystone.
+   shared package for Keystone (shipped as `@nubisco/bim`).
+7. **Doors on slanted walls.** Shipped on 2026-11-24, chosen by Jose after
+   the package. Doors, windows, open walls and radiators go in walls at any
+   angle, room edges and drawn walls alike.
+   - Version 2 always could: an opening is a wall and a distance along it.
+     Version 1, which the editor draws, gains `to` on an opening or radiator:
+     its far end, the near one being (x, y). It always runs towards +x, and
+     its sides are `left` and `right` as version 2 names them (the right of
+     a wall running towards +x faces down the plan). Its ends are not whole
+     millimetres, so `len` keeps the width exact and the converter finds the
+     wall within a millimetre and gives back `at` exactly, turning hinge and
+     side round when the wall runs towards -x (`@nubisco/bim` 1.1.0).
+   - The editor measures every wall line the same way (`Line` in
+     `apps/ui/src/house/geometry.ts`: a point and a unit direction, a place
+     on it being its dot product with the direction), so along x or y the
+     numbers are what they always were. On a slanted wall a door snaps by
+     its distance from the stretch's first end, not to the grid.
+   - Turning the 3D view now turns rooms drawn corner by corner, drawn walls,
+     wall thicknesses and dimension lines too. Before, only rectangles and
+     what sat on walls along x or y turned.
