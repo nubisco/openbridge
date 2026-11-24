@@ -588,10 +588,11 @@
   dominant-baseline: middle;
   pointer-events: none;
 }
+// A wall in the editor, as thick as it is built, corners mitred.
 .hv-ewall {
+  fill: #bfe2ff;
   stroke: #bfe2ff;
-  stroke-width: calc(5px / var(--hv-zoom, 1));
-  stroke-linecap: square;
+  stroke-linejoin: miter;
   pointer-events: none;
 }
 .hv-edraftwall {
@@ -602,6 +603,7 @@
   pointer-events: none;
 }
 .hv-ewall.hv-sel {
+  fill: #3ccfc0;
   stroke: #3ccfc0;
 }
 // A wall's tap target, wider than a thin wall, and only for the Select tool.

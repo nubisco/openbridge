@@ -52,7 +52,7 @@ import {
   type Point,
   type ViewMode,
 } from './geometry'
-import { floorWalls, runPieces, type FloorWall } from './editor'
+import { floorWalls, runPieces, wallGaps, wallOutline, type FloorWall } from './editor'
 import { specOf } from './openings'
 import { ROLLS, coveringDraws, type CoveringDraw } from './coverings'
 import { formatPower, stateText, type LiveDevice } from './live'
@@ -1006,98 +1006,11 @@ function coverings3d(
 
 // ─── Walls as solids ────────────────────────────────────────────────────────
 
-const segDist = (p: Point, a: Point, b: Point) => {
-  const [dx, dy] = [b[0] - a[0], b[1] - a[1]]
-  const t = clamp(((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy || 1), 0, 1)
-  return Math.hypot(p[0] - a[0] - dx * t, p[1] - a[1] - dy * t)
-}
 const unit = (a: Point, b: Point): Point => {
   const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1
   return [(b[0] - a[0]) / l, (b[1] - a[1]) / l]
 }
 const leftOf = (d: Point): Point => [-d[1], d[0]]
-/** Where the line through p along d meets the line through q along e. */
-function meet(p: Point, d: Point, q: Point, e: Point): Point | null {
-  const den = d[0] * e[1] - d[1] * e[0]
-  if (Math.abs(den) < 1e-9) return null
-  const t = ((q[0] - p[0]) * e[1] - (q[1] - p[1]) * e[0]) / den
-  return [p[0] + d[0] * t, p[1] + d[1] * t]
-}
-
-/**
- * The end of a wall at `p`, travelling into it along `din`: its corner on the
- * left of that travel and the one on the right. Two walls meeting at a corner
- * are cut where their faces meet (a mitre, for any angle and either
- * thickness). A wall ending against the side of another reaches into it, and
- * so does one between rooms meeting a corner of outside walls. A free end, or
- * one at a door or window, is cut square.
- */
-function wallEnd(
-  p: Point,
-  din: Point,
-  own: FloorWall,
-  walls: FloorWall[],
-  gaps: Array<[Point, Point]>,
-): [Point, Point] {
-  const h = own.thickness / 2 / CELL_MM
-  const n = leftOf(din)
-  const square = (e: number): [Point, Point] => [
-    [p[0] + din[0] * e + n[0] * h, p[1] + din[1] * e + n[1] * h],
-    [p[0] + din[0] * e - n[0] * h, p[1] + din[1] * e - n[1] * h],
-  ]
-  const atEnd = (q: Point) => Math.hypot(q[0] - p[0], q[1] - p[1]) < 1e-3
-  if (!atEnd(own.a) && !atEnd(own.b)) return square(0)
-  const corners: Array<{ v: Point; h: number; inner: boolean }> = []
-  let into = 0
-  // Half the thickness of a wall at the corner whose end there is a door or window.
-  let blocked = 0
-  for (const g of walls) {
-    if (g === own) continue
-    const gu = unit(g.a, g.b)
-    if (Math.abs(din[0] * gu[1] - din[1] * gu[0]) < 1e-6) continue
-    const hg = g.thickness / 2 / CELL_MM
-    // A door, window or open stretch at the corner: there is no wall there to meet.
-    const open = gaps.some(
-      ([a, b]) => segDist(p, a, b) < 1e-3 && Math.abs(gu[0] * (b[1] - a[1]) - gu[1] * (b[0] - a[0])) < 1e-6,
-    )
-    if (open && (atEnd(g.a) || atEnd(g.b))) {
-      blocked = Math.max(blocked, hg)
-      continue
-    }
-    if (atEnd(g.a)) corners.push({ v: gu, h: hg, inner: g.inner })
-    else if (atEnd(g.b)) corners.push({ v: [-gu[0], -gu[1]], h: hg, inner: g.inner })
-    else if (segDist(p, g.a, g.b) < 1e-3) {
-      // Against the side of a wall running past: reach its far face.
-      const sin = Math.abs(din[0] * gu[1] - din[1] * gu[0])
-      into = Math.max(into, hg / sin)
-    }
-  }
-  // Where more than two walls meet, an outside wall turns the corner with the
-  // other outside wall, and a wall between rooms butts into them.
-  const pair = corners.length === 1 ? corners : corners.filter((c) => c.inner === own.inner)
-  if (pair.length === 1 && !into && !blocked && !(own.inner && corners.length > 1)) {
-    const { v, h: hg } = pair[0]
-    const m = leftOf(v)
-    const l = meet([p[0] + n[0] * h, p[1] + n[1] * h], din, [p[0] + m[0] * hg, p[1] + m[1] * hg], v)
-    const r = meet([p[0] - n[0] * h, p[1] - n[1] * h], din, [p[0] - m[0] * hg, p[1] - m[1] * hg], v)
-    // A very sharp corner would run its point far out: cut it square instead.
-    const far = 4 * Math.max(h, hg)
-    if (l && r && Math.hypot(l[0] - p[0], l[1] - p[1]) < far && Math.hypot(r[0] - p[0], r[1] - p[1]) < far)
-      return [l, r]
-  }
-  // A wall between rooms stops at a corner of outside walls, which close it.
-  if (own.inner && corners.length > 1) return square(into)
-  return square(Math.max(into, blocked, ...corners.map((c) => c.h)))
-}
-
-/** A piece of wall as its outline on the floor: start left, end left, end right, start right. */
-function wallOutline(A: Point, B: Point, own: FloorWall, walls: FloorWall[], gaps: Array<[Point, Point]>): Point[] {
-  const u = unit(A, B)
-  const [eL, eR] = wallEnd(B, u, own, walls, gaps)
-  // Travelling into the start, the wall's left is on the right.
-  const [sR, sL] = wallEnd(A, [-u[0], -u[1]], own, walls, gaps)
-  return [sL, eL, eR, sR]
-}
 
 /** A plain outline for a piece of wall in a door's or window's run: square both ends. */
 function squareOutline(A: Point, B: Point, half: number): Point[] {
@@ -1458,12 +1371,7 @@ export function renderFloor(
   const walls = floorWalls(floor)
   const runs = wallRuns(floor)
   // Where the walls are not: doors, windows and open stretches.
-  const gaps = runs
-    .filter((r) => r.type !== 'wall')
-    .map((r): [Point, Point] => [
-      [r.x1, r.y1],
-      [r.x2, r.y2],
-    ])
+  const gaps = wallGaps(runs)
   for (const w of runs) {
     // An open stretch is a wall that is not there: nothing to draw.
     if (w.type === 'open') continue
