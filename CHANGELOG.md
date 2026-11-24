@@ -1,3 +1,10 @@
+# [1.43.0](https://github.com/nubisco/openbridge/compare/v1.42.1...v1.43.0) (2026-11-24)
+
+
+### Features
+
+* **house:** doors, windows and radiators in slanted walls ([#63](https://github.com/nubisco/openbridge/issues/63)) ([63842f4](https://github.com/nubisco/openbridge/commit/63842f42bc350ca14ee67548f556a732858f1476))
+
 ## [1.42.1](https://github.com/nubisco/openbridge/compare/v1.42.0...v1.42.1) (2026-11-24)
 
 
