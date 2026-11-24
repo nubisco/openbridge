@@ -192,7 +192,7 @@ export interface IfcOptions {
 // ─── The mapping's choices ──────────────────────────────────────────────────
 
 /** Heights of furniture, in millimetres, when the plan does not give one. */
-const FURNITURE_HEIGHT: Record<Furniture['kind'], number> = {
+export const FURNITURE_HEIGHT: Record<Furniture['kind'], number> = {
   table: 750,
   cabinet: 900,
   island: 900,
@@ -210,7 +210,7 @@ const FURNITURE_HEIGHT: Record<Furniture['kind'], number> = {
   pergola: 2500,
 }
 
-const FURNITURE_NAME: Record<Furniture['kind'], string> = {
+export const FURNITURE_NAME: Record<Furniture['kind'], string> = {
   table: 'Table',
   cabinet: 'Cabinet',
   island: 'Kitchen island',
@@ -421,6 +421,17 @@ export function toIfc(plan: Plan, opts: IfcOptions): string {
     null,
   )
   rel('IFCRELAGGREGATES', 'project', project, [site])
+  // The plot and the editor's snapping step, which IFC has no place for, so an import gets them back.
+  psets.push({
+    key: 'site',
+    name: 'House_Site',
+    on: site,
+    props: [
+      ['Width', T('IFCPOSITIVELENGTHMEASURE', m(plan.site.w))],
+      ['Depth', T('IFCPOSITIVELENGTHMEASURE', m(plan.site.h))],
+      ['Snap', T('IFCPOSITIVELENGTHMEASURE', m(plan.snap))],
+    ],
+  })
   rel('IFCRELAGGREGATES', 'site', site, [building])
 
   // Walls of one thickness share a layer set.

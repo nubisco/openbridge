@@ -13,6 +13,18 @@
           Export IFC
         </NbButton>
         <template v-if="mode === 'edit'">
+          <!-- A building model from other software, read in the browser in place of the drawing. -->
+          <NbButton v-if="!phone" size="sm" variant="ghost" icon="upload-simple" @click="ifcInput?.click()">
+            Import IFC
+          </NbButton>
+          <input
+            ref="ifcInput"
+            class="house__file"
+            type="file"
+            accept=".ifc"
+            aria-label="IFC file to import"
+            @change="importIfc"
+          />
           <NbButton size="sm" variant="ghost" :disabled="saving" @click="discard">Discard</NbButton>
           <NbButton size="sm" variant="primary" :loading="saving" @click="save">Save plan</NbButton>
         </template>
@@ -94,9 +106,9 @@ import type { HousePlan } from '@/api'
 import { useHouseStore } from '@/stores/house'
 import { useInspectorStore } from '@/stores/inspector'
 import { useLayoutStore } from '@/stores/layout'
-import { emptyPlan, tidy } from '@/house/editor'
+import { emptyPlan, replacePlan, tidy } from '@/house/editor'
 import { setPower, tapToggles } from '@/house/control'
-import { downloadIfc, houseIfc } from '@/house/ifc'
+import { downloadIfc, houseIfc, readIfc } from '@/house/ifc'
 import { fromV1 } from '@house-model/convert'
 import type { HousePlan as PlanV1 } from '@house-model/v1'
 import HouseStage from '@/components/house/HouseStage.vue'
@@ -264,6 +276,39 @@ function exportIfc() {
   }
 }
 
+const ifcInput = ref<HTMLInputElement | null>(null)
+
+/**
+ * Read an IFC file in place of the drawing being edited. It is a change like
+ * any other: Undo puts the drawing back, and nothing is saved until Save plan.
+ */
+async function importIfc(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file || !draft.value) return
+  let read: ReturnType<typeof readIfc>
+  try {
+    read = readIfc(await file.text(), draft.value)
+  } catch (err) {
+    toast.error((err as Error).message, { title: 'Could not read the file' })
+    return
+  }
+  const ok = await confirm({
+    title: 'Replace the drawing',
+    subjectLabel: 'File',
+    subject: file.name,
+    message: `It holds ${read.summary}. It takes the place of what is drawn now, and devices stay where they are on the floor at the same level. Undo puts the drawing back, and nothing is saved until you save the plan.`,
+    confirmLabel: 'Replace the drawing',
+    tone: 'neutral',
+  })
+  if (!ok || !draft.value) return
+  replacePlan(draft.value, read.plan as HousePlan)
+  snap.value = read.snap
+  if (read.notes.length) toast.warning(read.notes.join(' '), { title: 'Imported, with some things left out' })
+  else toast.success(`Imported ${file.name}`)
+}
+
 onBeforeRouteLeave(async () => {
   if (!dirty.value) return true
   return confirm({
@@ -296,6 +341,9 @@ onUnmounted(() => {
 </script>
 
 <style lang="scss" scoped>
+.house__file {
+  display: none;
+}
 .house {
   flex: 1;
   display: flex;
