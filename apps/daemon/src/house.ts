@@ -7,7 +7,7 @@
  * every device in it without a second copy of the truth to update.
  *
  * Stored as plan version 2 (millimetres, walls as elements, see
- * house-model/v2.ts and docs/design/house-bim.md). A version 1 plan, from the
+ * @nubisco/bim/v2 and docs/design/house-bim.md). A version 1 plan, from the
  * file of an older OpenBridge or a tab opened before the update, is still
  * accepted and converted, keeping what version 1 cannot say from the plan it
  * replaces.
@@ -20,10 +20,10 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs'
 import { dirname } from 'path'
 import { Logger } from '@nubisco/openbridge-logger'
-import { area as loopArea, inside, onEdge } from './house-model/cells.js'
-import { fromV1, toV1 } from './house-model/convert.js'
-import { PlanError, validatePlan } from './house-model/validate.js'
-import { LEAVES, type Covering, type Plan } from './house-model/v2.js'
+import { area as loopArea, inside, onEdge } from '@nubisco/bim/cells'
+import { fromV1, toV1 } from '@nubisco/bim/convert'
+import { PlanError, validatePlan } from '@nubisco/bim/validate'
+import { LEAVES, type Covering, type Plan } from '@nubisco/bim/v2'
 import {
   DEVICE_LOOKS,
   FURNITURE_KINDS,
@@ -42,10 +42,10 @@ import {
   type HouseRect,
   type HouseRoom,
   type OpeningSpec,
-} from './house-model/v1.js'
+} from '@nubisco/bim/v1'
 
-export * from './house-model/v1.js'
-export type { Plan } from './house-model/v2.js'
+export * from '@nubisco/bim/v1'
+export type { Plan } from '@nubisco/bim/v2'
 
 const log = Logger.create('house')
 

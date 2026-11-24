@@ -9,7 +9,7 @@
  * folded against the wall.
  */
 import type { HouseFloor, HouseOpening } from '@/api'
-import type { Covering } from '@house-model/v2'
+import type { Covering } from '@nubisco/bim/v2'
 import { clamp, roomAt, type Point } from './geometry'
 import type { LiveDevice } from './live'
 import { coveringsOf, driverOf } from './openings'

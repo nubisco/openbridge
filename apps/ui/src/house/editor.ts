@@ -53,11 +53,11 @@ import {
   type WallSpan,
   type WallUnit,
 } from './geometry'
-import { DEFAULTS } from '@house-model/v2'
-import { area as loopArea } from '@house-model/cells'
-import { wallLines } from '@house-model/convert'
-import { overlapLength } from '@house-model/edges'
-import type { HouseDimension, HouseDrawnWall, HouseFloor as FloorV1 } from '@house-model/v1'
+import { DEFAULTS } from '@nubisco/bim/v2'
+import { area as loopArea } from '@nubisco/bim/cells'
+import { wallLines } from '@nubisco/bim/convert'
+import { overlapLength } from '@nubisco/bim/edges'
+import type { HouseDimension, HouseDrawnWall, HouseFloor as FloorV1 } from '@nubisco/bim/v1'
 import { coveringDraws } from './coverings'
 import { KIND_LETTER, type LiveDevice } from './live'
 import { applyPreset, claimCovering, detach, presetCells, type OpeningPreset } from './openings'
@@ -471,7 +471,7 @@ export function resizeOpening(floor: HouseFloor, o: HouseOpening, end: 'start' |
 // ─── Walls ──────────────────────────────────────────────────────────────────
 // Walls follow the room edges. What the person sets on one (thickness,
 // height) is kept on the floor by where the wall is, and the plan's walls
-// take it from there when saved (house-model/convert.ts).
+// take it from there when saved (@nubisco/bim/convert).
 
 /** A wall of a floor, in cells, with what it is built as. */
 export interface FloorWall {

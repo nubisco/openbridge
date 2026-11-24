@@ -1,15 +1,15 @@
 /**
  * The house as an IFC file, from the browser, and an IFC file read back as a drawing. The writer is the model's own
- * (`@house-model/ifc`), which knows nothing of OpenBridge's devices. What each
+ * (`@nubisco/bim/ifc`), which knows nothing of OpenBridge's devices. What each
  * placed device is in IFC is decided here, from its kind and how it looks on
  * the plan.
  */
 import type { HouseLook } from '@/api'
-import { toIfc, type IfcDevice } from '@house-model/ifc'
-import { adoptIds, fromIfc } from '@house-model/ifc-read'
-import { toV1 } from '@house-model/convert'
-import type { HousePlan as HousePlanV1 } from '@house-model/v1'
-import type { Plan } from '@house-model/v2'
+import { toIfc, type IfcDevice } from '@nubisco/bim/ifc'
+import { adoptIds, fromIfc } from '@nubisco/bim/ifc-read'
+import { toV1 } from '@nubisco/bim/convert'
+import type { HousePlan as HousePlanV1 } from '@nubisco/bim/v1'
+import type { Plan } from '@nubisco/bim/v2'
 import type { LiveDevice } from './live'
 
 /** What a plug or switch powers, as IFC sees it. */
