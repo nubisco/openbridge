@@ -1,3 +1,10 @@
+## [1.42.1](https://github.com/nubisco/openbridge/compare/v1.42.0...v1.42.1) (2026-11-24)
+
+
+### Bug Fixes
+
+* **deps:** take the building model from @nubisco/bim ([#62](https://github.com/nubisco/openbridge/issues/62)) ([78b4f26](https://github.com/nubisco/openbridge/commit/78b4f2695f8d013063daf7d6be451e155f72b426))
+
 # [1.42.0](https://github.com/nubisco/openbridge/compare/v1.41.0...v1.42.0) (2026-11-24)
 
 
