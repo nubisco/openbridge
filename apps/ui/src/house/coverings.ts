@@ -10,7 +10,7 @@
  */
 import type { HouseFloor, HouseOpening } from '@/api'
 import type { Covering } from '@nubisco/bim/v2'
-import { clamp, roomAt, type Point } from './geometry'
+import { clamp, openingLine, openingMiddle, rightOf, roomAt, type Point } from './geometry'
 import type { LiveDevice } from './live'
 import { coveringsOf, driverOf } from './openings'
 
@@ -32,9 +32,10 @@ export const ROLLS = new Set<Covering['kind']>(['shutter', 'external-blind', 'bl
  * with none on either side, takes the side with the higher x or y.
  */
 export function insideNormal(floor: HouseFloor, o: HouseOpening): Point {
-  const mx = o.x + (o.axis === 'h' ? o.len / 2 : 0)
-  const my = o.y + (o.axis === 'v' ? o.len / 2 : 0)
-  const n: Point = o.axis === 'h' ? [0, 1] : [1, 0]
+  const [mx, my] = openingMiddle(o)
+  const l = openingLine(o)
+  // At an angle, the right side, which is the one with the higher y.
+  const n: Point = l.axis === 's' ? rightOf(l) : o.axis === 'h' ? [0, 1] : [1, 0]
   const walled = (k: number) => roomAt(floor, mx + n[0] * k * 0.25, my + n[1] * k * 0.25)?.kind === 'room'
   return walled(-1) && !walled(1) ? [-n[0], -n[1]] : n
 }

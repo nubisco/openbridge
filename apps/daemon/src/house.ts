@@ -403,7 +403,11 @@ export function roomsByRef(stored: HousePlan | Plan | null): Map<string, DeviceR
       let x = pl.x
       let y = pl.y
       const opening = pl.opening ? f.openings.find((o) => o.id === pl.opening) : undefined
-      if (opening) {
+      if (opening?.to) {
+        // In a slanted wall: halfway to its far end.
+        x = (opening.x + opening.to[0]) / 2
+        y = (opening.y + opening.to[1]) / 2
+      } else if (opening) {
         x = opening.x + (opening.axis === 'h' ? opening.len / 2 : 0)
         y = opening.y + (opening.axis === 'v' ? opening.len / 2 : 0)
       }

@@ -739,6 +739,10 @@ import {
   setSnap,
   snap as snapTo,
   toMm,
+  along,
+  openingLine,
+  openingSpan,
+  type OnWall,
   type Point,
 } from '@/house/geometry'
 import {
@@ -781,6 +785,9 @@ import {
   setDrawnLength,
   wallPoint,
   onDrawnWall,
+  holdOnWall,
+  followWall,
+  type Held,
   addDimension,
   dimensionLength,
   removeDimension,
@@ -1491,10 +1498,18 @@ function setMount(mount: HouseLightMount) {
   else p.mount = mount
 }
 
+/** How far along a door or radiator the pointer took it, so a drag keeps that spot under it. */
+const grabAlong = (x: OnWall, p: { x: number; y: number }) => along(openingLine(x), [p.x, p.y]) - openingSpan(x)[0]
+
 /** "Hinged on the left, opens down", in the plan's own terms. */
 const doorText = computed(() => {
   const o = opening.value
   if (!o) return ''
+  // At an angle a wall runs left to right, and its right side is the lower one on the plan.
+  if (o.to) {
+    const hinge = o.hinge === 'end' ? 'right' : 'left'
+    return `Hinged at the ${hinge} end, opens ${o.opens === 'left' ? 'up' : 'down'}wards on the plan.`
+  }
   const hinge = o.axis === 'h' ? (o.hinge === 'end' ? 'right' : 'left') : o.hinge === 'end' ? 'bottom' : 'top'
   const side = o.opens ?? (o.axis === 'h' ? 'down' : 'right')
   return `Hinged at the ${hinge}, opens ${side === 'up' || side === 'down' ? side + 'wards' : 'to the ' + side} on the plan.`
@@ -1669,7 +1684,7 @@ type Drag =
       b: Point
       carried: ReturnType<typeof onDrawnWall>
     }
-  | { type: 'wend'; d: HouseDrawnWall; end: 'a' | 'b' }
+  | { type: 'wend'; d: HouseDrawnWall; end: 'a' | 'b'; held: Held[] }
   | { type: 'ddraw'; a: Point }
   | { type: 'dend'; d: HouseDimension; end: 'a' | 'b' }
   | { type: 'fmove'; f: HouseFurniture; grab: { x: number; y: number } }
@@ -1689,7 +1704,7 @@ function grabOpening(t: Element | null, p: { x: number; y: number }): boolean {
   if (rad) {
     clearSelection()
     selRadiator.value = rad.id
-    drag = { type: 'rmove', r: rad, grab: (rad.axis === 'h' ? p.x : p.y) - (rad.axis === 'h' ? rad.x : rad.y) }
+    drag = { type: 'rmove', r: rad, grab: grabAlong(rad, p) }
     return true
   }
   const end = t?.closest('[data-ohandle]')?.getAttribute('data-ohandle')
@@ -1702,7 +1717,7 @@ function grabOpening(t: Element | null, p: { x: number; y: number }): boolean {
   if (!o) return false
   clearSelection()
   selOpening.value = o.id
-  drag = { type: 'omove', o, grab: (o.axis === 'h' ? p.x : p.y) - (o.axis === 'h' ? o.x : o.y) }
+  drag = { type: 'omove', o, grab: grabAlong(o, p) }
   return true
 }
 
@@ -1827,12 +1842,7 @@ function onDown(e: PointerEvent) {
       const o =
         existing ?? (tool.value === 'open' ? addOpenWall(floor.value, u) : addOpening(floor.value, u, toolPreset()))
       if (o) selOpening.value = o.id
-      if (existing)
-        drag = {
-          type: 'omove',
-          o: existing,
-          grab: (u.axis === 'h' ? p.x : p.y) - (u.axis === 'h' ? existing.x : existing.y),
-        }
+      if (existing) drag = { type: 'omove', o: existing, grab: grabAlong(existing, p) }
     }
   } else if (tool.value === 'furniture') {
     if (!grabFurniture(t, p)) {
@@ -1863,7 +1873,10 @@ function onDown(e: PointerEvent) {
     if (corner && room.value?.outline) {
       drag = { type: 'corner', room: room.value, i: Number(corner) }
     } else if (wend && wall.value?.drawn) {
-      drag = { type: 'wend', d: wall.value.drawn, end: wend === 'b' ? 'b' : 'a' }
+      const d = wall.value.drawn
+      const end = wend === 'b' ? 'b' : 'a'
+      const [fixed, moving] = end === 'a' ? [d.b, d.a] : [d.a, d.b]
+      drag = { type: 'wend', d, end, held: holdOnWall(floor.value, d, fixed, moving) }
     } else if (handle && room.value) {
       const [index, corner] = (handle.getAttribute('data-handle') as string).split(':')
       const r = roomRects(room.value)[Number(index)]
@@ -1971,11 +1984,17 @@ function onMove(e: PointerEvent) {
     const dy = snapTo(p.y - drag.start.y, true)
     const by = (q: Point): Point => [toMm(q[0] + dx), toMm(q[1] + dy)]
     if (moveDrawnWall(floor.value, drag.d, by(drag.a), by(drag.b)))
-      for (const c of drag.carried) Object.assign(c.o, { x: toMm(c.x + dx), y: toMm(c.y + dy) })
+      for (const c of drag.carried) {
+        // At an angle its ends are not whole millimetres: moved exactly, both of them.
+        if (c.to) Object.assign(c.o, { x: c.x + dx, y: c.y + dy, to: [c.to[0] + dx, c.to[1] + dy] })
+        else Object.assign(c.o, { x: toMm(c.x + dx), y: toMm(c.y + dy) })
+      }
   } else if (drag.type === 'wend') {
     const other = drag.end === 'a' ? drag.d.b : drag.d.a
     const q = wallPoint(floor.value, p.x, p.y, other, drag.d.id)
-    moveDrawnWall(floor.value, drag.d, drag.end === 'a' ? q : drag.d.a, drag.end === 'b' ? q : drag.d.b)
+    // What is on it keeps its distance from the end that stays, turning with the wall.
+    if (moveDrawnWall(floor.value, drag.d, drag.end === 'a' ? q : drag.d.a, drag.end === 'b' ? q : drag.d.b))
+      followWall(drag.held, other, q)
   } else if (drag.type === 'fmove') {
     moveFurniture(props.plan, drag.f, p.x, p.y, drag.grab)
   } else if (drag.type === 'fresize') {

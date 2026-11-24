@@ -50,6 +50,11 @@ works out which side is inside): a box and slats for what rolls, curtains in
 folds, an awning's canvas. A covering a device drives is drawn as the device
 reports it, one worked by hand is drawn open.
 
+Doors, windows, open walls and radiators go in any wall, at any angle (since
+2026-11-24). On a slanted wall the panel says the hinge is at the left or right
+end and the door opens up or down the plan, as a wall running left to right
+has its sides.
+
 One Door tool and one Window tool. Presets in the Library: wooden door (white),
 wooden door (brown), glazed swing door, sliding glass door, sliding window,
 full height fixed window, casement window. Anything glazed gets a Coverings

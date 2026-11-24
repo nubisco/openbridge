@@ -12,7 +12,7 @@
 import type { OpeningSpec } from '@nubisco/bim/v1'
 import { COVERING_KINDS, DEFAULTS, DOOR_OPERATIONS, WINDOW_OPERATIONS, type Covering } from '@nubisco/bim/v2'
 import type { HouseFloor, HouseOpening, HousePlacement } from '@/api'
-import { CELLS_PER_M } from './geometry'
+import { CELLS_PER_M, openingMiddle } from './geometry'
 
 export type { OpeningSpec }
 export type CoveringKind = (typeof COVERING_KINDS)[number]
@@ -317,8 +317,7 @@ export function drive(floor: HouseFloor, o: HouseOpening, id: string, p: HousePl
   if (before && before !== p) detach(before)
   p.opening = o.id
   p.covering = id
-  p.x = o.x + (o.axis === 'h' ? o.len / 2 : 0)
-  p.y = o.y + (o.axis === 'v' ? o.len / 2 : 0)
+  ;[p.x, p.y] = openingMiddle(o)
 }
 
 /**

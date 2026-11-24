@@ -277,6 +277,8 @@ export interface HouseOpening {
   y: number
   axis: 'h' | 'v'
   len: number
+  /** On a slanted wall: it runs from (x, y) to here, towards +x, and `axis` means nothing. */
+  to?: [number, number]
   /** A door's hinge end: lower x or y (`start`, the default) or the other. */
   hinge?: 'start' | 'end'
   /** The side a door swings into, on the plan. Default `down` or `right`. */
@@ -317,6 +319,8 @@ export interface HouseRadiator {
   y: number
   axis: 'h' | 'v'
   len: number
+  /** On a slanted wall: it runs from (x, y) to here, towards +x. Its side is then `left` or `right` of that. */
+  to?: [number, number]
   side: 'up' | 'down' | 'left' | 'right'
 }
 
