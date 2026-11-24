@@ -179,6 +179,43 @@ Shipped in stage 3:
   plan and every device mapping were checked the same way when it shipped.
   Opening the export in Bonsai is still to do.
 
+## The IFC import
+
+Decided by Jose on 2026-11-24: our own reader, like the writer (no
+WebAssembly), and an import replaces the drawing while keeping the devices.
+
+- `apps/daemon/src/house-model/ifc-read.ts` (`fromIfc`): a STEP reader, then
+  the building read from the structures the common tools write. Units from
+  the project (millimetres, metres, feet). Storeys by height, the one nearest
+  0 being the ground floor. Walls by their Axis, or the middle of an extruded
+  rectangle or of their footprint, with their thickness and height from the
+  body (a material layer set when there is no body). Spaces by their
+  footprint, named by LongName before Name. Doors and windows through the
+  openings that void a wall (`IfcRelVoidsElement`, `IfcRelFillsElement`),
+  measured along it. Radiators (`IfcSpaceHeater`), furniture and sanitary
+  terminals by type or name. Meshes count by the box round them. Devices are
+  not read.
+- A room drawn to the inside faces of its walls, as most tools draw one, is
+  moved out onto the walls' middle lines, as the plan draws rooms.
+- A house off the plan's corner, or at negative coordinates, is moved onto
+  the plot by whole half metres with a 1 m margin.
+- Our own export carries the plot and the snapping step in `House_Site` on
+  `IfcSite`, and how openings work and coverings in its property sets, so an
+  export read back is the same building (tested, and checked on the real
+  plan). Floors and rooms keep their ids by level and name (`adoptIds`).
+- "Import IFC" is on the House page while editing. The file is read in the
+  browser and replaces the drawing as one step that Undo takes back. Devices
+  stay where they are on the floor at the same level, and one on a floor the
+  file does not have goes back to "Not on the plan yet".
+- Left out, and said so after the import: curtain walls, recesses that are
+  not doors or windows, doors and windows in no wall, shapes the reader does
+  not understand. Doors and windows on slanted walls come in, but the editor
+  cannot show them yet. A space edge with no wall in the file becomes a wall,
+  because the editor's rooms are walled.
+- Tested with `fixtures/foreign-house.ifc`, made by IfcOpenShell the way
+  Bonsai makes a file (`fixtures/make-foreign-ifc.py`): millimetres, an
+  origin off the house, spaces to the inside faces, indexed poly curves.
+
 ## Stages
 
 Each stage ships on its own, and the live house view keeps working at every
@@ -254,4 +291,5 @@ step.
    the middle of the wall's thickness, with solid wall above and below. The
    2D live plan draws the same outlines, so it shows real thickness too.
    Rooms of any shape already draw, slanted edges included, since stage 4.
-6. **IFC import.** Then, extracting the shared package for Keystone.
+6. **IFC import.** Shipped, see "The IFC import". Then, extracting the
+   shared package for Keystone.
