@@ -9,8 +9,8 @@
  * sliding door, a glass door), so the plan and the 3D view draw it as before.
  */
 
-import type { OpeningSpec } from '@house-model/v1'
-import { COVERING_KINDS, DEFAULTS, DOOR_OPERATIONS, WINDOW_OPERATIONS, type Covering } from '@house-model/v2'
+import type { OpeningSpec } from '@nubisco/bim/v1'
+import { COVERING_KINDS, DEFAULTS, DOOR_OPERATIONS, WINDOW_OPERATIONS, type Covering } from '@nubisco/bim/v2'
 import type { HouseFloor, HouseOpening, HousePlacement } from '@/api'
 import { CELLS_PER_M } from './geometry'
 

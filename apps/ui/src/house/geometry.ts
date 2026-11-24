@@ -7,7 +7,7 @@
  * turns the few lengths that are really metres (wall height, how high a lamp
  * hangs) into cells.
  */
-import { area as loopArea, inside, onEdge, rectLoops } from '@house-model/cells'
+import { area as loopArea, inside, onEdge, rectLoops } from '@nubisco/bim/cells'
 import type {
   HouseFloor,
   HouseFurniture,

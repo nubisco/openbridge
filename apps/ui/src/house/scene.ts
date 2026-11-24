@@ -17,7 +17,7 @@ import type {
   HousePlan,
   HouseRoom,
 } from '@/api'
-import { Grid, area as loopArea } from '@house-model/cells'
+import { Grid, area as loopArea } from '@nubisco/bim/cells'
 import {
   CELLS_PER_M,
   ISO_FLOOR_MATRIX,

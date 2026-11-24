@@ -1,5 +1,5 @@
-import type { HouseDimension, HouseDrawnWall, HouseWallSpec, OpeningSpec } from '@house-model/v1'
-import type { Plan } from '@house-model/v2'
+import type { HouseDimension, HouseDrawnWall, HouseWallSpec, OpeningSpec } from '@nubisco/bim/v1'
+import type { Plan } from '@nubisco/bim/v2'
 const BASE = '/api'
 
 export async function get<T>(path: string): Promise<T> {
@@ -247,8 +247,8 @@ export interface DeviceRoom {
 // ─── House plan ─────────────────────────────────────────────────────────────
 // The server stores plan version 2 (millimetres, walls as elements). The
 // editor and views below still draw version 1, in grid cells of `grid`
-// metres, through the adapter in @house-model/convert. These types mirror
-// apps/daemon/src/house-model/v1.ts.
+// metres, through the adapter in @nubisco/bim/convert. These types mirror
+// @nubisco/bim/v1.
 
 export type HouseRoomKind = 'room' | 'outdoor' | 'paved' | 'pool'
 
@@ -373,7 +373,7 @@ export interface HousePlan {
   floors: HouseFloor[]
 }
 
-/** The plan as stored: version 2, in millimetres (apps/daemon/src/house-model/v2.ts). */
+/** The plan as stored: version 2, in millimetres (@nubisco/bim/v2). */
 export type HouseModel = Plan
 
 export interface StoredHouse {

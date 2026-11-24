@@ -708,8 +708,8 @@ import HouseOutline, { outlineId, type OutlinePick } from '@/components/house/Ho
 import HouseStage from '@/components/house/HouseStage.vue'
 import type { LibraryItem } from '@/house/library'
 import { RULER_SIZE } from '@/house/ruler'
-import { History } from '@house-model/history'
-import type { HouseDimension, HouseDrawnWall } from '@house-model/v1'
+import { History } from '@nubisco/bim/history'
+import type { HouseDimension, HouseDrawnWall } from '@nubisco/bim/v1'
 import type {
   HouseFloor,
   HouseFurniture,

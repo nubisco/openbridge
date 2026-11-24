@@ -102,11 +102,16 @@ converts to millimetres without rounding, and each room edge that today draws a
 wall becomes a wall element of the default thickness. The daemon keeps a copy of
 the version 1 file the first time it migrates one (`house.json.v1.json`).
 
-How it is built (stage 1, `apps/daemon/src/house-model/`):
+How it is built (stage 1, in OpenBridge first, now the package `@nubisco/bim`):
 
+- Decided by Jose on 2026-11-24: the model is its own package,
+  `@nubisco/bim` (github.com/nubisco/bim, MIT), so Keystone can use it too.
+  OpenBridge depends on it from npm, the daemon and the UI alike
+  (`@nubisco/bim/convert`, `@nubisco/bim/v2` and so on). Its tests, the
+  IFC fixtures and the IfcOpenShell check live there.
 - `v1.ts` and `v2.ts` are the two formats, `convert.ts` goes between them,
   `validate.ts` checks a version 2 plan, `cells.ts` turns cells into outlines
-  and back. All pure TypeScript, imported by the UI as `@house-model/*`.
+  and back. All pure TypeScript, with no Node.
 - Walls are the room edges merged into straight runs, cut where a wall changes
   from inner (100 mm, rooms both sides) to outer (300 mm). Height 2500 mm,
   storeys 2800 mm floor to floor.
@@ -160,7 +165,7 @@ relies on to track changes.
 
 Shipped in stage 3:
 
-- The writer and the mapping are `apps/daemon/src/house-model/ifc.ts`
+- The writer and the mapping are `ifc.ts` in `@nubisco/bim`
   (`toIfc`). What a placed device is in IFC is the caller's to say: the UI
   decides it from the device's kind and look in `apps/ui/src/house/ifc.ts`.
 - "Export IFC" is on the House page, in view and while editing. Editing, it
@@ -174,7 +179,7 @@ Shipped in stage 3:
   works, its frame, a covering's side, whether it has a motor) is in the
   property sets `House_Opening`, `House_Covering` and `House_Device`.
 - Not exported yet: heating circuits as pipes.
-- `house-ifc.test.ts` runs IfcOpenShell (`validate-ifc.py` beside it) on
+- `@nubisco/bim`'s `test/ifc.test.ts` runs IfcOpenShell (`validate-ifc.py`) on
   every CI run: the schema, its rules, and building every shape. The real
   plan and every device mapping were checked the same way when it shipped.
   Opening the export in Bonsai is still to do.
@@ -184,7 +189,7 @@ Shipped in stage 3:
 Decided by Jose on 2026-11-24: our own reader, like the writer (no
 WebAssembly), and an import replaces the drawing while keeping the devices.
 
-- `apps/daemon/src/house-model/ifc-read.ts` (`fromIfc`): a STEP reader, then
+- `ifc-read.ts` in `@nubisco/bim` (`fromIfc`): a STEP reader, then
   the building read from the structures the common tools write. Units from
   the project (millimetres, metres, feet). Storeys by height, the one nearest
   0 being the ground floor. Walls by their Axis, or the middle of an extruded
@@ -212,8 +217,8 @@ WebAssembly), and an import replaces the drawing while keeping the devices.
   not understand. Doors and windows on slanted walls come in, but the editor
   cannot show them yet. A space edge with no wall in the file becomes a wall,
   because the editor's rooms are walled.
-- Tested with `fixtures/foreign-house.ifc`, made by IfcOpenShell the way
-  Bonsai makes a file (`fixtures/make-foreign-ifc.py`): millimetres, an
+- Tested in `@nubisco/bim` with `test/fixtures/foreign-house.ifc`, made by IfcOpenShell the way
+  Bonsai makes a file (`test/fixtures/make-foreign-ifc.py`): millimetres, an
   origin off the house, spaces to the inside faces, indexed poly curves.
 
 ## Stages
@@ -237,7 +242,7 @@ step.
    steps, each usable on its own:
    1. Undo and redo (shipped). A step is the plan once a change settles: each
       tap or drag when it ends, typing when it pauses. Whole copies of the
-      plan, in `house-model/history.ts`.
+      plan, in `@nubisco/bim/history`.
    2. Millimetres everywhere (shipped). Decided by Jose on 2026-11-23: the
       editor keeps drawing version 1's shapes (rectangles, walls along room
       edges) first, with every value exact to the millimetre, and real wall
@@ -245,7 +250,7 @@ step.
       (0.5 m, 10 cm, 1 cm, off) and saved as the plan's `snap`. The editor
       saves version 2, converting in the browser against the stored plan.
       Shapes are no longer walked cell by cell: `Grid` in
-      `house-model/cells.ts` cuts the plane at every corner, so the same
+      `@nubisco/bim/cells` cuts the plane at every corner, so the same
       algorithms work on any measurements, and the UI's walls are stretches
       along a line (`Walls` in `house/geometry.ts`). The live view and 3D
       draw the exact values too.
@@ -265,7 +270,7 @@ step.
       down corners one by one (tap the first again, or Enter, to close).
       Corners are dragged afterwards. A version 1 room carries them as
       `outline`, the rectangle being the box around it. Walls are now found
-      from room edges rather than cells (`house-model/edges.ts`), so slanted
+      from room edges rather than cells (`@nubisco/bim/edges`), so slanted
       edges are walls too, settable like any other, though doors and windows
       go only on straight ones until the editor works on version 2. A space
       that is not a rectangle and has no rectangles hint comes back as a

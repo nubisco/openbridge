@@ -23,7 +23,7 @@ import type { DeviceObservation, ObservationStore } from '../observations.js'
 import { DeviceSeries, type Point } from '../timeseries.js'
 import type { HomeKitServiceTypes } from '../homekit-service-type.js'
 import { roomRects, type DeviceRoom, type HouseStore } from '../house.js'
-import { toV1 } from '../house-model/convert.js'
+import { toV1 } from '@nubisco/bim/convert'
 
 export type ControlHandler = (value: unknown) => void | Promise<void>
 

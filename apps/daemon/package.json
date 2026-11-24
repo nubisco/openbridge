@@ -58,6 +58,7 @@
     "@fastify/cors": "^11.3.1",
     "@fastify/static": "^10.1.7",
     "@fastify/websocket": "^11.3.4",
+    "@nubisco/bim": "^1.0.0",
     "@nubisco/openbridge-compatibility-homebridge": "workspace:*",
     "@nubisco/openbridge-config": "workspace:*",
     "@nubisco/openbridge-core": "workspace:*",
