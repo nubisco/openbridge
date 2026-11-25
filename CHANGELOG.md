@@ -1,3 +1,10 @@
+# [1.48.0](https://github.com/nubisco/openbridge/compare/v1.47.0...v1.48.0) (2026-11-25)
+
+
+### Features
+
+* **brand:** the icon is one bascule bridge with both leaves raised ([76ad2e8](https://github.com/nubisco/openbridge/commit/76ad2e8ce4b696cba365a878e65e2f384eedbd0e))
+
 # [1.47.0](https://github.com/nubisco/openbridge/compare/v1.46.0...v1.47.0) (2026-11-25)
 
 
