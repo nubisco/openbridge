@@ -85,6 +85,10 @@ centre line. Corners, wall ends and openings within reach still win. Drawn
 nearly straight across or down, the tape stays exactly straight and meets the
 face where that line crosses it.
 
+A stretch that cannot go through says what stops it by name (the room, or
+the door, window or radiator and the rooms it sits between) and outlines it
+in red on its floor until the next click.
+
 ### Stretching at one end
 
 One scale cannot fix a plan drawn by eye, where each room is off by its own

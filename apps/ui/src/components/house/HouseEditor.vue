@@ -392,8 +392,8 @@
 
             <NbPanel v-else-if="dim" title="Dimension" :flat="true">
               <p class="house-editor__muted">
-                {{ metres(dimLength) }} m on the plan. Near a wall, an end lands on its face, so measure the same faces
-                you measured on site.
+                {{ metres(dimLength) }} m on the plan. Near a wall, an end lands on the wall's face, as a tape measure
+                on site does.
               </p>
               <NbField v-slot="{ id }" label="Real length (m)" orientation="stack">
                 <NbNumberInput :id="id" v-model="dimTarget" :min="0.01" :max="200" :step="0.001" size="sm" />
@@ -810,6 +810,7 @@ import {
   removeDimension,
   resizePlan,
   stretchPlan,
+  type StretchStop,
   rulerPoint,
   addPolygonRoom,
   moveCorner,
@@ -961,6 +962,8 @@ const selWall = ref<string | null>(null)
 const selDim = ref<string | null>(null)
 /** A dimension being drawn with the Ruler. */
 const draftDim = ref<{ a: Point; b: Point } | null>(null)
+// What stopped the last stretch, outlined on its floor until the next click.
+const stretchStop = ref<StretchStop | null>(null)
 /** What the Door and Window tools put down next. */
 const doorPreset = ref(DOOR_PRESETS[0].id)
 const windowPreset = ref(WINDOW_PRESETS[0].id)
@@ -1203,6 +1206,7 @@ const markup = computed(() =>
     selectedWall: selWall.value,
     selectedDimension: selDim.value,
     draftDimension: draftDim.value,
+    flag: stretchStop.value?.floor === floorId.value ? stretchStop.value.box : null,
     draft: draft.value,
     draftWall: draftWall.value,
     draftPolygon: polyDraft.value
@@ -1448,7 +1452,8 @@ async function stretchToMatch() {
   const before = fixedAt(d[ends.fixed])
   const p = props.plan
   const stopped = stretchPlan(p, axis, d[ends.moving][ends.k], dimSide.value, stretchBy.value)
-  if (stopped) return void toast.warning(`It cannot stretch that way: ${stopped}`)
+  stretchStop.value = stopped
+  if (stopped) return void toast.warning(`It cannot stretch that way: ${stopped.text}`)
   if (p.plot.w > 200 * CELLS_PER_M || p.plot.h > 200 * CELLS_PER_M) toast.warning('The plot is now over 200 m across.')
   settle()
   await nextTick()
@@ -1884,6 +1889,7 @@ function capture(e: PointerEvent) {
 }
 
 function onDown(e: PointerEvent) {
+  stretchStop.value = null
   if (e.pointerType === 'touch') {
     touches.set(e.pointerId, [e.clientX, e.clientY])
     if (touches.size === 2) {

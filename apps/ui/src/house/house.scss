@@ -946,3 +946,12 @@
   stroke-width: 1;
   pointer-events: none;
 }
+
+// What stopped a stretch, pointed out until the next click.
+.hv-eflag {
+  fill: rgba(255, 99, 99, 0.15);
+  stroke: #ff6363;
+  stroke-width: calc(2px / var(--hv-zoom, 1));
+  stroke-dasharray: calc(6px / var(--hv-zoom, 1)) calc(4px / var(--hv-zoom, 1));
+  pointer-events: none;
+}
