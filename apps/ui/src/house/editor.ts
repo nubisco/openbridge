@@ -1102,7 +1102,13 @@ export function resizePlan(plan: HousePlan, k: number, keepSizes: boolean): void
  * Returns what stops it, and then leaves the plan as it was: shrinking over
  * a room or wall, or something left off its wall.
  */
-export function stretchPlan(plan: HousePlan, axis: 'x' | 'y', at: number, side: 1 | -1, by: number): string | null {
+export function stretchPlan(
+  plan: HousePlan,
+  axis: 'x' | 'y',
+  at: number,
+  side: 1 | -1,
+  by: number,
+): StretchStop | null {
   const next: HousePlan = JSON.parse(JSON.stringify(plan))
   const stopped = stretchAll(next, axis, at, side, by)
   if (stopped) return stopped
@@ -1128,11 +1134,73 @@ export function stretchPlan(plan: HousePlan, axis: 'x' | 'y', at: number, side: 
     }, 0)
   const before = lost(plan)
   const after = lost(next)
-  if (before >= 0 && after !== before)
-    return after < 0 ? 'The plan would no longer be valid.' : 'A door, window or radiator would be left off its wall.'
-  if (off(next) > off(plan)) return 'A door, window or radiator would be left off its wall.'
+  if (before >= 0 && after < 0) return { text: 'The plan would no longer be valid.' }
+  if ((before >= 0 && after !== before) || off(next) > off(plan)) return leftOff(plan, next)
   replacePlan(plan, next)
   return null
+}
+
+/** Why a stretch stops, and where: the floor and the box round what is in the way, in cells. */
+export interface StretchStop {
+  text: string
+  floor?: string
+  box?: { x: number; y: number; w: number; h: number }
+}
+
+const boxOf = (pts: Point[]) => {
+  const xs = pts.map((p) => p[0])
+  const ys = pts.map((p) => p[1])
+  const [x, y] = [Math.min(...xs), Math.min(...ys)]
+  return { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y }
+}
+
+/** The first door, window or radiator that fits its wall in `plan` and would not in `next`. */
+function leftOff(plan: HousePlan, next: HousePlan): StretchStop {
+  const dropped = new Set(
+    (() => {
+      try {
+        return fromV1(next as unknown as PlanV1).dropped.map((d) => d.split(' ').pop())
+      } catch {
+        return []
+      }
+    })(),
+  )
+  for (const f of plan.floors) {
+    const g = next.floors.find((x) => x.id === f.id)
+    if (!g) continue
+    const [wf, wg] = [Walls.of(f), Walls.of(g)]
+    for (const o of [...f.openings, ...(f.radiators ?? [])]) {
+      const n = [...g.openings, ...(g.radiators ?? [])].find((x) => x.id === o.id)
+      if (!n || !openingFits(o, wf)) continue
+      if (openingFits(n, wg) && !dropped.has(o.id)) continue
+      const what = 'type' in o ? OPENING_WORD[o.type] : 'radiator'
+      const where = whereOn(f, openingMiddle(o))
+      const named = plan.floors.length > 1 ? ` on the ${f.name}` : ''
+      return {
+        text: `The ${what}${where}${named} would be left off its wall.`,
+        floor: f.id,
+        box: boxOf([[o.x, o.y], openingEnd(o)]),
+      }
+    }
+  }
+  return { text: 'A door, window or radiator would be left off its wall.' }
+}
+
+const OPENING_WORD: Record<string, string> = { door: 'door', window: 'window', open: 'gap', slider: 'sliding door' }
+
+/** Which rooms' walls a point is on, as words: " on Study's wall", " between Hall and Study". */
+function whereOn(f: HouseFloor, p: Point): string {
+  const names: string[] = []
+  for (const r of [...f.rooms].sort((a, b) => Number(a.kind === 'outdoor') - Number(b.kind === 'outdoor'))) {
+    if (r.kind === 'outdoor' || !r.name) continue
+    const on = roomShapes(r).some((loop) =>
+      loop.some((q, j) => segmentDistance(p, q, loop[(j + 1) % loop.length]) < 0.05),
+    )
+    if (on && !names.includes(r.name)) names.push(r.name)
+  }
+  if (names.length === 1) return ` on ${names[0]}'s wall`
+  if (names.length >= 2) return ` between ${names[0]} and ${names[1]}`
+  return ''
 }
 
 /** The lowest and highest x (k = 0) or y (k = 1) anything on the plan reaches. */
@@ -1147,7 +1215,7 @@ function extent(plan: HousePlan, k: 0 | 1): [number, number] {
   return vs.length ? [Math.min(...vs), Math.max(...vs)] : [0, 0]
 }
 
-function stretchAll(plan: HousePlan, axis: 'x' | 'y', at: number, side: 1 | -1, by: number): string | null {
+function stretchAll(plan: HousePlan, axis: 'x' | 'y', at: number, side: 1 | -1, by: number): StretchStop | null {
   const i = axis === 'x' ? 0 : 1
   const key = axis
   const shift = by * side
@@ -1168,10 +1236,12 @@ function stretchAll(plan: HousePlan, axis: 'x' | 'y', at: number, side: 1 | -1, 
           [q.x, q.y],
           [q.x + q.w, q.y + q.h],
         ])
-      if (pts.some((p) => inWay(p[i]))) return `${name(r.name || 'A room', f)} is in the way.`
+      if (pts.some((p) => inWay(p[i])))
+        return { text: `${name(r.name || 'A room', f)} is in the way.`, floor: f.id, box: boxOf(pts) }
     }
     for (const d of f.drawnWalls ?? [])
-      if (inWay(d.a[i]) || inWay(d.b[i])) return `${name('A drawn wall', f)} is in the way.`
+      if (inWay(d.a[i]) || inWay(d.b[i]))
+        return { text: `${name('A drawn wall', f)} is in the way.`, floor: f.id, box: boxOf([d.a, d.b]) }
     // A slanted wall crossing the cut turns, so what is on it is said
     // from its end on the same side, before anything moves.
     const slanted: Array<[Point, Point]> = [
@@ -1558,6 +1628,8 @@ export interface EditorDrawOptions {
   selectedDimension?: string | null
   /** A dimension being drawn with the Ruler. */
   draftDimension?: { a: Point; b: Point } | null
+  /** A box to point out, in cells: what stopped a stretch. */
+  flag?: { x: number; y: number; w: number; h: number } | null
   draft: Pick<HouseRoom, 'x' | 'y' | 'w' | 'h'> | null
   /** A wall being drawn, end to end. */
   draftWall?: { a: Point; b: Point } | null
@@ -1838,6 +1910,11 @@ export function renderEditor(
   for (const d of floor.dimensions ?? [])
     h += dimension(d, `hv-edim${d.id === o.selectedDimension ? ' hv-sel' : ''}`, d.id)
   if (o.draftDimension) h += dimension(o.draftDimension, 'hv-edim hv-edim--draft')
+  if (o.flag) {
+    const pad = 0.3
+    const q = o.flag
+    h += `<rect class="hv-eflag" x="${r1((q.x - pad) * S)}" y="${r1((q.y - pad) * S)}" width="${r1((q.w + 2 * pad) * S)}" height="${r1((q.h + 2 * pad) * S)}"/>`
+  }
   const sd = (floor.dimensions ?? []).find((d) => d.id === o.selectedDimension)
   if (sd) {
     for (const [end, p] of [
