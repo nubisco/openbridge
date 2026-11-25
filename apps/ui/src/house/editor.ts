@@ -927,9 +927,74 @@ function measurePoints(floor: HouseFloor, except?: string): Point[] {
   return out
 }
 
-/** Where a dimension's end goes for a pointer at (x, y). */
+/**
+ * The faces of a floor's walls, as the editor draws them: each piece of wall
+ * gives its two long sides, and its corners where they end.
+ */
+function wallFaces(floor: HouseFloor): { faces: Array<[Point, Point]>; corners: Point[] } {
+  const walls = floorWalls(floor)
+  const runs = wallRuns(floor)
+  const gaps = wallGaps(runs)
+  const faces: Array<[Point, Point]> = []
+  const corners: Point[] = []
+  for (const run of runs) {
+    if (run.type !== 'wall') continue
+    for (const pc of runPieces(run, walls)) {
+      const [sL, eL, eR, sR] = wallOutline(pc.A, pc.B, pc.w, walls, gaps)
+      faces.push([sL, eL], [sR, eR])
+      corners.push(sL, eL, eR, sR)
+    }
+  }
+  return { faces, corners }
+}
+
+/**
+ * Where a dimension's end goes for a pointer at (x, y). A corner, a wall's
+ * end, an opening's end or a face's corner within reach catches it first.
+ * Else, near a wall, it lands on that wall's face, so a tape measures from
+ * plaster to plaster as a tape measure on site does. Drawn from `from`
+ * nearly straight across or down, it stays exactly straight and meets the
+ * face there.
+ */
 export function rulerPoint(floor: HouseFloor, x: number, y: number, from?: Point, except?: string): Point {
-  return catchPoint(measurePoints(floor, except), x, y, from)
+  const { faces, corners } = wallFaces(floor)
+  const points = [...measurePoints(floor, except), ...corners]
+  const reach = 0.4
+  if (points.some((c) => Math.hypot(c[0] - x, c[1] - y) < reach)) return catchPoint(points, x, y, from)
+  const onFace = faceAt(faces, x, y, from)
+  return onFace ? [toMm(onFace[0]), toMm(onFace[1])] : catchPoint(points, x, y, from)
+}
+
+/** The point on the nearest wall face within reach of (x, y), kept straight from `from`; null when none is near. */
+function faceAt(faces: Array<[Point, Point]>, x: number, y: number, from?: Point): Point | null {
+  const reach = 0.4
+  let best: Point | null = null
+  let bestD = reach
+  for (const [a, b] of faces) {
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1])
+    if (len < 1e-6) continue
+    const u: Point = [(b[0] - a[0]) / len, (b[1] - a[1]) / len]
+    const t = (x - a[0]) * u[0] + (y - a[1]) * u[1]
+    if (t < 0 || t > len) continue
+    let q: Point = [a[0] + u[0] * t, a[1] + u[1] * t]
+    const d = Math.hypot(q[0] - x, q[1] - y)
+    if (d >= bestD) continue
+    if (from) {
+      // Nearly straight across or down from the other end: exactly so, where that line meets the face.
+      const [dx, dy] = [q[0] - from[0], q[1] - from[1]]
+      const tan = Math.tan((4 * Math.PI) / 180)
+      const dir: Point | null =
+        Math.abs(dy) <= Math.abs(dx) * tan ? [1, 0] : Math.abs(dx) <= Math.abs(dy) * tan ? [0, 1] : null
+      if (dir) {
+        const m = meet(from, dir, a, u)
+        if (!m || segDist(m, a, b) > 1e-6) continue
+        q = m
+      }
+    }
+    best = q
+    bestD = d
+  }
+  return best
 }
 
 export const dimensionLength = (d: { a: Point; b: Point }) => Math.hypot(d.b[0] - d.a[0], d.b[1] - d.a[1])
