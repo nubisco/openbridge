@@ -392,8 +392,8 @@
 
             <NbPanel v-else-if="dim" title="Dimension" :flat="true">
               <p class="house-editor__muted">
-                {{ metres(dimLength) }} m on the plan. Rooms are drawn to the middle of their walls, so measure from the
-                middle of a wall too.
+                {{ metres(dimLength) }} m on the plan. Near a wall, an end lands on its face, so measure the same faces
+                you measured on site.
               </p>
               <NbField v-slot="{ id }" label="Real length (m)" orientation="stack">
                 <NbNumberInput :id="id" v-model="dimTarget" :min="0.01" :max="200" :step="0.001" size="sm" />
@@ -1224,7 +1224,7 @@ const help = computed(() => {
   if (armed.value) return `Now tap the plan where "${props.devices.get(armed.value)?.name ?? 'it'}" is.`
   return {
     ruler:
-      'Drag from one point to another to measure it. The ends catch on corners, wall ends, doors and windows. The line stays on the plan: select it to type the real length and resize the plan to match.',
+      'Drag from one point to another to measure it. The ends catch on corners, wall ends, doors and windows, and near a wall on its face. The line stays on the plan: select it to type the real length and resize the plan to match.',
     select: 'Drag a room to move it, or its corners to resize it. Drag a device to move it. Tap anything to edit it.',
     wall: 'Drag from one end of a wall to the other: a garden wall, a partition, a fence. Rooms bring their own walls. Its ends catch on corners and other walls.',
     room: 'Drag to draw a rectangular room, or tap its corners one by one for any shape and tap the first again (or press Enter) to close it. Draw one inside another for a room within a room.',

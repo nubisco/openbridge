@@ -78,6 +78,13 @@ sizes" also keeps radiators and gates, and a door or radiator that would no
 longer fit its wall at its old size is scaled after all. The Ruler sits next
 to Select, and Select picks a dimension line too.
 
+Since 1.46 an end near a wall lands on the wall's face, as the editor draws
+it, and the corners of those faces catch too. A tape then measures plaster to
+plaster, the way a tape measure on site does, instead of centre line to
+centre line. Corners, wall ends and openings within reach still win. Drawn
+nearly straight across or down, the tape stays exactly straight and meets the
+face where that line crosses it.
+
 ### Stretching at one end
 
 One scale cannot fix a plan drawn by eye, where each room is off by its own
