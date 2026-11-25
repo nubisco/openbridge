@@ -1,3 +1,10 @@
+# [1.47.0](https://github.com/nubisco/openbridge/compare/v1.46.0...v1.47.0) (2026-11-25)
+
+
+### Features
+
+* **house:** a refused stretch names and outlines what is in the way ([#67](https://github.com/nubisco/openbridge/issues/67)) ([701cd48](https://github.com/nubisco/openbridge/commit/701cd486ec20334525680cc3f3ea5898b85c33af))
+
 # [1.46.0](https://github.com/nubisco/openbridge/compare/v1.45.0...v1.46.0) (2026-11-25)
 
 
