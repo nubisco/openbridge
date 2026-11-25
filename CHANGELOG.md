@@ -1,3 +1,10 @@
+# [1.46.0](https://github.com/nubisco/openbridge/compare/v1.45.0...v1.46.0) (2026-11-25)
+
+
+### Features
+
+* **house:** measuring tapes snap to wall faces ([#66](https://github.com/nubisco/openbridge/issues/66)) ([713646d](https://github.com/nubisco/openbridge/commit/713646d02a7a9f0d9a4ac2859d8f07e19412462a))
+
 # [1.45.0](https://github.com/nubisco/openbridge/compare/v1.44.0...v1.45.0) (2026-11-24)
 
 
